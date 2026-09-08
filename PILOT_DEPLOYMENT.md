@@ -1,7 +1,14 @@
 # Gaeld local pilot deployment
 
 This runbook describes the local-only pilot stack in `compose.production.yml`.
-It is pinned to Gaeld commit `7ca55186f59fe50e6f8eafc35146f552070b702d`.
+It is pinned to upstream release `v3.8.6` (commit
+`3a92e1c25008c3de47da6c6409b4f16b3920ffee`), built as
+`gaeld/app:v3.8.6-ideall.1` and `gaeld/web:v3.8.6-ideall.1`.
+
+The deployment source is `/home/gmk/Gaeld`; there is no second checkout.
+The compose project is named `gaeld` in the compose file itself, so never
+pass `-p` — it would override that name and detach the stack from its
+explicitly named volumes.
 
 The stack is intentionally reachable only on `127.0.0.1:8088`. It does not
 use the server's existing Traefik network and does not expose PostgreSQL or
