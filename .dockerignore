@@ -1,12 +1,52 @@
-node_modules/
-vendor/
+# VCS und IDE
+.git
 .git/
+.github
+.githooks
+.idea
+.vscode
+.fleet
+
+# Environment (Beispieldateien bleiben erhalten)
+.env
+.env.*
+!.env.example
+!.env.production.example
+!.env.production.pilot.example
+
+# Build-Artefakte und Abhängigkeiten
+node_modules
+node_modules/
+vendor
+vendor/
+public/build
+public/hot
+.pnpm-store
+
+# Container-Definitionen (werden per -f übergeben)
 Dockerfile*
-.dockerignore
-*.log*
-.env*
-coverage/
-storage/logs/
+docker-compose.yml
+
+# Laufzeitdaten
+storage/app/private/*
+storage/framework/cache/*
 storage/framework/cache/
+storage/framework/sessions/*
 storage/framework/sessions/
+storage/framework/testing/*
+storage/framework/views/*
 storage/framework/views/
+storage/logs/*
+storage/logs/
+*.log*
+
+# Tests und CI
+tests
+coverage
+coverage/
+.phpunit.cache
+.phpunit.result.cache
+npm-debug.log
+yarn-error.log
+deploy.php
+.gitlab-ci.yml

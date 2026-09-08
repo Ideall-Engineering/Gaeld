@@ -16,6 +16,9 @@
 .env
 .env.backup
 .env.production
+.env.production.*
+!.env.production.example
+!.env.production.pilot.example
 .env.testing
 .phpunit.result.cache
 .phpunit.cache
