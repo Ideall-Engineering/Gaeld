@@ -141,7 +141,13 @@ networks:
     backend:
         driver: bridge
 
+# Volume names are pinned explicitly so they never inherit the compose project
+# prefix. Without this, a `docker compose up` would bind to the pre-existing
+# gaeld_gaeld-* volumes from an earlier deployment, which still hold data.
 volumes:
     gaeld-postgres:
+        name: gaeld-postgres
     gaeld-redis:
+        name: gaeld-redis
     gaeld-storage:
+        name: gaeld-storage

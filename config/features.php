@@ -18,6 +18,11 @@ return [
     // CE features (enabled by default)
     'bank_import' => env('FEATURE_BANK_IMPORT', true),
 
+    // Public self-registration via /register. Disable on single-tenant or
+    // admin-only installations; the initial /setup wizard stays available so
+    // an empty installation can still be provisioned.
+    'self_registration' => env('SELF_REGISTRATION_ENABLED', true),
+
     // Per-organization toggleable modules — defaults preserve current behavior.
     // Owners override these from Settings → Modules.
     'budgets' => env('FEATURE_BUDGETS', true),
