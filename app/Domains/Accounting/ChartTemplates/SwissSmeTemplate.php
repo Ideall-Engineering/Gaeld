@@ -86,6 +86,9 @@ class SwissSmeTemplate implements ChartTemplateInterface
             ['code' => '2201', 'type' => AccountType::Liability->value, 'name' => [
                 'en' => 'VAT Payable', 'fr' => 'TVA à payer', 'de' => 'MWST-Zahllast', 'it' => 'IVA da pagare', 'rm' => 'TIVA da pajar',
             ]],
+            ['code' => '2202', 'type' => AccountType::Liability->value, 'name' => [
+                'en' => 'Acquisition Tax Payable', 'fr' => 'Impôt sur les acquisitions dû', 'de' => 'Bezugsteuer geschuldet', 'it' => 'Imposta sull\'acquisto dovuta', 'rm' => 'Taglia sin acquists da pajar',
+            ]],
             ['code' => '2270', 'type' => AccountType::Liability->value, 'name' => [
                 'en' => 'Social Security Payable', 'fr' => 'Assurances sociales à payer', 'de' => 'Sozialversicherungen', 'it' => 'Assicurazioni sociali da pagare', 'rm' => 'Assicuranzas socialas da pajar',
             ]],

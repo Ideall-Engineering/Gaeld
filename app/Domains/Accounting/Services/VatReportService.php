@@ -56,6 +56,7 @@ class VatReportService
             // Separate Output (sales) and Input (purchases) entries
             $outputEntries = $entries->where('type', VatEntryType::Output);
             $inputEntries = $entries->where('type', VatEntryType::Input);
+            $acquisitionEntries = $entries->where('type', VatEntryType::Acquisition);
 
             // Aggregate Output by rate → chiffres 200 & 300
             $revenueByRate = [];
@@ -100,11 +101,21 @@ class VatReportService
                 $totalInputVat = Money::add($totalInputVat, (string) $entry->vat_amount);
             }
 
+            // Aggregate acquisition tax on foreign services → chiffre 381.
+            // Owed like output VAT; the matching deduction rides along in 400.
+            $totalAcquisitionTax = '0.00';
+            $acquisitionBase = '0.00';
+            foreach ($acquisitionEntries as $entry) {
+                $totalAcquisitionTax = Money::add($totalAcquisitionTax, (string) $entry->vat_amount);
+                $acquisitionBase = Money::add($acquisitionBase, (string) $entry->base_amount);
+            }
+
             // Totals
             $totalRevenue = array_reduce($revenueByRate, fn ($carry, $row) => Money::add($carry, $row['base_amount']), '0.00');
             $totalTaxable = array_reduce($outputVatByRate, fn ($carry, $row) => Money::add($carry, $row['base_amount']), '0.00');
             $totalOutputVat = array_reduce($outputVatByRate, fn ($carry, $row) => Money::add($carry, $row['amount']), '0.00');
-            $netVat = Money::subtract($totalOutputVat, $totalInputVat);
+            $totalTaxOwed = Money::add($totalOutputVat, $totalAcquisitionTax);
+            $netVat = Money::subtract($totalTaxOwed, $totalInputVat);
 
             $revenueRows = array_map(fn ($row) => [
                 'line' => '200',
@@ -131,6 +142,9 @@ class VatReportService
                 'output_vat_rows' => $outputVatRows,
                 'total_taxable' => $totalTaxable,
                 'total_output_vat' => $totalOutputVat,      // chiffre 399
+                'acquisition_tax_base' => $acquisitionBase,   // chiffre 380
+                'acquisition_tax' => $totalAcquisitionTax,    // chiffre 381
+                'total_tax_owed' => $totalTaxOwed,
                 'input_vat' => $totalInputVat,       // chiffre 400
                 'total_input_vat' => $totalInputVat,
                 'net_vat' => $netVat,              // chiffre 500

@@ -12,6 +12,7 @@ use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Expenses\DTOs\RecordExpensePaymentData;
 use App\Domains\Expenses\Enums\ExpenseStatus;
+use App\Domains\Expenses\Enums\ExpenseTaxTreatment;
 use App\Domains\Expenses\Models\Expense;
 use App\Support\DTOs\SummaryResult;
 use App\Support\Money;
@@ -44,6 +45,18 @@ class ExpenseService
      *   Debit  1170                  Input VAT        (vat_amount)
      *   Credit {bankAccountCode}    Bank account     (GROSS = NET + VAT)
      *
+     * For acquisition tax on foreign services (tax_treatment = reverse_charge):
+     *   Debit  {expenseAccountCode} Expense account  (NET amount)
+     *   Credit {bankAccountCode}    Bank account     (NET — the supplier bills no VAT)
+     *   Debit  1170                  Input VAT        (acquisition tax)
+     *   Credit 2202                  Acquisition tax  (acquisition tax)
+     * The last two cancel out in the result; they exist so figures 380/381 and
+     * 400 of the FTA return can be filled from the ledger instead of by hand.
+     *
+     * For import VAT (tax_treatment = import_tax) nothing is posted beyond the
+     * net expense: the deductible amount lives on the customs assessment, which
+     * is booked separately once it arrives.
+     *
      * For credit notes (reversed): mirror of the above.
      *
      * Marks the expense as Posted.
@@ -59,10 +72,21 @@ class ExpenseService
             $expenseAccount = $this->ledgerQuery->resolveAccount($orgId, $data->expenseAccountCode);
             $bankAccount = $this->ledgerQuery->resolveAccount($orgId, $bankAccountCode);
 
+            $treatment = $expense->tax_treatment ?? ExpenseTaxTreatment::Standard;
+
             $netAmount = $data->amount;
             $vatAmount = (string) ($expense->vat_amount ?? '0');
-            $hasVat = $expense->vat_rate_id && Money::isPositive($vatAmount);
-            $grossAmount = $hasVat ? Money::add($netAmount, $vatAmount) : $netAmount;
+            $hasVatAmount = $expense->vat_rate_id && Money::isPositive($vatAmount);
+
+            // Input VAT the supplier actually charged us and we pay along.
+            $hasVat = $hasVatAmount && $treatment->hasSupplierInputVat();
+
+            // Acquisition tax we owe ourselves on a foreign service.
+            $hasAcquisitionTax = $hasVatAmount && $treatment->requiresAcquisitionTaxEntry();
+
+            $grossAmount = $treatment->increasesPayableAmount() && $hasVatAmount
+                ? Money::add($netAmount, $vatAmount)
+                : $netAmount;
 
             if ($isCreditNote) {
                 // Credit note: reverse the normal flow
@@ -79,6 +103,23 @@ class ExpenseService
                         description: 'Input VAT reversal',
                     );
                 }
+                if ($hasAcquisitionTax) {
+                    $vatAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::VAT_INPUT);
+                    $acquisitionAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::VAT_ACQUISITION_TAX_PAYABLE);
+
+                    $lines[] = new JournalLineData(
+                        accountId: (string) $vatAccount->id,
+                        debit: '0',
+                        credit: $vatAmount,
+                        description: 'Input VAT reversal on acquisition tax',
+                    );
+                    $lines[] = new JournalLineData(
+                        accountId: (string) $acquisitionAccount->id,
+                        debit: $vatAmount,
+                        credit: '0',
+                        description: 'Acquisition tax reversal',
+                    );
+                }
             } else {
                 $lines = [
                     new JournalLineData(accountId: (string) $expenseAccount->id, debit: $netAmount, credit: '0', description: $expense->description ?? 'Expense'),
@@ -92,6 +133,24 @@ class ExpenseService
                         description: 'Input VAT',
                     );
                 }
+                if ($hasAcquisitionTax) {
+                    $vatAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::VAT_INPUT);
+                    $acquisitionAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::VAT_ACQUISITION_TAX_PAYABLE);
+
+                    $lines[] = new JournalLineData(
+                        accountId: (string) $vatAccount->id,
+                        debit: $vatAmount,
+                        credit: '0',
+                        description: 'Input VAT on acquisition tax',
+                    );
+                    $lines[] = new JournalLineData(
+                        accountId: (string) $acquisitionAccount->id,
+                        debit: '0',
+                        credit: $vatAmount,
+                        description: 'Acquisition tax on foreign services',
+                    );
+                }
+
                 $lines[] = new JournalLineData(
                     accountId: (string) $bankAccount->id,
                     debit: '0',
@@ -146,6 +205,20 @@ class ExpenseService
                     'vat_amount' => $vatAmount,
                     'type' => VatEntryType::Input,
                 ]);
+            }
+
+            // Acquisition tax shows up twice in the return: owed under 380/381
+            // and deducted under 400. Two entries keep both figures derivable.
+            if ($hasAcquisitionTax) {
+                foreach ([VatEntryType::Acquisition, VatEntryType::Input] as $entryType) {
+                    VatEntry::create([
+                        'journal_entry_id' => $journalEntry->id,
+                        'vat_rate_id' => $expense->vat_rate_id,
+                        'base_amount' => (string) $expense->amount,
+                        'vat_amount' => $vatAmount,
+                        'type' => $entryType,
+                    ]);
+                }
             }
 
             $expense->update([

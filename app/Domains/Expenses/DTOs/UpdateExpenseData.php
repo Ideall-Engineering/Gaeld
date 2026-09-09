@@ -28,6 +28,7 @@ readonly class UpdateExpenseData
         public ?string $bankAccountCode = null,
         public ?string $supplierId = null,
         public ?string $paymentMethod = null,
+        public ?string $taxTreatment = null,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -50,6 +51,7 @@ readonly class UpdateExpenseData
             bankAccountCode: $data['bank_account_code'] ?? null,
             supplierId: $data['supplier_id'] ?? null,
             paymentMethod: $data['payment_method'] ?? null,
+            taxTreatment: $data['tax_treatment'] ?? null,
         );
     }
 }

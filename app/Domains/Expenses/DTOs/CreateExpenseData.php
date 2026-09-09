@@ -30,6 +30,7 @@ readonly class CreateExpenseData
         public ?string $expenseAccountCode = null,
         public ?string $bankAccountCode = null,
         public ?string $paymentMethod = null,
+        public string $taxTreatment = 'standard',
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -54,6 +55,7 @@ readonly class CreateExpenseData
             expenseAccountCode: $data['expense_account_code'] ?? null,
             bankAccountCode: $data['bank_account_code'] ?? null,
             paymentMethod: $data['payment_method'] ?? null,
+            taxTreatment: $data['tax_treatment'] ?? 'standard',
         );
     }
 }

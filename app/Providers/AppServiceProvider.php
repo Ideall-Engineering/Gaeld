@@ -22,6 +22,12 @@ use App\Domains\Api\Jobs\DispatchWebhookJob;
 use App\Domains\Api\Models\PersonalAccessToken;
 use App\Domains\Assets\Jobs\MonthlyDepreciationJob;
 use App\Domains\Banking\Contracts\PaymentInitiationProviderInterface;
+use App\Domains\Banking\Events\BankStatementImported;
+use App\Domains\Banking\Listeners\QueueBankRuleSuggestions;
+use App\Domains\Banking\Models\BankRule;
+use App\Domains\Banking\Models\BankRuleApplication;
+use App\Domains\Banking\Policies\BankRuleApplicationPolicy;
+use App\Domains\Banking\Policies\BankRulePolicy;
 use App\Domains\Banking\Services\Payments\FilePain001Provider;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Policies\ContactPolicy;
@@ -169,8 +175,11 @@ class AppServiceProvider extends ServiceProvider
         Event::subscribe(AuthAuditSubscriber::class);
         Event::subscribe(JournalEventSubscriber::class);
         Event::listen(MemberRemoved::class, RevokeOrganizationTokens::class);
+        Event::listen(BankStatementImported::class, QueueBankRuleSuggestions::class);
         Event::listen(LongWaitDetected::class, SendHorizonTelegramAlert::class);
 
+        Gate::policy(BankRule::class, BankRulePolicy::class);
+        Gate::policy(BankRuleApplication::class, BankRuleApplicationPolicy::class);
         Gate::policy(Contact::class, ContactPolicy::class);
         Gate::policy(FiscalYearChangeRequest::class, FiscalYearChangeRequestPolicy::class);
         Gate::policy(FiscalYear::class, FiscalYearPolicy::class);
@@ -221,4 +230,5 @@ class AppServiceProvider extends ServiceProvider
             Expense::$event($dashboardFlush);
         }
     }
+
 }

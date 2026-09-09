@@ -6,6 +6,7 @@ use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Expenses\Enums\ExpenseStatus;
+use App\Domains\Expenses\Enums\ExpenseTaxTreatment;
 use App\Domains\Expenses\Enums\ExpenseType;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Users\Models\User;
@@ -35,6 +36,7 @@ use Laravel\Scout\Searchable;
  * @property string|null $description
  * @property string $amount
  * @property string $vat_amount
+ * @property ExpenseTaxTreatment $tax_treatment
  * @property Carbon $date
  * @property string|null $vendor
  * @property string|null $receipt_path
@@ -67,6 +69,7 @@ class Expense extends Model
         'description',
         'amount',
         'vat_amount',
+        'tax_treatment',
         'date',
         'vendor',
         'receipt_path',
@@ -86,6 +89,7 @@ class Expense extends Model
             'date' => 'date',
             'amount' => 'decimal:2',
             'vat_amount' => 'decimal:2',
+            'tax_treatment' => ExpenseTaxTreatment::class,
             'status' => ExpenseStatus::class,
             'type' => ExpenseType::class,
             'archived_at' => 'datetime',

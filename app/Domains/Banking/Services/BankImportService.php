@@ -3,6 +3,7 @@
 namespace App\Domains\Banking\Services;
 
 use App\Domains\Banking\Enums\CamtFormat;
+use App\Domains\Banking\Events\BankStatementImported;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Banking\Models\BankImport;
 use App\Domains\Banking\Models\BankTransaction;
@@ -47,7 +48,7 @@ class BankImportService
         $format = $this->detectFormat($xml);
         $parsedStatement = $this->parseEntries($xml, $format);
 
-        return DB::transaction(function () use ($bankAccount, $filename, $format, $parsedStatement) {
+        $import = DB::transaction(function () use ($bankAccount, $filename, $format, $parsedStatement) {
             $import = BankImport::create([
                 'organization_id' => $bankAccount->organization_id,
                 'bank_account_id' => $bankAccount->id,
@@ -94,6 +95,8 @@ class BankImportService
 
             return $import->load('transactions');
         });
+
+        return $this->announce($import);
     }
 
     /**
@@ -156,7 +159,7 @@ class BankImportService
         ?string $statementId,
         array $entries,
     ): BankImport {
-        return DB::transaction(function () use ($bankAccount, $filename, $format, $statementId, $entries) {
+        $import = DB::transaction(function () use ($bankAccount, $filename, $format, $statementId, $entries) {
             $import = BankImport::create([
                 'organization_id' => $bankAccount->organization_id,
                 'bank_account_id' => $bankAccount->id,
@@ -202,6 +205,26 @@ class BankImportService
 
             return $import->load('transactions');
         });
+
+        return $this->announce($import);
+    }
+
+    /**
+     * Announce a finished import once its rows are committed.
+     *
+     * Deliberately outside the DB transaction: a queued listener that picked the
+     * import up mid-transaction would find no rows, and a listener that threw
+     * would roll the whole statement back.
+     */
+    private function announce(BankImport $import): BankImport
+    {
+        BankStatementImported::dispatch(
+            (string) $import->id,
+            (string) $import->organization_id,
+            (int) $import->transaction_count,
+        );
+
+        return $import;
     }
 
     // ──────────────────────────────────────────────────────────────

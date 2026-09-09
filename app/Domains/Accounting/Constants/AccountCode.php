@@ -18,6 +18,9 @@ final class AccountCode
 
     public const VAT_PAYABLE_AFC = '2201';
 
+    /** Acquisition tax on services bought abroad (Bezugsteuer, MWSTG Art. 45). */
+    public const VAT_ACQUISITION_TAX_PAYABLE = '2202';
+
     public const SOCIAL_CHARGES = '5700';
 
     public const GENERAL_EXPENSE = '6530';

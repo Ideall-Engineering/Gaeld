@@ -123,6 +123,10 @@ const navigation = computed(() => {
     { key: 'banking', href: '/banking', icon: Landmark, children: [
       { key: 'bank_accounts', href: '/banking' },
       { key: 'reconciliation', href: '/reconciliation' },
+      ...(features.value.rule_engine ? [
+        { key: 'bank_rules', href: '/banking/rules' },
+        { key: 'bank_rule_review', href: '/banking/rule-review' },
+      ] : []),
       { key: 'payments_outgoing', href: '/payments/outgoing' },
     ]},
     { key: 'accounting', href: '/accounting/journal-entries', icon: BookOpen, children: [

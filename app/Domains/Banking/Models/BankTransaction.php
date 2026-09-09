@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -122,6 +123,19 @@ class BankTransaction extends Model
     public function matchedExpense(): BelongsTo
     {
         return $this->belongsTo(Expense::class, 'matched_expense_id');
+    }
+
+    /**
+     * The rule proposal for this transaction, if one was ever made.
+     *
+     * At most one — bank_rule_applications carries a unique index on the
+     * transaction, which is what keeps re-imports from duplicating proposals.
+     *
+     * @return HasOne<BankRuleApplication, $this>
+     */
+    public function ruleApplication(): HasOne
+    {
+        return $this->hasOne(BankRuleApplication::class, 'bank_transaction_id');
     }
 
     /** @return HasMany<BankMatch, $this> */

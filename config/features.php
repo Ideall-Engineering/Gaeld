@@ -44,6 +44,11 @@ return [
     'automation' => env('FEATURE_AUTOMATION', false),
     'multi_currency' => env('FEATURE_MULTI_CURRENCY', false),
     'rule_engine' => env('FEATURE_RULE_ENGINE', false),
+
+    // Lets rules marked auto_apply actually write without confirmation. Kept
+    // separate from 'rule_engine' so the rule table can express automation long
+    // before the installation is willing to act on it.
+    'rule_engine_auto_apply' => env('FEATURE_RULE_ENGINE_AUTO_APPLY', false),
     'advanced_permissions' => env('FEATURE_ADVANCED_PERMISSIONS', false),
     'analytical' => env('FEATURE_ANALYTICAL', false),
     'withholding_tax' => env('FEATURE_WITHHOLDING_TAX', false),

@@ -1,6 +1,8 @@
 <?php
 
 use App\Domains\Banking\Controllers\BankingController;
+use App\Domains\Banking\Controllers\BankRuleApplicationController;
+use App\Domains\Banking\Controllers\BankRuleController;
 use App\Domains\Banking\Controllers\BicLookupController;
 use App\Domains\Banking\Controllers\PaymentInitiationController;
 use App\Domains\Banking\Controllers\ReconciliationController;
@@ -8,6 +10,17 @@ use Illuminate\Support\Facades\Route;
 
 // IBAN → BIC auto-fill helper (Swiss/LI banks)
 Route::post('/banking/bic-lookup', BicLookupController::class)->name('banking.bic-lookup');
+
+// Editable posting rules and their review list (feature-gated)
+Route::middleware('feature:rule_engine')->group(function () {
+    Route::get('/banking/rules', [BankRuleController::class, 'index'])->name('banking.rules.index');
+    Route::post('/banking/rules', [BankRuleController::class, 'store'])->name('banking.rules.store');
+    Route::put('/banking/rules/{bankRule}', [BankRuleController::class, 'update'])->name('banking.rules.update');
+    Route::delete('/banking/rules/{bankRule}', [BankRuleController::class, 'destroy'])->name('banking.rules.destroy');
+
+    Route::get('/banking/rule-review', [BankRuleApplicationController::class, 'index'])->name('banking.rule-review.index');
+    Route::post('/banking/rule-review/{bankRuleApplication}', [BankRuleApplicationController::class, 'decide'])->name('banking.rule-review.decide');
+});
 
 // Core banking features (CE)
 Route::get('/banking', [BankingController::class, 'index'])->name('banking.index');
