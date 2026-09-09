@@ -147,4 +147,5 @@ Route::middleware(['auth', 'verified', 'org', 'org-2fa', 'subscription'])->group
     require __DIR__.'/web/assets.php';
     require __DIR__.'/web/payroll.php';
     require __DIR__.'/web/migration.php';
+    require __DIR__.'/web/automation.php';
 });

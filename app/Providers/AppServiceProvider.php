@@ -21,6 +21,19 @@ use App\Domains\Accounting\Policies\TaxDeclarationPolicy;
 use App\Domains\Api\Jobs\DispatchWebhookJob;
 use App\Domains\Api\Models\PersonalAccessToken;
 use App\Domains\Assets\Jobs\MonthlyDepreciationJob;
+use App\Domains\Automation\Handlers\BankImportSuggestionsHandler;
+use App\Domains\Automation\Handlers\MissingDocumentsHandler;
+use App\Domains\Automation\Handlers\OverdueInvoicesHandler;
+use App\Domains\Automation\Handlers\PaymentRemindersHandler;
+use App\Domains\Automation\Handlers\QrPaymentMatchingHandler;
+use App\Domains\Automation\Handlers\RecurringInvoiceDraftsHandler;
+use App\Domains\Automation\Handlers\TaxDeclarationReadinessHandler;
+use App\Domains\Automation\Handlers\UnclearPaymentsHandler;
+use App\Domains\Automation\Models\AutomationRun;
+use App\Domains\Automation\Models\AutomationSetting;
+use App\Domains\Automation\Policies\AutomationPolicy;
+use App\Domains\Automation\Policies\AutomationSettingPolicy;
+use App\Domains\Automation\Services\AutomationRegistry;
 use App\Domains\Banking\Contracts\PaymentInitiationProviderInterface;
 use App\Domains\Banking\Events\BankStatementImported;
 use App\Domains\Banking\Listeners\QueueBankRuleSuggestions;
@@ -109,6 +122,8 @@ class AppServiceProvider extends ServiceProvider
         // when the bank_sync feature is enabled and the BankAccount uses bLink.
         $this->app->bind(PaymentInitiationProviderInterface::class, FilePain001Provider::class);
 
+        $this->registerAutomations();
+
         $this->app->singleton(GlobalSearchService::class, function ($app) {
             return new GlobalSearchService(
                 $app->make(InvoiceSearchProvider::class),
@@ -180,6 +195,8 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::policy(BankRule::class, BankRulePolicy::class);
         Gate::policy(BankRuleApplication::class, BankRuleApplicationPolicy::class);
+        Gate::policy(AutomationRun::class, AutomationPolicy::class);
+        Gate::policy(AutomationSetting::class, AutomationSettingPolicy::class);
         Gate::policy(Contact::class, ContactPolicy::class);
         Gate::policy(FiscalYearChangeRequest::class, FiscalYearChangeRequestPolicy::class);
         Gate::policy(FiscalYear::class, FiscalYearPolicy::class);
@@ -231,4 +248,31 @@ class AppServiceProvider extends ServiceProvider
         }
     }
 
+    /**
+     * The automations this installation knows about.
+     *
+     * One list, consulted by the settings screen, the scheduler and the run log
+     * alike — so none of them can disagree about what exists.
+     */
+    private function registerAutomations(): void
+    {
+        $this->app->singleton(AutomationRegistry::class, function ($app): AutomationRegistry {
+            $registry = new AutomationRegistry;
+
+            foreach ([
+                BankImportSuggestionsHandler::class,
+                QrPaymentMatchingHandler::class,
+                UnclearPaymentsHandler::class,
+                RecurringInvoiceDraftsHandler::class,
+                OverdueInvoicesHandler::class,
+                PaymentRemindersHandler::class,
+                MissingDocumentsHandler::class,
+                TaxDeclarationReadinessHandler::class,
+            ] as $handler) {
+                $registry->register($app->make($handler));
+            }
+
+            return $registry;
+        });
+    }
 }

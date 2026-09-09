@@ -23,6 +23,7 @@ import {
   Settings,
   Sun,
   Moon,
+  Cog,
 } from 'lucide-vue-next'
 import { useTranslations } from '@/lib/useTranslations'
 import { usePermissions } from '@/lib/usePermissions'
@@ -129,6 +130,9 @@ const navigation = computed(() => {
       ] : []),
       { key: 'payments_outgoing', href: '/payments/outgoing' },
     ]},
+    ...(features.value.automation ? [
+      { key: 'automation', href: '/automation', icon: Cog },
+    ] : []),
     { key: 'accounting', href: '/accounting/journal-entries', icon: BookOpen, children: [
       { key: 'journal_entries', href: '/accounting/journal-entries' },
       ...(can('accounting.create') ? [

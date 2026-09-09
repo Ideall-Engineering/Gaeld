@@ -41,8 +41,17 @@ Schedule::job(GenerateRecurringExpensesJob::class)->dailyAt('03:30');
 
 /**
  * Send payment reminders for overdue invoices (04:00) — all editions.
+ *
+ * Stands down by itself once the automation module is on: sending reminders is
+ * then a per-organization decision that defaults to off, and the runner owns it.
  */
 Schedule::job(SendPaymentRemindersJob::class)->dailyAt('04:00');
+
+/**
+ * Daily automations (04:30). The command is a no-op while FEATURE_AUTOMATION is
+ * off, and each run is keyed by the calendar day so a second firing does nothing.
+ */
+Schedule::command('gaeld:run-automations')->dailyAt('04:30')->withoutOverlapping();
 
 /**
  * Nightly auto-reconciliation (02:00) — EE only.

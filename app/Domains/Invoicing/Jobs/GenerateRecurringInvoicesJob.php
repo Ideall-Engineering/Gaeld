@@ -6,6 +6,7 @@ use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\DTOs\CreateInvoiceData;
 use App\Domains\Invoicing\Models\RecurringInvoice;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
+use App\Support\FeatureFlag;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -32,11 +33,39 @@ class GenerateRecurringInvoicesJob implements ShouldQueue
 
     public function handle(CreateInvoiceAction $createInvoice, InvoiceNumberGenerator $numberGenerator): void
     {
+        // With the automation module on, whether recurring invoices are drafted
+        // is a per-organization decision recorded in automation_settings, and
+        // the automation runner owns it. Running here as well would produce the
+        // invoices twice over — once logged, once not.
+        if (FeatureFlag::enabled('automation')) {
+            return;
+        }
+
+        $this->generateDue($createInvoice, $numberGenerator);
+    }
+
+    /**
+     * Draft every recurring invoice that has come due.
+     *
+     * Extracted so the automation handler can run it for a single organization
+     * and report what it did, without either copy of the logic drifting.
+     *
+     * @return array{created: int, failed: int}
+     */
+    public function generateDue(
+        CreateInvoiceAction $createInvoice,
+        InvoiceNumberGenerator $numberGenerator,
+        ?string $organizationId = null,
+    ): array {
         $today = Carbon::today();
         $dueRecurrings = RecurringInvoice::withoutGlobalScope('organization')
+            ->when($organizationId, fn ($q) => $q->where('organization_id', $organizationId))
             ->active()
             ->due($today)
             ->get(['id', 'organization_id']);
+
+        $created = 0;
+        $failed = 0;
 
         foreach ($dueRecurrings as $candidate) {
             try {
@@ -53,7 +82,11 @@ class GenerateRecurringInvoicesJob implements ShouldQueue
                     $this->generateInvoice($recurring, $createInvoice, $numberGenerator);
                     $this->advanceSchedule($recurring);
                 });
+
+                $created++;
             } catch (\DomainException|\InvalidArgumentException $e) {
+                $failed++;
+
                 Log::error('GenerateRecurringInvoicesJob: failed to generate', [
                     'recurring_invoice_id' => $candidate->id,
                     'organization_id' => $candidate->organization_id,
@@ -61,6 +94,8 @@ class GenerateRecurringInvoicesJob implements ShouldQueue
                 ]);
             }
         }
+
+        return ['created' => $created, 'failed' => $failed];
     }
 
     private function generateInvoice(

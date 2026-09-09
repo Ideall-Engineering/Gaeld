@@ -4,6 +4,7 @@ namespace App\Domains\Invoicing\Jobs;
 
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Services\InvoiceMailerService;
+use App\Support\FeatureFlag;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -22,6 +23,14 @@ class SendPaymentRemindersJob implements ShouldQueue
 
     public function handle(InvoiceMailerService $mailerService): void
     {
+        // With the automation module on, sending reminders is a per-organization
+        // decision recorded in automation_settings — and one that defaults to
+        // off, because a reminder is a letter to a customer. This unconditional
+        // nightly send stands down so that decision is the only one in force.
+        if (FeatureFlag::enabled('automation')) {
+            return;
+        }
+
         $overdueInvoices = Invoice::withoutGlobalScope('organization')
             ->overdue()
             ->whereNull('archived_at')
