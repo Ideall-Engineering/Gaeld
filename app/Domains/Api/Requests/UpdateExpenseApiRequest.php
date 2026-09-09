@@ -2,6 +2,7 @@
 
 namespace App\Domains\Api\Requests;
 
+use App\Domains\Expenses\Enums\ExpenseTaxTreatment;
 use App\Domains\Expenses\Validation\ExpenseSharedValidationRules;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Illuminate\Foundation\Http\FormRequest;
@@ -28,6 +29,7 @@ class UpdateExpenseApiRequest extends FormRequest
                 'uuid',
                 Rule::exists('vat_rates', 'uuid')->where('organization_id', $orgId),
             ],
+            'tax_treatment' => ['sometimes', Rule::enum(ExpenseTaxTreatment::class)],
         ]);
     }
 }

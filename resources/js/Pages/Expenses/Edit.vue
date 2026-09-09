@@ -25,6 +25,7 @@ import { Plus, FileText } from 'lucide-vue-next'
 const props = defineProps({
   expense: Object,
   vatRates: { type: Array, default: () => [] },
+  taxTreatments: { type: Array, default: () => [] },
   suppliers: { type: Array, default: () => [] },
   categories: { type: Array, default: () => [] },
   expenseAccounts: { type: Array, default: () => [] },
@@ -38,6 +39,7 @@ const form = useForm({
   amount: props.expense.amount ?? '',
   vat_amount: props.expense.vat_amount ?? '',
   vat_rate_id: props.expense.vat_rate_id ?? '',
+  tax_treatment: props.expense.tax_treatment ?? 'standard',
   date: props.expense.date?.slice(0, 10) ?? '',
   vendor: props.expense.vendor ?? '',
   supplier_id: props.expense.supplier_id ?? '',
@@ -76,6 +78,11 @@ const paymentMethodOptions = [
   { value: 'bank_transfer', label: t('payment_bank_transfer') },
   { value: 'other', label: t('payment_other') },
 ]
+
+// Says what the chosen treatment will actually do to the entry, because the
+// difference between them is invisible in the amounts: acquisition tax leaves
+// the payment net, import VAT arrives later from customs.
+const taxTreatmentHint = computed(() => t(`expense_tax_treatment_${form.tax_treatment}_hint`))
 
 const expenseAccountOptions = computed(() =>
   props.expenseAccounts
@@ -201,6 +208,14 @@ const isImage = computed(() => {
               v-model="form.vat_rate_id"
               :label="t('vat_rate')"
               :options="vatOptions"
+            />
+            <FormSelect
+              id="tax_treatment"
+              v-model="form.tax_treatment"
+              :label="t('expense_tax_treatment')"
+              :options="taxTreatments"
+              :hint="taxTreatmentHint"
+              :error="form.errors.tax_treatment"
             />
             <FormInput
               id="vat_amount"

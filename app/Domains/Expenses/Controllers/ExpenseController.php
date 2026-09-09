@@ -12,6 +12,7 @@ use App\Domains\Expenses\Actions\DeleteExpenseAction;
 use App\Domains\Expenses\Actions\UpdateExpenseAction;
 use App\Domains\Expenses\DTOs\CreateExpenseData;
 use App\Domains\Expenses\DTOs\UpdateExpenseData;
+use App\Domains\Expenses\Enums\ExpenseTaxTreatment;
 use App\Domains\Expenses\Exceptions\InvalidExpenseStateException;
 use App\Domains\Expenses\Models\Expense;
 use App\Domains\Expenses\Models\ReceiptScan;
@@ -87,6 +88,7 @@ class ExpenseController extends Controller
 
         return Inertia::render('Expenses/Create', [
             'vatRates' => VatRateQuery::active(),
+            'taxTreatments' => ExpenseTaxTreatment::options(),
             'suppliers' => $selfService ? [] : ContactQuery::forSelect(),
             'categories' => ExpenseCategoryQuery::forSelect(),
             'expenseAccounts' => $selfService ? [] : AccountQuery::forSelect(AccountType::Expense),
@@ -190,6 +192,7 @@ class ExpenseController extends Controller
         return Inertia::render('Expenses/Edit', [
             'expense' => $expense->load('vatRate'),
             'vatRates' => VatRateQuery::active(),
+            'taxTreatments' => ExpenseTaxTreatment::options(),
             'suppliers' => ContactQuery::forSelect(),
             'categories' => ExpenseCategoryQuery::forSelect(),
             'expenseAccounts' => AccountQuery::forSelect(AccountType::Expense),

@@ -167,6 +167,8 @@ const journalColumns = computed(() => [
             <dd>{{ expense.vat_rate ? `${expense.vat_rate.name} (${expense.vat_rate.rate}%)` : '—' }}</dd>
             <dt class="text-muted-foreground">{{ t('vat_amount') }}</dt>
             <dd>{{ expense.vat_amount ? formatCurrency(expense.vat_amount, expense.currency) : '—' }}</dd>
+            <dt class="text-muted-foreground">{{ t('expense_tax_treatment') }}</dt>
+            <dd>{{ t(`expense_tax_treatment_${expense.tax_treatment || 'standard'}`) }}</dd>
             <dt class="text-muted-foreground">{{ t('date') }}</dt>
             <dd>{{ formatDate(expense.date) }}</dd>
             <dt class="text-muted-foreground">{{ t('supplier') }}</dt>

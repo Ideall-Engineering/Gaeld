@@ -20,6 +20,7 @@ class ExpenseResource extends JsonResource
             'description' => $this->description,
             'amount' => $this->amount,
             'vat_amount' => $this->vat_amount,
+            'tax_treatment' => $this->tax_treatment->value,
             'date' => $this->date->toDateString(),
             'vendor' => $this->vendor,
             'status' => $this->status->value,

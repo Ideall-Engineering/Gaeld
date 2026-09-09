@@ -3,6 +3,7 @@
 namespace App\Domains\Expenses\Requests\Concerns;
 
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Expenses\Enums\ExpenseTaxTreatment;
 use App\Domains\Expenses\Enums\ExpenseType;
 use App\Domains\Expenses\Validation\ExpenseSharedValidationRules;
 use App\Domains\Organizations\Enums\Permission;
@@ -23,6 +24,10 @@ trait ExpenseValidationRules
                     'nullable',
                     Rule::exists('vat_rates', 'id')->where('organization_id', $orgId),
                 ],
+                // Where the VAT on this purchase comes from. Without it every
+                // expense is read as ordinary Swiss input tax, which is exactly
+                // the mistake acquisition and import tax exist to prevent.
+                'tax_treatment' => ['sometimes', Rule::enum(ExpenseTaxTreatment::class)],
                 'supplier_id' => [
                     $selfService ? 'prohibited' : 'nullable',
                     Rule::exists('contacts', 'id')->where('organization_id', $orgId)->whereNull('deleted_at'),

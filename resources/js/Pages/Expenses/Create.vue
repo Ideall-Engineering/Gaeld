@@ -26,6 +26,7 @@ import { Plus, HelpCircle } from 'lucide-vue-next'
 
 const props = defineProps({
   vatRates: { type: Array, default: () => [] },
+  taxTreatments: { type: Array, default: () => [] },
   suppliers: { type: Array, default: () => [] },
   categories: { type: Array, default: () => [] },
   expenseAccounts: { type: Array, default: () => [] },
@@ -40,6 +41,7 @@ const form = useForm({
   amount: '',
   vat_amount: '',
   vat_rate_id: '',
+  tax_treatment: 'standard',
   date: new Date().toISOString().slice(0, 10),
   vendor: '',
   supplier_id: '',
@@ -99,6 +101,11 @@ const vatOptions = [
   { value: '', label: t('no_vat') },
   ...props.vatRates.map(v => ({ value: v.id, label: `${v.name} (${v.rate}%)` })),
 ]
+
+// Says what the chosen treatment will actually do to the entry, because the
+// difference between them is invisible in the amounts: acquisition tax leaves
+// the payment net, import VAT arrives later from customs.
+const taxTreatmentHint = computed(() => t(`expense_tax_treatment_${form.tax_treatment}_hint`))
 
 const selectedVatRate = computed(() =>
   props.vatRates.find(rate => String(rate.id) === String(form.vat_rate_id))
@@ -266,6 +273,14 @@ function onSupplierCreated(supplier) {
                 <HelpCircle class="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
               </Tooltip>
             </div>
+            <FormSelect
+              id="tax_treatment"
+              v-model="form.tax_treatment"
+              :label="t('expense_tax_treatment')"
+              :options="taxTreatments"
+              :hint="taxTreatmentHint"
+              :error="form.errors.tax_treatment"
+            />
             <FormInput
               id="vat_amount"
               :model-value="calculatedVatAmount"

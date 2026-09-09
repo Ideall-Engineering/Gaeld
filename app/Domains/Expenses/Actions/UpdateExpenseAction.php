@@ -33,6 +33,7 @@ class UpdateExpenseAction
             'amount' => $data->amount,
             'vat_rate_id' => $vatRateId,
             'vat_amount' => $vatAmount,
+            'tax_treatment' => $data->taxTreatment ?? $expense->tax_treatment,
             'date' => $data->date,
             'vendor' => $data->vendor ?? $expense->vendor,
             'supplier_id' => $data->supplierId ?? $expense->supplier_id,
