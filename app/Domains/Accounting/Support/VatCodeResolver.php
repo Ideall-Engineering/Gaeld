@@ -24,9 +24,10 @@ use App\Support\Money;
 final class VatCodeResolver
 {
     /**
-     * code => [VAT rate code, VAT entry type]. A null pair means "no VAT".
+     * code => [VAT rate code, VAT entry type, default VAT figure].
+     * A null rate and type mean "no VAT".
      *
-     * @var array<string, array{0: string|null, 1: VatEntryType|null}>
+     * @var array<string, array{0: string|null, 1: VatEntryType|null, 2?: string}>
      */
     private const CODES = [
         'V81' => ['NORMAL', VatEntryType::Output],
@@ -41,9 +42,11 @@ final class VatCodeResolver
         'B81' => ['NORMAL', VatEntryType::Acquisition],
         'B26' => ['REDUCED', VatEntryType::Acquisition],
         'B38' => ['ACCOMMODATION', VatEntryType::Acquisition],
-        'V0' => ['EXEMPT', VatEntryType::Output],
+        'V0' => ['EXEMPT', VatEntryType::Output, '220'],
+        'V0-N' => ['EXEMPT', VatEntryType::Output, '230'],
         'M0' => [null, null],
         'I0' => [null, null],
+        'Z0' => [null, null],
     ];
 
     public static function knows(string $code): bool
@@ -77,12 +80,13 @@ final class VatCodeResolver
         }
 
         [$rateCode, $vatType] = self::CODES[$code];
+        $defaultFigure = self::CODES[$code][2] ?? null;
 
         $account = (string) $line['account_code'];
         $contra = (string) $line['contra_account_code'];
         $amount = Money::of($line['gross']);
         $description = $line['description'] ?? null;
-        $figure = $line['vat_figure'] ?? null;
+        $figure = $line['vat_figure'] ?? $defaultFigure;
 
         if ($vatType === null) {
             return $this->plainLines($account, $contra, $amount, $description);
@@ -144,7 +148,8 @@ final class VatCodeResolver
      */
     private function plainLines(string $account, string $contra, string $amount, ?string $description): array
     {
-        // M0/I0 are expense-side codes: the named account is debited.
+        // No-VAT expense codes debit the named account. Z0 reaches this path
+        // with the source debit account as the named account as well.
         return [
             $this->line($account, $amount, '0.00', $description),
             $this->line($contra, '0.00', $amount, $description),

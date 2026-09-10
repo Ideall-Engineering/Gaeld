@@ -187,12 +187,12 @@ class VatReportController extends Controller
             $rows[] = [
                 $row['line'],
                 VatDeclarationLines::label($row['line']),
-                $row['line'] === '380' ? $row['amount'] : '',
-                $row['line'] === '381' ? $row['amount'] : '',
+                $row['taxable'],
+                $row['vat'],
             ];
         }
 
-        $rows[] = ['399', VatDeclarationLines::label('399'), '', $report['total_output_vat']];
+        $rows[] = ['399', VatDeclarationLines::label('399'), '', $report['total_tax_owed']];
 
         foreach ([...$report['input_vat_rows'], ...$report['settlement_rows']] as $row) {
             $rows[] = [$row['line'], VatDeclarationLines::label($row['line']), '', $row['amount']];

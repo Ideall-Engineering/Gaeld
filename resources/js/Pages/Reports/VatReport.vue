@@ -216,20 +216,16 @@ const { isClosed: isPeriodClosed, closedYear } = useClosedFiscalYear(periodDate)
               <tr v-for="row in report.acquisition_rows" :key="row.line" class="border-b last:border-0">
                 <td class="py-2 pr-4 font-mono text-xs text-[hsl(var(--muted-foreground))]">{{ row.line }}</td>
                 <td class="py-2 pr-4">{{ t(`vat_line_${row.line}`) }}</td>
-                <td class="py-2 pr-4 text-right tabular-nums">
-                  {{ row.line === '380' ? formatCurrency(row.amount) : '' }}
-                </td>
+                <td class="py-2 pr-4 text-right tabular-nums">{{ formatCurrency(row.taxable) }}</td>
                 <td class="py-2 pr-4" />
-                <td class="py-2 text-right tabular-nums">
-                  {{ row.line === '381' ? formatCurrency(row.amount) : '' }}
-                </td>
+                <td class="py-2 text-right tabular-nums">{{ formatCurrency(row.vat) }}</td>
               </tr>
               <tr class="border-t font-semibold">
                 <td class="py-2 pr-4 font-mono text-xs">399</td>
                 <td class="py-2 pr-4">{{ t('vat_line_399') }}</td>
-                <td class="py-2 pr-4 text-right tabular-nums">{{ formatCurrency(report.total_taxable) }}</td>
                 <td class="py-2 pr-4" />
-                <td class="py-2 text-right tabular-nums">{{ formatCurrency(report.total_output_vat) }}</td>
+                <td class="py-2 pr-4" />
+                <td class="py-2 text-right tabular-nums">{{ formatCurrency(report.total_tax_owed) }}</td>
               </tr>
             </tbody>
           </table>

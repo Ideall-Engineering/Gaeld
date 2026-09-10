@@ -17,9 +17,9 @@ class VatReportService
 {
     /** @var array<string, string> */
     private const OUTPUT_LINES_BY_RATE_CODE = [
-        'NORMAL' => '302',
-        'REDUCED' => '312',
-        'ACCOMMODATION' => '342',
+        'NORMAL' => '303',
+        'REDUCED' => '313',
+        'ACCOMMODATION' => '343',
     ];
 
     /** @var string[] */
@@ -104,8 +104,7 @@ class VatReportService
                 'acquisition_tax_base' => $acquisitionBase,
                 'acquisition_tax' => $totalAcquisitionTax,
                 'acquisition_rows' => [
-                    ['line' => '380', 'amount' => $acquisitionBase],
-                    ['line' => '381', 'amount' => $totalAcquisitionTax],
+                    ['line' => '383', 'taxable' => $acquisitionBase, 'vat' => $totalAcquisitionTax],
                 ],
                 'total_tax_owed' => $totalTaxOwed,
                 'input_vat' => $totalInputVat400,

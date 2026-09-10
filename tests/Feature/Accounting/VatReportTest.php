@@ -346,18 +346,19 @@ class VatReportTest extends TestCase
             ->get(route('reports.vat', ['from_date' => '2026-01-01', 'to_date' => '2026-03-31']));
 
         $viewResponse->assertInertia(fn ($page) => $page
-            ->where('report.acquisition_rows.0.line', '380')
-            ->where('report.acquisition_rows.0.amount', '1000.00')
-            ->where('report.acquisition_rows.1.line', '381')
-            ->where('report.acquisition_rows.1.amount', '81.00'));
+            ->where('report.acquisition_rows.0.line', '383')
+            ->where('report.acquisition_rows.0.taxable', '1000.00')
+            ->where('report.acquisition_rows.0.vat', '81.00')
+            ->where('report.total_tax_owed', '81.00'));
 
         $csv = $this->actingAs($this->user)
             ->withSession(['current_organization_id' => $this->organization->id])
             ->get(route('reports.vat.export', ['format' => 'csv', 'from_date' => '2026-01-01', 'to_date' => '2026-03-31']))
             ->streamedContent();
 
-        $this->assertStringContainsString('380;', $csv);
-        $this->assertStringContainsString('381;', $csv);
+        $this->assertStringContainsString('383;', $csv);
+        $this->assertStringContainsString('399;', $csv);
+        $this->assertStringContainsString(';81.00', $csv);
 
         $report = app(VatReportService::class)->generate(
             $this->organization->id,
@@ -369,8 +370,8 @@ class VatReportTest extends TestCase
             'report' => $report,
         ])->render();
 
-        $this->assertMatchesRegularExpression('/>\s*380\s*</', $html);
-        $this->assertMatchesRegularExpression('/>\s*381\s*</', $html);
+        $this->assertMatchesRegularExpression('/>\s*383\s*</', $html);
+        $this->assertMatchesRegularExpression('/>\s*399\s*</', $html);
     }
 
     public function test_csv_contains_every_declaration_line_shown_in_the_view(): void
@@ -380,7 +381,7 @@ class VatReportTest extends TestCase
             ->get(route('reports.vat.export', ['format' => 'csv', 'from_date' => '2026-01-01', 'to_date' => '2026-03-31']))
             ->streamedContent();
 
-        foreach (['200', '220', '221', '225', '230', '235', '280', '289', '299', '302', '312', '342', '380', '381', '399', '400', '405', '479', '500', '510'] as $line) {
+        foreach (['200', '220', '221', '225', '230', '235', '280', '289', '299', '303', '313', '343', '383', '399', '400', '405', '479', '500', '510'] as $line) {
             $this->assertStringContainsString("\n{$line};", $csv, "VAT line {$line} is missing from CSV.");
         }
     }

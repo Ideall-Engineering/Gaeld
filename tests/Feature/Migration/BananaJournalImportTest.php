@@ -169,7 +169,7 @@ class BananaJournalImportTest extends TestCase
         $this->assertSame('19.44', (string) $lines['2200']->credit);
     }
 
-    public function test_v0_turnover_reaches_chiffre_200(): void
+    public function test_v0_turnover_reaches_chiffre_200_and_defaults_to_chiffre_220(): void
     {
         $this->import();
 
@@ -179,6 +179,7 @@ class BananaJournalImportTest extends TestCase
         $this->assertSame(VatEntryType::Output, $vatEntry->type);
         $this->assertSame('18322.95', (string) $vatEntry->base_amount);
         $this->assertSame('0.00', (string) $vatEntry->vat_amount);
+        $this->assertSame('220', $vatEntry->figure);
     }
 
     public function test_a_row_without_a_code_creates_no_vat_entry(): void
@@ -191,15 +192,14 @@ class BananaJournalImportTest extends TestCase
         $this->assertCount(2, $entry->lines);
     }
 
-    public function test_an_unknown_code_is_reported_and_not_swallowed(): void
+    public function test_z0_is_imported_without_a_vat_entry(): void
     {
-        $result = $this->import();
+        $this->import();
 
-        $this->assertNull(JournalEntry::where('reference', 'BAN-20260615-1099')->first());
-        $this->assertNotEmpty(array_filter(
-            $result->warnings,
-            static fn (string $warning): bool => str_contains($warning, 'Z0'),
-        ));
+        $entry = JournalEntry::where('reference', 'BAN-20260615-1099')->firstOrFail();
+
+        $this->assertSame(0, VatEntry::where('journal_entry_id', $entry->id)->count());
+        $this->assertCount(2, $entry->lines);
     }
 
     public function test_a_second_run_creates_no_duplicates(): void
@@ -235,6 +235,8 @@ class BananaJournalImportTest extends TestCase
         // I81 on 80.39.
         $this->assertSame('6.51', $report['input_investment_vat']);
         $this->assertSame('21962.95', $report['total_revenue']);
+        $this->assertSame('18322.95', $report['deductions_by_figure']['220']);
+        $this->assertSame('3640.00', $report['total_taxable']);
         $this->assertSame('288.27', $report['net_vat']);
     }
 }

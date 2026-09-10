@@ -321,6 +321,27 @@ class JournalEntryVatApiTest extends SecurityTestCase
         $this->assertSame('230', $vatEntry->figure);
     }
 
+    public function test_shorthand_v0_n_defaults_to_chiffre_230(): void
+    {
+        $this->withToken($this->token)->postJson('/api/v1/journal-entries', [
+            'date' => '2026-05-01',
+            'reference' => 'BAN-20260501-V0-N',
+            'status' => 'posted',
+            'lines' => [[
+                'account_code' => '3000',
+                'contra_account_code' => '1020',
+                'gross' => '100.00',
+                'vat_code' => 'V0-N',
+            ]],
+        ])->assertCreated();
+
+        $entry = JournalEntry::where('reference', 'BAN-20260501-V0-N')->firstOrFail();
+        $vatEntry = VatEntry::where('journal_entry_id', $entry->id)->sole();
+
+        $this->assertSame(VatEntryType::Output, $vatEntry->type);
+        $this->assertSame('230', $vatEntry->figure);
+    }
+
     public function test_shorthand_m0_creates_no_vat_entry(): void
     {
         $this->withToken($this->token)->postJson('/api/v1/journal-entries', [

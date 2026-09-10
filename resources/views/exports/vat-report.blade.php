@@ -61,21 +61,17 @@
                     <tr>
                         <td class="chiffre">{{ $row['line'] }}</td>
                         <td>{{ $row['label'] }}</td>
-                        <td class="amount">
-                            {{ $row['line'] === '380' ? number_format((float) $row['amount'], 2, '.', "'") : '' }}
-                        </td>
+                        <td class="amount">{{ number_format((float) $row['taxable'], 2, '.', "'") }}</td>
                         <td class="amount"></td>
-                        <td class="amount">
-                            {{ $row['line'] === '381' ? number_format((float) $row['amount'], 2, '.', "'") : '' }}
-                        </td>
+                        <td class="amount">{{ number_format((float) $row['vat'], 2, '.', "'") }}</td>
                     </tr>
                 @endforeach
                 <tr class="total">
                     <td class="chiffre">399</td>
                     <td>{{ __('app.vat_line_399') }}</td>
-                    <td class="amount">{{ number_format((float) $report['total_taxable'], 2, '.', "'") }}</td>
                     <td class="amount"></td>
-                    <td class="amount">{{ number_format((float) $report['total_output_vat'], 2, '.', "'") }}</td>
+                    <td class="amount"></td>
+                    <td class="amount">{{ number_format((float) $report['total_tax_owed'], 2, '.', "'") }}</td>
                 </tr>
             </tbody>
         </table>
