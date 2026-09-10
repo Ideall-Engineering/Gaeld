@@ -73,6 +73,18 @@ abstract class SecurityTestCase extends TestCase
 
     /**
      * Create a Sanctum API token scoped to the given org for the given user.
+     *
+     * NOTE: a test that needs to act as *two different* tokens/users must
+     * not rely on a second `withToken()` call alone — Sanctum's guard
+     * (`Illuminate\Auth\RequestGuard`) memoizes whichever user it first
+     * resolved, and `Auth::forgetGuards()` was not sufficient in practice to
+     * force a clean re-resolution across simulated requests within one test
+     * (root cause not fully isolated — the guard is rebuilt against
+     * whatever request the container held at rebuild time, not necessarily
+     * the new one). Prefer creating the "other side" of a cross-tenant
+     * fixture directly through the domain layer instead of a second
+     * `withToken()` call — see
+     * plugins/accountant-api/tests/Feature/JournalCorrectionSecurityTest.php.
      */
     protected function createApiToken(User $user, Organization $org): string
     {

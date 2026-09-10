@@ -14,10 +14,26 @@ use Tests\TestCase;
  * "Erlaubte Änderungen ausserhalb des Moduls" — the module's own
  * ServiceProvider wiring, e.g. registering an ability for a core model, is
  * explicitly the module's boot-time glue, not request-handling code).
+ *
+ * Restricted namespaces are the Fachdomains plan.md means to decouple from
+ * (Accounting and, as later etappen add endpoints, Invoicing/Expenses/
+ * Banking/Payroll/Assets) — not every `App\Domains\*` namespace. Discovered
+ * while building Phase 4: `App\Domains\Organizations\Services\
+ * CurrentOrganization` and `App\Domains\Api\*` are the same shared
+ * tenancy/API-platform infrastructure the module's routes already sit on
+ * top of (the 'api-org' middleware, `HandleApiIdempotency`,
+ * `JournalEntryApiMapper` reuse for the identical explicit-or-VAT-shorthand
+ * format) — restricting those too would make the module unable to validate
+ * a request against the correct organization at all without duplicating
+ * that platform code.
  */
 class AccountantApiModuleBoundaryTest extends TestCase
 {
     private const RESTRICTED_DIRS = ['Controllers', 'Requests', 'Resources', 'Jobs'];
+
+    private const RESTRICTED_NAMESPACES = [
+        'Accounting', 'Invoicing', 'Expenses', 'Banking', 'Payroll', 'Assets',
+    ];
 
     public function test_no_core_class_references_the_accountant_api_plugin_namespace(): void
     {
@@ -47,8 +63,10 @@ class AccountantApiModuleBoundaryTest extends TestCase
                 continue;
             }
 
+            $pattern = '/^use\s+App\\\\Domains\\\\('.implode('|', self::RESTRICTED_NAMESPACES).')\\\\/m';
+
             foreach ((new Finder)->files()->in($path)->name('*.php') as $file) {
-                if (preg_match('/^use\s+App\\\\Domains\\\\/m', $file->getContents())) {
+                if (preg_match($pattern, $file->getContents())) {
                     $offenders[] = $dir.'/'.$file->getRelativePathname();
                 }
             }
@@ -57,7 +75,7 @@ class AccountantApiModuleBoundaryTest extends TestCase
         $this->assertSame(
             [],
             $offenders,
-            'Module Controllers/Requests/Resources/Jobs importing core classes directly (route through CoreBridge/ instead): '.implode(', ', $offenders),
+            'Module Controllers/Requests/Resources/Jobs importing a Fachdomain class directly (route through CoreBridge/ instead): '.implode(', ', $offenders),
         );
     }
 
