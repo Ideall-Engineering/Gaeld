@@ -2,12 +2,12 @@
 
 namespace App\Domains\Accounting\Controllers;
 
+use App\Domains\Accounting\Actions\UpdateJournalDraftAction;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
-use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Requests\StoreJournalEntryRequest;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
@@ -20,7 +20,6 @@ use App\Support\Exceptions\DomainException;
 use App\Support\PdfExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
@@ -168,7 +167,7 @@ class AccountingController extends Controller
     public function updateJournalEntry(
         StoreJournalEntryRequest $request,
         JournalEntry $journalEntry,
-        CurrentOrganization $currentOrg,
+        UpdateJournalDraftAction $updateJournalDraft,
     ): RedirectResponse {
         $this->authorize('update', $journalEntry);
 
@@ -194,28 +193,7 @@ class AccountingController extends Controller
         );
 
         try {
-            // Delete old lines and update entry in a transaction
-            DB::transaction(function () use ($journalEntry, $entryData) {
-                $journalEntry->lines()->delete();
-                $journalEntry->update([
-                    'date' => $entryData->date,
-                    'reference' => $entryData->reference,
-                    'description' => $entryData->description,
-                ]);
-
-                // Recreate lines
-                foreach ($entryData->lines as $line) {
-                    TransactionLine::create([
-                        'journal_entry_id' => $journalEntry->id,
-                        'account_id' => $line->accountId,
-                        'debit' => $line->debit,
-                        'credit' => $line->credit,
-                        'description' => $line->description,
-                    ]);
-                }
-            });
-
-            $journalEntry->load('lines.account');
+            $updateJournalDraft->execute($journalEntry, $entryData);
         } catch (DomainException $e) {
             return $this->backWithError($e);
         }
