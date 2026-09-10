@@ -1,0 +1,54 @@
+{
+    "_meta": {
+        "module": "accountant-api",
+        "core_contract_version": "1.0.0",
+        "note": "Reconciled against contract/api-contract.json by tests/Feature/Plugins/ModuleContractReconciliationTest.php — no (method, path) pair may appear in both files. Routes below are the Phase 4 journal-correction endpoints (plan.md 'API-Vertrag'); registered as this module implements them."
+    },
+    "routes": [
+        {
+            "name": "api.journal-entries.corrections.prepare",
+            "method": "POST",
+            "path": "/api/v1/journal-entries/{original}/corrections",
+            "controller": "Plugins\\AccountantApi\\Controllers\\JournalCorrectionController@store",
+            "auth_required": true,
+            "abilities_required": ["correct"],
+            "notes": "Prepares a guided correction: creates a locked reversal draft and an editable replacement draft from the original. Requires Idempotency-Key."
+        },
+        {
+            "name": "api.journal-corrections.show",
+            "method": "GET",
+            "path": "/api/v1/journal-corrections/{correction}",
+            "controller": "Plugins\\AccountantApi\\Controllers\\JournalCorrectionController@show",
+            "auth_required": true,
+            "abilities_required": ["correct"],
+            "notes": "Returns the correction with original/reversal/replacement and their relationship links."
+        },
+        {
+            "name": "api.journal-corrections.replacement.update",
+            "method": "PUT",
+            "path": "/api/v1/journal-corrections/{correction}/replacement",
+            "controller": "Plugins\\AccountantApi\\Controllers\\JournalCorrectionController@updateReplacement",
+            "auth_required": true,
+            "abilities_required": ["correct"],
+            "notes": "Edits only the replacement draft. Requires Idempotency-Key."
+        },
+        {
+            "name": "api.journal-corrections.post",
+            "method": "POST",
+            "path": "/api/v1/journal-corrections/{correction}/post",
+            "controller": "Plugins\\AccountantApi\\Controllers\\JournalCorrectionController@post",
+            "auth_required": true,
+            "abilities_required": ["correct"],
+            "notes": "Posts the reversal and replacement together, atomically. Requires Idempotency-Key."
+        },
+        {
+            "name": "api.journal-corrections.destroy",
+            "method": "DELETE",
+            "path": "/api/v1/journal-corrections/{correction}",
+            "controller": "Plugins\\AccountantApi\\Controllers\\JournalCorrectionController@destroy",
+            "auth_required": true,
+            "abilities_required": ["correct"],
+            "notes": "Discards an open (draft) correction. Only allowed while status is draft."
+        }
+    ]
+}

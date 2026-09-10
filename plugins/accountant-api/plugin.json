@@ -1,0 +1,11 @@
+{
+    "name": "Accountant API",
+    "slug": "accountant-api",
+    "version": "0.1.0",
+    "description": "Extends /api/v1 with the guided journal correction endpoints and future accountant workflow coverage, as a thin transport layer over core Domain-Actions.",
+    "author": "Gäld",
+    "provider": "Plugins\\AccountantApi\\AccountantApiServiceProvider",
+    "enabled": true,
+    "core_contract_version": "1.0.0",
+    "requires": []
+}
