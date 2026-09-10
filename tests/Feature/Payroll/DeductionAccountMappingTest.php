@@ -201,6 +201,43 @@ class DeductionAccountMappingTest extends TestCase
         $this->assertTrue($lines->has('5700'));
     }
 
+    public function test_the_gross_salary_follows_the_configured_account(): void
+    {
+        Account::create([
+            'organization_id' => $this->organization->id,
+            'code' => '5600', 'name' => 'Löhne', 'type' => AccountType::Expense->value,
+        ]);
+        $this->organization->update(['payroll_salary_account_code' => '5600']);
+        $this->seedFullSwissRates();
+
+        $slip = $this->postFor($this->joel);
+        $codes = $slip->journalEntry->lines->load('account')->pluck('account.code');
+
+        $this->assertTrue($codes->contains('5600'));
+        $this->assertFalse($codes->contains('5000'));
+        $this->assertBalanced($slip);
+    }
+
+    public function test_a_reimbursement_follows_the_configured_account(): void
+    {
+        Account::create([
+            'organization_id' => $this->organization->id,
+            'code' => '5620', 'name' => 'Spesen', 'type' => AccountType::Expense->value,
+        ]);
+        $this->organization->update(['payroll_reimbursement_account_code' => '5620']);
+        $this->seedFullSwissRates();
+
+        $slip = app(PayrollCalculator::class)->calculate($this->joel, 5, 2026, reimbursementAmount: '50.00');
+        $slip->save();
+        $posted = app(PostPayrollAction::class)->execute($slip);
+
+        $lines = $posted->journalEntry->lines->load('account')->keyBy(fn ($l) => $l->account->code);
+
+        $this->assertSame('50.00', (string) $lines['5620']->debit);
+        $this->assertFalse($lines->has('6530'));
+        $this->assertBalanced($posted);
+    }
+
     public function test_a_deduction_without_an_account_is_refused_at_posting(): void
     {
         $this->seedFullSwissRates();

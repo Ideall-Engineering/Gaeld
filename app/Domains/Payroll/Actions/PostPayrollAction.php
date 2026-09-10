@@ -7,6 +7,7 @@ use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Contracts\SourceTaxServiceInterface;
 use App\Domains\Payroll\Exceptions\UnmappedDeductionException;
 use App\Domains\Payroll\Models\DeductionRate;
@@ -54,7 +55,15 @@ class PostPayrollAction
         $employee = $slip->employee;
         $description = "Salary {$employee->fullName()} — {$slip->period_month}/{$slip->period_year}";
 
-        $salaryAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::SALARIES);
+        // Explicitly, not via $employee->organization: lazy loading is off
+        // installation-wide and an unloaded relation throws.
+        $organization = Organization::query()->whereKey($orgId)->first();
+        $salaryAccount = $this->ledgerQuery->resolveAccount(
+            $orgId,
+            $organization?->payroll_salary_account_code === null
+                ? AccountCode::SALARIES
+                : $organization->payroll_salary_account_code,
+        );
         $bankAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::BANK_CASH);
 
         $sourceTaxAmount = Money::normalize((string) ($deductions['source_tax'] ?? $slip->source_tax_amount ?? '0.00'));
@@ -85,7 +94,12 @@ class PostPayrollAction
 
         $reimbursementAmount = (string) ($deductions['reimbursement_amount'] ?? '0.00');
         if (Money::isPositive($reimbursementAmount)) {
-            $reimbursementAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::GENERAL_EXPENSE);
+            $reimbursementAccount = $this->ledgerQuery->resolveAccount(
+                $orgId,
+                $organization?->payroll_reimbursement_account_code === null
+                    ? AccountCode::GENERAL_EXPENSE
+                    : $organization->payroll_reimbursement_account_code,
+            );
             $lines[] = new JournalLineData(
                 accountId: (string) $reimbursementAccount->id,
                 debit: $reimbursementAmount,

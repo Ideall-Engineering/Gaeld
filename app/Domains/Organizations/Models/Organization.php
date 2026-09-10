@@ -57,6 +57,8 @@ class Organization extends Model
     use Auditable, HasFactory, HasUuids, SoftDeletes;
 
     protected $fillable = [
+        'payroll_salary_account_code',
+        'payroll_reimbursement_account_code',
         'name',
         'legal_name',
         'address',
