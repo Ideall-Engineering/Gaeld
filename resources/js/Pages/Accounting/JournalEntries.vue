@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { router, useForm } from '@inertiajs/vue3'
+import { Link, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
 import CardHeader from '@/Components/UI/CardHeader.vue'
@@ -17,9 +17,10 @@ import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
 import HelpText from '@/Components/HelpText.vue'
 import EmptyState from '@/Components/UI/EmptyState.vue'
+import JournalCorrectionDialog from '@/Components/Accounting/JournalCorrectionDialog.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
-import { BookText, Plus, Check, RotateCcw, Trash2, Pencil, HelpCircle } from 'lucide-vue-next'
+import { BookText, Plus, Check, RotateCcw, Replace, Trash2, Pencil, HelpCircle } from 'lucide-vue-next'
 
 const props = defineProps({
   entries: Object,
@@ -155,6 +156,13 @@ function doReverse() {
   })
 }
 
+// Correction action
+const correctingEntry = ref(null)
+
+function openCorrect(entry) {
+  correctingEntry.value = entry
+}
+
 // Delete action
 const deletingEntry = ref(null)
 
@@ -202,32 +210,40 @@ function doDelete() {
           </template>
           <template #cell-reference="{ value, row }">
             <span class="inline-flex items-center gap-2">
-              {{ value }}
+              <Link :href="`/accounting/journal-entries/${row.id}`" class="hover:underline">{{ value || t('journal_entry') }}</Link>
               <Badge v-if="row.type === 'historical_summary'" variant="secondary">{{ t('historical_summary_badge') }}</Badge>
+              <Badge v-if="row.correction_role === 'original'" variant="warning">{{ t('journal_correction_corrected_badge') }}</Badge>
+              <Badge v-else-if="row.correction_role === 'reversal'" variant="secondary">{{ t('journal_correction_reversal_badge') }}</Badge>
+              <Badge v-else-if="row.correction_role === 'replacement'" variant="info">{{ t('journal_correction_replacement_badge') }}</Badge>
             </span>
           </template>
           <template #cell-actions="{ row }">
             <div class="flex justify-end gap-1">
               <!-- Draft entry actions -->
               <template v-if="!row.is_posted">
-                <Tooltip v-if="can.edit" :content="t('edit')" side="left">
+                <Tooltip v-if="can.edit && row.correction_role !== 'reversal'" :content="t('edit')" side="left">
                   <Button variant="ghost" size="icon" @click="openEdit(row)">
                     <Pencil class="h-4 w-4" />
                   </Button>
                 </Tooltip>
-                <Tooltip v-if="can.edit" :content="t('post')" side="left">
+                <Tooltip v-if="can.edit && row.correction_role !== 'reversal'" :content="t('post')" side="left">
                   <Button variant="ghost" size="icon" @click="confirmPost(row)">
                     <Check class="h-4 w-4 text-[hsl(var(--success))]" />
                   </Button>
                 </Tooltip>
-                <Tooltip v-if="can.delete" :content="t('delete')" side="left">
+                <Tooltip v-if="can.delete && !row.correction_role" :content="t('delete')" side="left">
                   <Button variant="ghost" size="icon" @click="confirmDelete(row)">
                     <Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" />
                   </Button>
                 </Tooltip>
               </template>
-              <!-- Posted entry actions (immutable - can only reverse) -->
-              <template v-else>
+              <!-- Posted entry actions -->
+              <template v-else-if="!row.correction_role && !row.reversal_of_entry_id">
+                <Tooltip v-if="can.edit" :content="t('tooltip_correct_journal_entry')" side="left">
+                  <Button variant="ghost" size="icon" @click="openCorrect(row)">
+                    <Replace class="h-4 w-4" />
+                  </Button>
+                </Tooltip>
                 <Tooltip v-if="can.edit" :content="t('tooltip_reverse_journal_entry')" side="left">
                   <Button variant="ghost" size="icon" @click="confirmReverse(row)">
                     <RotateCcw class="h-4 w-4" />
@@ -451,5 +467,8 @@ function doDelete() {
       @confirm="doDelete"
       @cancel="deletingEntry = null"
     />
+
+    <!-- Guided correction -->
+    <JournalCorrectionDialog :entry="correctingEntry" @close="correctingEntry = null" />
   </AppLayout>
 </template>
