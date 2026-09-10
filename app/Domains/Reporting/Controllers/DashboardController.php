@@ -34,9 +34,7 @@ class DashboardController extends Controller
         $org = $currentOrg->get();
         $metrics = $dashboardService->metrics($orgId);
 
-        $isEmptyState = $metrics['revenue'] === '0.00'
-            && $metrics['expenses'] === '0.00'
-            && count($metrics['recentTransactions']) === 0;
+        $isEmptyState = ! $metrics['hasActivity'];
 
         $expiredFiscalYear = FiscalYear::query()
             ->where('status', FiscalYearStatus::Expired->value)
