@@ -4,14 +4,14 @@ return [
     // Classe 1 : Actifs
     '1000' => 'Caisse',
     '1010' => 'Compte postal',
-    '1020' => 'Compte bancaire CHF',
+    '1020' => 'Compte bancaire Raiffeisen',
     '1021' => 'Compte bancaire EUR',
-    '1100' => 'Créances clients',
+    '1100' => 'Créances',
     '1109' => 'Provision pour créances douteuses',
     '1170' => 'TVA récupérable (impôt préalable)',
     '1200' => 'Stocks',
     '1300' => 'Charges payées d’avance',
-    '1500' => 'Machines et équipements',
+    '1500' => 'Inventaire commercial',
     '1510' => 'Mobilier de bureau',
     '1520' => 'Matériel informatique',
     '1530' => 'Véhicules',
@@ -21,11 +21,11 @@ return [
     '2000' => 'Dettes fournisseurs',
     '2100' => 'Emprunt bancaire à court terme',
     '2200' => 'TVA due (impôt sur le chiffre d’affaires)',
-    '2201' => 'TVA à payer',
-    '2270' => 'Charges sociales à payer',
-    '2271' => 'Assurance chômage (AC) à payer',
-    '2272' => 'Caisse de pension (LPP) à payer',
-    '2300' => 'Charges à payer',
+    '2201' => 'Décompte TVA (AFC)',
+    '2270' => 'Dettes envers les assurances sociales',
+    '2271' => 'Dettes envers la caisse de pension / LPP',
+    '2272' => 'Dettes envers les assurances de personnes (AXA LAA/IJM)',
+    '2300' => 'Charges non encore payées',
     '2400' => 'Emprunt bancaire à long terme',
 
     // Classe 2.8 : Capitaux propres
@@ -35,33 +35,33 @@ return [
     '2970' => 'Prélèvements privés',
 
     // Classe 3 : Produits
-    '3000' => 'Produits des prestations de services',
-    '3200' => 'Produits des ventes de marchandises',
+    '3000' => 'Produits bruts de la vente de marchandises',
+    '3200' => 'Produits financiers',
     '3400' => 'Autres produits',
     '3800' => 'Rabais et remises accordés',
     '3900' => 'Corrections de produits',
 
     // Classe 4 : Charges de matières et de services
-    '4000' => 'Charges de matières',
+    '4000' => 'Charges de matières de production',
     '4200' => 'Charges de services',
     '4400' => 'Charges de sous-traitance',
 
     // Classe 5 : Charges de personnel
     '5000' => 'Salaires',
-    '5700' => 'Charges sociales',
+    '5700' => 'AVS, AI, APG, AC',
     '5800' => 'Autres charges de personnel',
     '5900' => 'Personnel temporaire',
 
     // Classe 6 : Autres charges d’exploitation
     '6000' => 'Loyer',
     '6100' => 'Entretien et réparations',
-    '6200' => 'Frais de véhicules',
+    '6200' => 'Impôts directs',
     '6300' => 'Assurances',
     '6400' => 'Énergie et fluides',
     '6500' => 'Fournitures de bureau',
     '6510' => 'Téléphone et internet',
     '6520' => 'Frais de port',
-    '6530' => 'Logiciels et abonnements',
+    '6530' => 'Frais de secrétariat, comptabilité et révision',
     '6570' => 'Honoraires comptables et juridiques',
     '6600' => 'Publicité et marketing',
     '6700' => 'Frais de déplacement',
@@ -73,7 +73,7 @@ return [
     '7000' => 'Produits hors exploitation',
     '7500' => 'Charges hors exploitation',
     '8000' => 'Produits extraordinaires',
-    '8500' => 'Charges extraordinaires',
+    '8500' => 'Charges extraordinaires uniques',
 
     // Classe 9 : Bouclement
     '9000' => 'Bilan d’ouverture',
