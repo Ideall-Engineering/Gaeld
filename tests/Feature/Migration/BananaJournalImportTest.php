@@ -210,7 +210,10 @@ class BananaJournalImportTest extends TestCase
         $second = $this->import();
 
         $this->assertSame($countAfterFirst, JournalEntry::count());
+        $this->assertTrue($second->success);
         $this->assertSame(0, $second->importedCount);
+        $this->assertSame(0, $second->failedCount);
+        $this->assertGreaterThan(0, $second->skippedCount);
         $this->assertGreaterThan(0, $first->importedCount);
     }
 

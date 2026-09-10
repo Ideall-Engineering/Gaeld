@@ -5,6 +5,7 @@ namespace App\Domains\Migration\Importers;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Accounting\Support\VatCodeResolver;
 use App\Domains\Migration\Contracts\DataTypeImporterInterface;
@@ -92,6 +93,13 @@ class JournalEntryImporter implements DataTypeImporterInterface
 
         $accounts = Account::where('organization_id', $organization->id)
             ->pluck('id', 'code');
+        /** @var array<string, true> $existingReferences */
+        $existingReferences = JournalEntry::query()
+            ->where('organization_id', $organization->id)
+            ->whereNotNull('reference')
+            ->pluck('reference')
+            ->mapWithKeys(static fn ($reference): array => [(string) $reference => true])
+            ->all();
 
         foreach ($rows as $row) {
             if (! $row instanceof JournalEntryImportRow || ! $row->isValid()) {
@@ -101,6 +109,12 @@ class JournalEntryImporter implements DataTypeImporterInterface
             }
 
             $rowNumber = $row->sourceRow();
+
+            if ($row->reference !== null && isset($existingReferences[$row->reference])) {
+                $skipped++;
+
+                continue;
+            }
 
             try {
                 $lines = $this->explicitLines($row, $organization);
@@ -147,6 +161,9 @@ class JournalEntryImporter implements DataTypeImporterInterface
                 ));
 
                 $imported++;
+                if ($row->reference !== null) {
+                    $existingReferences[$row->reference] = true;
+                }
             } catch (\Throwable $exception) {
                 $failed++;
                 $errors[] = "Row {$rowNumber}: {$exception->getMessage()}";
