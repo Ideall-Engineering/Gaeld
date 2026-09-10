@@ -73,6 +73,7 @@ class PostJournalCorrectionAction
 
         JournalEntryCorrected::dispatch(
             Str::uuid()->toString(),
+            $posted->organization_id,
             $posted->original_journal_entry_id,
             $posted->reversal_journal_entry_id,
             $posted->replacement_journal_entry_id,

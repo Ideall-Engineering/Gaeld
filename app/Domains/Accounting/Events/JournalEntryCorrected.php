@@ -15,6 +15,7 @@ class JournalEntryCorrected
 
     public function __construct(
         public readonly string $eventId,
+        public readonly string $organizationId,
         public readonly string $originalJournalEntryId,
         public readonly string $reversalJournalEntryId,
         public readonly string $replacementJournalEntryId,
