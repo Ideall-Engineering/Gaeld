@@ -7,6 +7,7 @@ use App\Domains\Accounting\Exceptions\DuplicateReferenceException;
 use App\Domains\Accounting\Exceptions\FiscalYearClosedException;
 use App\Domains\Accounting\Exceptions\InvalidEntryDataException;
 use App\Domains\Accounting\Exceptions\UnbalancedEntryException;
+use App\Domains\Accounting\Exceptions\UnknownVatCodeException;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Api\Exceptions\ApiIdempotencyConflictException;
@@ -293,6 +294,7 @@ class JournalEntryApiController extends Controller
             $exception instanceof FiscalYearClosedException => 'fiscal_year_closed',
             $exception instanceof InvalidEntryDataException => 'invalid_entry_data',
             $exception instanceof UnbalancedEntryException => 'journal_entry_unbalanced',
+            $exception instanceof UnknownVatCodeException => 'unknown_vat_code',
             default => 'domain_error',
         };
 

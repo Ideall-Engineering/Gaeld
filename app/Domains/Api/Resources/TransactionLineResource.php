@@ -25,6 +25,10 @@ class TransactionLineResource extends JsonResource
             'debit' => (string) $this->debit,
             'credit' => (string) $this->credit,
             'description' => $this->description,
+            'vat_rate_id' => $this->vat_rate_id,
+            'vat_amount' => $this->vat_amount === null ? null : (string) $this->vat_amount,
+            'vat_type' => $this->vat_type?->value,
+            'vat_figure' => $this->vat_figure,
         ];
     }
 }

@@ -19,49 +19,121 @@
       "security": "Local/admin command only. The plain-text token is printed once and is never persisted in plain text."
     }
   },
-
   "authentication": {
     "type": "bearer",
     "scheme": "sanctum",
     "header": "Authorization: Bearer {token}",
-    "token_types": ["personal", "organization"],
-    "middleware_stack": ["auth:sanctum", "api-org", "feature:api_access", "throttle:api"],
+    "token_types": [
+      "personal",
+      "organization"
+    ],
+    "middleware_stack": [
+      "auth:sanctum",
+      "api-org",
+      "feature:api_access",
+      "throttle:api"
+    ],
     "organization_resolution": "Resolved from token's organization_id column. Personal tokens also verify user membership. Organization tokens bypass policy checks.",
     "data_isolation": "BelongsToOrganization trait adds global scope filtering all queries by organization_id automatically."
   },
   "token_abilities": {
     "canonical": [
-      "accounting.view", "accounting.create", "accounting.edit", "accounting.delete",
-      "contacts.view", "contacts.create", "contacts.edit", "contacts.delete",
-      "invoicing.view", "invoicing.create", "invoicing.edit", "invoicing.delete", "invoicing.finalize", "invoicing.record-payment",
-      "expenses.view", "expenses.create", "expenses.edit", "expenses.approve", "expenses.delete",
-      "banking.view", "banking.create", "banking.import",
-      "organization.view", "organization.edit", "organization.delete", "organization.manage-users", "organization.view-audit-log"
+      "accounting.view",
+      "accounting.create",
+      "accounting.edit",
+      "accounting.delete",
+      "contacts.view",
+      "contacts.create",
+      "contacts.edit",
+      "contacts.delete",
+      "invoicing.view",
+      "invoicing.create",
+      "invoicing.edit",
+      "invoicing.delete",
+      "invoicing.finalize",
+      "invoicing.record-payment",
+      "expenses.view",
+      "expenses.create",
+      "expenses.edit",
+      "expenses.approve",
+      "expenses.delete",
+      "banking.view",
+      "banking.create",
+      "banking.import",
+      "organization.view",
+      "organization.edit",
+      "organization.delete",
+      "organization.manage-users",
+      "organization.view-audit-log"
     ],
     "wildcard": "*",
     "empty_selection": "An omitted or empty abilities array creates a wildcard token.",
     "legacy_aliases": {
-      "customers:read": ["contacts.view"],
-      "customers:write": ["contacts.create", "contacts.edit", "contacts.delete"],
-      "invoices:read": ["invoicing.view"],
-      "invoices:write": ["invoicing.create", "invoicing.edit", "invoicing.delete"],
-      "expenses:read": ["expenses.view"],
-      "expenses:write": ["expenses.create", "expenses.edit", "expenses.delete"],
-      "accounts:read": ["accounting.view"],
-      "bank-accounts:read": ["banking.view"],
-      "webhooks:read": ["organization.edit"],
-      "webhooks:write": ["organization.edit"]
+      "customers:read": [
+        "contacts.view"
+      ],
+      "customers:write": [
+        "contacts.create",
+        "contacts.edit",
+        "contacts.delete"
+      ],
+      "invoices:read": [
+        "invoicing.view"
+      ],
+      "invoices:write": [
+        "invoicing.create",
+        "invoicing.edit",
+        "invoicing.delete"
+      ],
+      "expenses:read": [
+        "expenses.view"
+      ],
+      "expenses:write": [
+        "expenses.create",
+        "expenses.edit",
+        "expenses.delete"
+      ],
+      "accounts:read": [
+        "accounting.view"
+      ],
+      "bank-accounts:read": [
+        "banking.view"
+      ],
+      "webhooks:read": [
+        "organization.edit"
+      ],
+      "webhooks:write": [
+        "organization.edit"
+      ]
     }
   },
-
   "route_aliases": [
-    { "route_name": "api.contacts.index", "path": "/api/v1/contacts", "alias_of": "api.customers.index" },
-    { "route_name": "api.contacts.show", "path": "/api/v1/contacts/{contact}", "alias_of": "api.customers.show" },
-    { "route_name": "api.contacts.store", "path": "/api/v1/contacts", "alias_of": "api.customers.store" },
-    { "route_name": "api.contacts.update", "path": "/api/v1/contacts/{contact}", "alias_of": "api.customers.update" },
-    { "route_name": "api.contacts.destroy", "path": "/api/v1/contacts/{contact}", "alias_of": "api.customers.destroy" }
+    {
+      "route_name": "api.contacts.index",
+      "path": "/api/v1/contacts",
+      "alias_of": "api.customers.index"
+    },
+    {
+      "route_name": "api.contacts.show",
+      "path": "/api/v1/contacts/{contact}",
+      "alias_of": "api.customers.show"
+    },
+    {
+      "route_name": "api.contacts.store",
+      "path": "/api/v1/contacts",
+      "alias_of": "api.customers.store"
+    },
+    {
+      "route_name": "api.contacts.update",
+      "path": "/api/v1/contacts/{contact}",
+      "alias_of": "api.customers.update"
+    },
+    {
+      "route_name": "api.contacts.destroy",
+      "path": "/api/v1/contacts/{contact}",
+      "alias_of": "api.customers.destroy"
+    }
   ],
-
   "rate_limiting": {
     "strategy": "throttle:api middleware via Laravel RateLimiter",
     "default_limit": "60 requests per minute",
@@ -77,14 +149,12 @@
       "message": "Too Many Attempts."
     }
   },
-
   "monitoring": {
     "error_tracking": "Sentry (sentry/sentry-laravel ^4.24)",
     "config": "Environment-based via SENTRY_LARAVEL_DSN in .env",
     "traces_sample_rate": "Configurable via SENTRY_TRACES_SAMPLE_RATE (default 0.1)",
     "health_check": "GET /health (HealthController) — checks app status outside API middleware"
   },
-
   "error_format": {
     "standard": {
       "message": "string",
@@ -94,7 +164,9 @@
       "message": "string",
       "code": "validation_error",
       "errors": {
-        "<field>": ["string"]
+        "<field>": [
+          "string"
+        ]
       }
     },
     "domain_exception_422": {
@@ -120,11 +192,14 @@
     "rate_limit_429": {
       "message": "Too Many Attempts.",
       "code": "rate_limit_exceeded",
-      "headers": ["Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining"]
+      "headers": [
+        "Retry-After",
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining"
+      ]
     },
     "uuid_parse_error": "Malformed UUID in route parameter returns 404 (handled by QueryException 22P02 rendering)"
   },
-
   "routes": [
     {
       "name": "api.info",
@@ -142,7 +217,6 @@
       },
       "notes": "Static response. Status is always 'ok' regardless of system state. Documentation URL is hardcoded to https://docs.gaeld.ch/docs/api/gald-api-documentation."
     },
-
     {
       "name": "api.tokens.index",
       "method": "GET",
@@ -156,7 +230,9 @@
           {
             "id": "uuid",
             "name": "string",
-            "abilities": ["string"],
+            "abilities": [
+              "string"
+            ],
             "last_used_at": "ISO8601|null",
             "expires_at": "ISO8601|null",
             "created_at": "ISO8601|null"
@@ -165,7 +241,6 @@
       },
       "notes": "Returns only personal tokens for the authenticated user in the current organization."
     },
-
     {
       "name": "api.tokens.store",
       "method": "POST",
@@ -176,20 +251,37 @@
       "request": {
         "validation_class": "StoreApiTokenRequest",
         "body": {
-          "name": { "type": "string", "required": true, "max": 255 },
-          "abilities": { "type": "array of string", "required": false, "default": ["*"], "values": "Canonical permissions, wildcard, or documented legacy aliases" },
-          "expires_in_days": { "type": "integer|null", "required": false, "min": 1, "max": 365 }
+          "name": {
+            "type": "string",
+            "required": true,
+            "max": 255
+          },
+          "abilities": {
+            "type": "array of string",
+            "required": false,
+            "default": [
+              "*"
+            ],
+            "values": "Canonical permissions, wildcard, or documented legacy aliases"
+          },
+          "expires_in_days": {
+            "type": "integer|null",
+            "required": false,
+            "min": 1,
+            "max": 365
+          }
         }
       },
       "response_201": {
         "token": "string (plain-text, shown ONCE)",
         "name": "string",
         "type": "personal",
-        "abilities": ["string"],
+        "abilities": [
+          "string"
+        ],
         "expires_at": "ISO8601|null"
       }
     },
-
     {
       "name": "api.tokens.destroy",
       "method": "DELETE",
@@ -203,23 +295,28 @@
         }
       },
       "response_204": null,
-      "response_404": { "message": "string" }
+      "response_404": {
+        "message": "string"
+      }
     },
-
     {
       "name": "api.org-tokens.index",
       "method": "GET",
       "path": "/api/v1/org-tokens",
       "controller": "OrgTokenController@index",
       "auth_required": true,
-      "abilities_required": ["manageUsers permission on organization"],
+      "abilities_required": [
+        "manageUsers permission on organization"
+      ],
       "request": {},
       "response_200": {
         "data": [
           {
             "id": "uuid",
             "name": "string",
-            "abilities": ["string"],
+            "abilities": [
+              "string"
+            ],
             "last_used_at": "ISO8601|null",
             "expires_at": "ISO8601|null",
             "created_at": "ISO8601|null",
@@ -228,47 +325,68 @@
         ]
       }
     },
-
     {
       "name": "api.org-tokens.store",
       "method": "POST",
       "path": "/api/v1/org-tokens",
       "controller": "OrgTokenController@store",
       "auth_required": true,
-      "abilities_required": ["manageUsers permission on organization"],
+      "abilities_required": [
+        "manageUsers permission on organization"
+      ],
       "request": {
         "validation_class": "StoreOrgTokenRequest",
         "body": {
-          "name": { "type": "string", "required": true, "max": 255 },
-          "abilities": { "type": "array of string", "required": false, "default": ["*"], "values": "Canonical permissions, wildcard, or documented legacy aliases" },
-          "expires_in_days": { "type": "integer|null", "required": false, "min": 1, "max": 365 }
+          "name": {
+            "type": "string",
+            "required": true,
+            "max": 255
+          },
+          "abilities": {
+            "type": "array of string",
+            "required": false,
+            "default": [
+              "*"
+            ],
+            "values": "Canonical permissions, wildcard, or documented legacy aliases"
+          },
+          "expires_in_days": {
+            "type": "integer|null",
+            "required": false,
+            "min": 1,
+            "max": 365
+          }
         }
       },
       "response_201": {
         "token": "string (plain-text, shown ONCE)",
         "name": "string",
         "type": "organization",
-        "abilities": ["string"],
+        "abilities": [
+          "string"
+        ],
         "expires_at": "ISO8601|null"
       }
     },
-
     {
       "name": "api.org-tokens.destroy",
       "method": "DELETE",
       "path": "/api/v1/org-tokens/{token}",
       "controller": "OrgTokenController@destroy",
       "auth_required": true,
-      "abilities_required": ["manageUsers permission on organization"],
+      "abilities_required": [
+        "manageUsers permission on organization"
+      ],
       "request": {
         "params": {
           "token": "uuid (token UUID)"
         }
       },
       "response_204": null,
-      "response_404": { "message": "string" }
+      "response_404": {
+        "message": "string"
+      }
     },
-
     {
       "name": "api.meta.abilities",
       "method": "GET",
@@ -279,17 +397,36 @@
       "request": {},
       "response_200": {
         "data": [
-          "accounting.view", "accounting.create", "accounting.edit", "accounting.delete",
-          "contacts.view", "contacts.create", "contacts.edit", "contacts.delete",
-          "invoicing.view", "invoicing.create", "invoicing.edit", "invoicing.delete", "invoicing.finalize", "invoicing.record-payment",
-          "expenses.view", "expenses.create", "expenses.edit", "expenses.approve", "expenses.delete",
-          "banking.view", "banking.import",
-          "organization.view", "organization.edit", "organization.delete", "organization.manage-users", "organization.view-audit-log"
+          "accounting.view",
+          "accounting.create",
+          "accounting.edit",
+          "accounting.delete",
+          "contacts.view",
+          "contacts.create",
+          "contacts.edit",
+          "contacts.delete",
+          "invoicing.view",
+          "invoicing.create",
+          "invoicing.edit",
+          "invoicing.delete",
+          "invoicing.finalize",
+          "invoicing.record-payment",
+          "expenses.view",
+          "expenses.create",
+          "expenses.edit",
+          "expenses.approve",
+          "expenses.delete",
+          "banking.view",
+          "banking.import",
+          "organization.view",
+          "organization.edit",
+          "organization.delete",
+          "organization.manage-users",
+          "organization.view-audit-log"
         ]
       },
       "notes": "Derived from the supported model-policy permission map."
     },
-
     {
       "name": "api.meta.webhook-events",
       "method": "GET",
@@ -300,48 +437,80 @@
       "request": {},
       "response_200": {
         "data": [
-          "invoice.created", "invoice.updated", "invoice.deleted", "invoice.finalized", "invoice.payment_recorded",
-          "customer.created", "customer.updated", "customer.deleted",
-          "expense.created", "expense.updated", "expense.deleted", "expense.approved",
-          "journal_entry.posted", "journal_entry.reversed"
+          "invoice.created",
+          "invoice.updated",
+          "invoice.deleted",
+          "invoice.finalized",
+          "invoice.payment_recorded",
+          "customer.created",
+          "customer.updated",
+          "customer.deleted",
+          "expense.created",
+          "expense.updated",
+          "expense.deleted",
+          "expense.approved",
+          "journal_entry.posted",
+          "journal_entry.reversed"
         ]
       },
       "notes": "Derived from WebhookEvent enum. Verified in source."
     },
-
     {
       "name": "api.customers.index",
       "method": "GET",
       "path": "/api/v1/customers",
       "controller": "CustomerApiController@index",
       "auth_required": true,
-      "abilities_required": ["contacts.view"],
+      "abilities_required": [
+        "contacts.view"
+      ],
       "policy": "viewAny on Customer",
       "request": {
         "query": {
-          "page": { "type": "integer", "required": false },
-          "per_page": { "type": "integer", "required": false },
-          "search": { "type": "string", "required": false },
-          "sort": { "type": "string", "required": false }
+          "page": {
+            "type": "integer",
+            "required": false
+          },
+          "per_page": {
+            "type": "integer",
+            "required": false
+          },
+          "search": {
+            "type": "string",
+            "required": false
+          },
+          "sort": {
+            "type": "string",
+            "required": false
+          }
         }
       },
       "response_200": {
-        "data": ["CustomerResource[]"],
+        "data": [
+          "CustomerResource[]"
+        ],
         "links": {},
-        "meta": { "current_page": "int", "per_page": "int", "total": "int" }
+        "meta": {
+          "current_page": "int",
+          "per_page": "int",
+          "total": "int"
+        }
       }
     },
-
     {
       "name": "api.customers.show",
       "method": "GET",
       "path": "/api/v1/customers/{customer}",
       "controller": "CustomerApiController@show",
       "auth_required": true,
-      "abilities_required": ["contacts.view"],
+      "abilities_required": [
+        "contacts.view"
+      ],
       "policy": "view on Customer",
       "request": {
-        "params": { "customer": "uuid" }
+        "params": {
+          "customer": "uuid"
+        }
       },
       "response_200": {
         "data": {
@@ -363,113 +532,240 @@
         }
       }
     },
-
     {
       "name": "api.customers.store",
       "method": "POST",
       "path": "/api/v1/customers",
       "controller": "CustomerApiController@store",
       "auth_required": true,
-      "abilities_required": ["contacts.create"],
+      "abilities_required": [
+        "contacts.create"
+      ],
       "policy": "create on Customer",
       "request": {
         "validation_class": "StoreCustomerApiRequest",
         "body": {
-          "name": { "type": "string", "required": true, "max": 255 },
-          "email": { "type": "email|null", "required": false, "max": 255 },
-          "phone": { "type": "string|null", "required": false, "max": 50 },
-          "address": { "type": "string|null", "required": false, "max": 500 },
-          "city": { "type": "string|null", "required": false, "max": 100 },
-          "postal_code": { "type": "string|null", "required": false, "max": 10 },
-          "country": { "type": "string|null", "required": false, "size": 2, "note": "ISO 3166-1 alpha-2" },
-          "vat_number": { "type": "string|null", "required": false, "max": 50 },
-          "currency": { "type": "string|null", "required": false, "size": 3, "note": "ISO 4217" },
-          "payment_terms": { "type": "string|null", "required": false, "max": 255 },
-          "internal_notes": { "type": "string|null", "required": false }
+          "name": {
+            "type": "string",
+            "required": true,
+            "max": 255
+          },
+          "email": {
+            "type": "email|null",
+            "required": false,
+            "max": 255
+          },
+          "phone": {
+            "type": "string|null",
+            "required": false,
+            "max": 50
+          },
+          "address": {
+            "type": "string|null",
+            "required": false,
+            "max": 500
+          },
+          "city": {
+            "type": "string|null",
+            "required": false,
+            "max": 100
+          },
+          "postal_code": {
+            "type": "string|null",
+            "required": false,
+            "max": 10
+          },
+          "country": {
+            "type": "string|null",
+            "required": false,
+            "size": 2,
+            "note": "ISO 3166-1 alpha-2"
+          },
+          "vat_number": {
+            "type": "string|null",
+            "required": false,
+            "max": 50
+          },
+          "currency": {
+            "type": "string|null",
+            "required": false,
+            "size": 3,
+            "note": "ISO 4217"
+          },
+          "payment_terms": {
+            "type": "string|null",
+            "required": false,
+            "max": 255
+          },
+          "internal_notes": {
+            "type": "string|null",
+            "required": false
+          }
         }
       },
-      "response_201": { "data": "CustomerResource" }
+      "response_201": {
+        "data": "CustomerResource"
+      }
     },
-
     {
       "name": "api.customers.update",
       "method": "PUT",
       "path": "/api/v1/customers/{customer}",
       "controller": "CustomerApiController@update",
       "auth_required": true,
-      "abilities_required": ["contacts.edit"],
+      "abilities_required": [
+        "contacts.edit"
+      ],
       "policy": "update on Customer",
       "request": {
         "validation_class": "UpdateCustomerApiRequest",
-        "params": { "customer": "uuid" },
+        "params": {
+          "customer": "uuid"
+        },
         "body": {
-          "name": { "type": "string", "required": false, "max": 255 },
-          "email": { "type": "email|null", "required": false, "max": 255 },
-          "phone": { "type": "string|null", "required": false, "max": 50 },
-          "address": { "type": "string|null", "required": false, "max": 500 },
-          "city": { "type": "string|null", "required": false, "max": 100 },
-          "postal_code": { "type": "string|null", "required": false, "max": 10 },
-          "country": { "type": "string|null", "required": false, "size": 2 },
-          "vat_number": { "type": "string|null", "required": false, "max": 50 },
-          "currency": { "type": "string|null", "required": false, "size": 3 },
-          "payment_terms": { "type": "string|null", "required": false, "max": 255 },
-          "internal_notes": { "type": "string|null", "required": false }
+          "name": {
+            "type": "string",
+            "required": false,
+            "max": 255
+          },
+          "email": {
+            "type": "email|null",
+            "required": false,
+            "max": 255
+          },
+          "phone": {
+            "type": "string|null",
+            "required": false,
+            "max": 50
+          },
+          "address": {
+            "type": "string|null",
+            "required": false,
+            "max": 500
+          },
+          "city": {
+            "type": "string|null",
+            "required": false,
+            "max": 100
+          },
+          "postal_code": {
+            "type": "string|null",
+            "required": false,
+            "max": 10
+          },
+          "country": {
+            "type": "string|null",
+            "required": false,
+            "size": 2
+          },
+          "vat_number": {
+            "type": "string|null",
+            "required": false,
+            "max": 50
+          },
+          "currency": {
+            "type": "string|null",
+            "required": false,
+            "size": 3
+          },
+          "payment_terms": {
+            "type": "string|null",
+            "required": false,
+            "max": 255
+          },
+          "internal_notes": {
+            "type": "string|null",
+            "required": false
+          }
         }
       },
-      "response_200": { "data": "CustomerResource" },
+      "response_200": {
+        "data": "CustomerResource"
+      },
       "notes": "Sparse update — only provided fields are changed."
     },
-
     {
       "name": "api.customers.destroy",
       "method": "DELETE",
       "path": "/api/v1/customers/{customer}",
       "controller": "CustomerApiController@destroy",
       "auth_required": true,
-      "abilities_required": ["contacts.delete"],
+      "abilities_required": [
+        "contacts.delete"
+      ],
       "policy": "delete on Customer",
       "request": {
-        "params": { "customer": "uuid" }
+        "params": {
+          "customer": "uuid"
+        }
       },
       "response_204": null,
       "notes": "ISSUE: No FK constraint handling. Will throw unhandled QueryException if customer has linked invoices."
     },
-
     {
       "name": "api.invoices.index",
       "method": "GET",
       "path": "/api/v1/invoices",
       "controller": "InvoiceApiController@index",
       "auth_required": true,
-      "abilities_required": ["invoicing.view"],
+      "abilities_required": [
+        "invoicing.view"
+      ],
       "policy": "viewAny on Invoice",
       "request": {
         "query": {
-          "page": { "type": "integer", "required": false },
-          "per_page": { "type": "integer", "required": false },
-          "status": { "type": "string", "required": false },
-          "type": { "type": "string", "required": false },
-          "sort": { "type": "string", "required": false },
-          "search": { "type": "string", "required": false }
+          "page": {
+            "type": "integer",
+            "required": false
+          },
+          "per_page": {
+            "type": "integer",
+            "required": false
+          },
+          "status": {
+            "type": "string",
+            "required": false
+          },
+          "type": {
+            "type": "string",
+            "required": false
+          },
+          "sort": {
+            "type": "string",
+            "required": false
+          },
+          "search": {
+            "type": "string",
+            "required": false
+          }
         }
       },
       "response_200": {
-        "data": ["InvoiceResource[]"],
+        "data": [
+          "InvoiceResource[]"
+        ],
         "links": {},
-        "meta": { "current_page": "int", "per_page": "int", "total": "int" }
+        "meta": {
+          "current_page": "int",
+          "per_page": "int",
+          "total": "int"
+        }
       }
     },
-
     {
       "name": "api.invoices.show",
       "method": "GET",
       "path": "/api/v1/invoices/{invoice}",
       "controller": "InvoiceApiController@show",
       "auth_required": true,
-      "abilities_required": ["invoicing.view"],
+      "abilities_required": [
+        "invoicing.view"
+      ],
       "policy": "view on Invoice",
       "request": {
-        "params": { "invoice": "uuid" }
+        "params": {
+          "invoice": "uuid"
+        }
       },
       "response_200": {
         "data": {
@@ -533,118 +829,225 @@
       },
       "notes": "Invoice lines have integer IDs (InvoiceLine model lacks HasUuids). All other models use UUID."
     },
-
     {
       "name": "api.invoices.store",
       "method": "POST",
       "path": "/api/v1/invoices",
       "controller": "InvoiceApiController@store",
       "auth_required": true,
-      "abilities_required": ["invoicing.create"],
+      "abilities_required": [
+        "invoicing.create"
+      ],
       "policy": "create on Invoice",
       "request": {
         "validation_class": "StoreInvoiceApiRequest",
         "body": {
-          "customer_id": { "type": "uuid", "required": true, "note": "Must exist in customers table for current org" },
-          "number": { "type": "string|null", "required": false, "max": 50, "note": "Auto-generated if omitted (format: PREFIX-YYYY-NNN)" },
-          "issue_date": { "type": "date", "required": true },
-          "due_date": { "type": "date|null", "required": false, "note": "Must be >= issue_date" },
-          "currency": { "type": "string", "required": false, "size": 3 },
-          "notes": { "type": "string|null", "required": false },
-          "payment_terms": { "type": "string|null", "required": false },
+          "customer_id": {
+            "type": "uuid",
+            "required": true,
+            "note": "Must exist in customers table for current org"
+          },
+          "number": {
+            "type": "string|null",
+            "required": false,
+            "max": 50,
+            "note": "Auto-generated if omitted (format: PREFIX-YYYY-NNN)"
+          },
+          "issue_date": {
+            "type": "date",
+            "required": true
+          },
+          "due_date": {
+            "type": "date|null",
+            "required": false,
+            "note": "Must be >= issue_date"
+          },
+          "currency": {
+            "type": "string",
+            "required": false,
+            "size": 3
+          },
+          "notes": {
+            "type": "string|null",
+            "required": false
+          },
+          "payment_terms": {
+            "type": "string|null",
+            "required": false
+          },
           "lines": {
             "type": "array",
             "required": true,
             "min_items": 1,
             "items": {
-              "description": { "type": "string", "required": true },
-              "quantity": { "type": "numeric", "required": true, "min": 0.01 },
-              "unit_price": { "type": "numeric", "required": true, "min": 0 },
-              "vat_rate_id": { "type": "uuid|null", "required": false, "note": "Must exist in vat_rates for current org" }
+              "description": {
+                "type": "string",
+                "required": true
+              },
+              "quantity": {
+                "type": "numeric",
+                "required": true,
+                "min": 0.01
+              },
+              "unit_price": {
+                "type": "numeric",
+                "required": true,
+                "min": 0
+              },
+              "vat_rate_id": {
+                "type": "uuid|null",
+                "required": false,
+                "note": "Must exist in vat_rates for current org"
+              }
             }
           }
         }
       },
-      "response_201": { "data": "InvoiceResource (with customer, lines.vatRate loaded)" },
+      "response_201": {
+        "data": "InvoiceResource (with customer, lines.vatRate loaded)"
+      },
       "notes": "Auto-generates invoice number with up to 3 retry attempts on unique constraint conflict (PostgreSQL error 23505)."
     },
-
     {
       "name": "api.invoices.update",
       "method": "PUT",
       "path": "/api/v1/invoices/{invoice}",
       "controller": "InvoiceApiController@update",
       "auth_required": true,
-      "abilities_required": ["invoicing.edit"],
+      "abilities_required": [
+        "invoicing.edit"
+      ],
       "policy": "update on Invoice",
       "request": {
         "validation_class": "UpdateInvoiceApiRequest",
-        "params": { "invoice": "uuid" },
+        "params": {
+          "invoice": "uuid"
+        },
         "body": {
-          "customer_id": { "type": "uuid", "required": false },
-          "number": { "type": "string|null", "required": false, "max": 50 },
-          "issue_date": { "type": "date", "required": false },
-          "due_date": { "type": "date|null", "required": false },
-          "currency": { "type": "string", "required": false, "size": 3 },
-          "notes": { "type": "string|null", "required": false },
-          "payment_terms": { "type": "string|null", "required": false },
-          "lines": { "type": "array|null", "required": false, "items": "same as store" }
+          "customer_id": {
+            "type": "uuid",
+            "required": false
+          },
+          "number": {
+            "type": "string|null",
+            "required": false,
+            "max": 50
+          },
+          "issue_date": {
+            "type": "date",
+            "required": false
+          },
+          "due_date": {
+            "type": "date|null",
+            "required": false
+          },
+          "currency": {
+            "type": "string",
+            "required": false,
+            "size": 3
+          },
+          "notes": {
+            "type": "string|null",
+            "required": false
+          },
+          "payment_terms": {
+            "type": "string|null",
+            "required": false
+          },
+          "lines": {
+            "type": "array|null",
+            "required": false,
+            "items": "same as store"
+          }
         }
       },
-      "response_200": { "data": "InvoiceResource" },
+      "response_200": {
+        "data": "InvoiceResource"
+      },
       "notes": "Sparse update: missing fields hydrated from existing invoice. Only draft invoices can be updated — throws InvalidInvoiceStateException otherwise."
     },
-
     {
       "name": "api.invoices.destroy",
       "method": "DELETE",
       "path": "/api/v1/invoices/{invoice}",
       "controller": "InvoiceApiController@destroy",
       "auth_required": true,
-      "abilities_required": ["invoicing.delete"],
+      "abilities_required": [
+        "invoicing.delete"
+      ],
       "policy": "delete on Invoice",
       "request": {
-        "params": { "invoice": "uuid" }
+        "params": {
+          "invoice": "uuid"
+        }
       },
       "response_204": null,
       "notes": "Only draft/cancelled invoices can be deleted. Action cleans up journal entries."
     },
-
     {
       "name": "api.expenses.index",
       "method": "GET",
       "path": "/api/v1/expenses",
       "controller": "ExpenseApiController@index",
       "auth_required": true,
-      "abilities_required": ["expenses.view"],
+      "abilities_required": [
+        "expenses.view"
+      ],
       "policy": "viewAny on Expense",
       "request": {
         "query": {
-          "page": { "type": "integer", "required": false },
-          "per_page": { "type": "integer", "required": false },
-          "status": { "type": "string", "required": false },
-          "category": { "type": "string", "required": false },
-          "search": { "type": "string", "required": false },
-          "sort": { "type": "string", "required": false }
+          "page": {
+            "type": "integer",
+            "required": false
+          },
+          "per_page": {
+            "type": "integer",
+            "required": false
+          },
+          "status": {
+            "type": "string",
+            "required": false
+          },
+          "category": {
+            "type": "string",
+            "required": false
+          },
+          "search": {
+            "type": "string",
+            "required": false
+          },
+          "sort": {
+            "type": "string",
+            "required": false
+          }
         }
       },
       "response_200": {
-        "data": ["ExpenseResource[]"],
+        "data": [
+          "ExpenseResource[]"
+        ],
         "links": {},
-        "meta": { "current_page": "int", "per_page": "int", "total": "int" }
+        "meta": {
+          "current_page": "int",
+          "per_page": "int",
+          "total": "int"
+        }
       }
     },
-
     {
       "name": "api.expenses.show",
       "method": "GET",
       "path": "/api/v1/expenses/{expense}",
       "controller": "ExpenseApiController@show",
       "auth_required": true,
-      "abilities_required": ["expenses.view"],
+      "abilities_required": [
+        "expenses.view"
+      ],
       "policy": "view on Expense",
       "request": {
-        "params": { "expense": "uuid" }
+        "params": {
+          "expense": "uuid"
+        }
       },
       "response_200": {
         "data": {
@@ -663,192 +1066,431 @@
         }
       }
     },
-
     {
       "name": "api.expenses.store",
       "method": "POST",
       "path": "/api/v1/expenses",
       "controller": "ExpenseApiController@store",
       "auth_required": true,
-      "abilities_required": ["expenses.create"],
+      "abilities_required": [
+        "expenses.create"
+      ],
       "policy": "create on Expense",
       "request": {
         "validation_class": "StoreExpenseApiRequest",
         "body": {
-          "category": { "type": "string", "required": true, "max": 100 },
-          "amount": { "type": "numeric", "required": true, "min": 0.01 },
-          "date": { "type": "date", "required": true },
-          "description": { "type": "string|null", "required": false },
-          "vat_amount": { "type": "numeric|null", "required": false, "min": 0 },
-          "vat_rate_id": { "type": "uuid|null", "required": false, "note": "Must exist in vat_rates for current org" },
-          "vendor": { "type": "string|null", "required": false, "max": 255 },
-          "currency": { "type": "string|null", "required": false, "size": 3 }
+          "category": {
+            "type": "string",
+            "required": true,
+            "max": 100
+          },
+          "amount": {
+            "type": "numeric",
+            "required": true,
+            "min": 0.01
+          },
+          "date": {
+            "type": "date",
+            "required": true
+          },
+          "description": {
+            "type": "string|null",
+            "required": false
+          },
+          "vat_amount": {
+            "type": "numeric|null",
+            "required": false,
+            "min": 0
+          },
+          "vat_rate_id": {
+            "type": "uuid|null",
+            "required": false,
+            "note": "Must exist in vat_rates for current org"
+          },
+          "vendor": {
+            "type": "string|null",
+            "required": false,
+            "max": 255
+          },
+          "currency": {
+            "type": "string|null",
+            "required": false,
+            "size": 3
+          }
         }
       },
-      "response_201": { "data": "ExpenseResource" }
+      "response_201": {
+        "data": "ExpenseResource"
+      }
     },
-
     {
       "name": "api.expenses.update",
       "method": "PUT",
       "path": "/api/v1/expenses/{expense}",
       "controller": "ExpenseApiController@update",
       "auth_required": true,
-      "abilities_required": ["expenses.edit"],
+      "abilities_required": [
+        "expenses.edit"
+      ],
       "policy": "update on Expense",
       "request": {
         "validation_class": "UpdateExpenseApiRequest",
-        "params": { "expense": "uuid" },
+        "params": {
+          "expense": "uuid"
+        },
         "body": {
-          "category": { "type": "string", "required": false, "max": 100 },
-          "amount": { "type": "numeric", "required": false, "min": 0.01 },
-          "date": { "type": "date", "required": false },
-          "description": { "type": "string|null", "required": false },
-          "vat_amount": { "type": "numeric|null", "required": false, "min": 0 },
-          "vat_rate_id": { "type": "uuid|null", "required": false },
-          "vendor": { "type": "string|null", "required": false, "max": 255 },
-          "currency": { "type": "string|null", "required": false, "size": 3 }
+          "category": {
+            "type": "string",
+            "required": false,
+            "max": 100
+          },
+          "amount": {
+            "type": "numeric",
+            "required": false,
+            "min": 0.01
+          },
+          "date": {
+            "type": "date",
+            "required": false
+          },
+          "description": {
+            "type": "string|null",
+            "required": false
+          },
+          "vat_amount": {
+            "type": "numeric|null",
+            "required": false,
+            "min": 0
+          },
+          "vat_rate_id": {
+            "type": "uuid|null",
+            "required": false
+          },
+          "vendor": {
+            "type": "string|null",
+            "required": false,
+            "max": 255
+          },
+          "currency": {
+            "type": "string|null",
+            "required": false,
+            "size": 3
+          }
         }
       },
-      "response_200": { "data": "ExpenseResource" },
+      "response_200": {
+        "data": "ExpenseResource"
+      },
       "notes": "Only pending expenses can be updated — throws InvalidExpenseStateException otherwise."
     },
-
     {
       "name": "api.expenses.destroy",
       "method": "DELETE",
       "path": "/api/v1/expenses/{expense}",
       "controller": "ExpenseApiController@destroy",
       "auth_required": true,
-      "abilities_required": ["expenses.delete"],
+      "abilities_required": [
+        "expenses.delete"
+      ],
       "policy": "delete on Expense",
       "request": {
-        "params": { "expense": "uuid" }
+        "params": {
+          "expense": "uuid"
+        }
       },
       "response_204": null,
       "notes": "Only pending expenses can be deleted (soft-delete within transaction)."
     },
-
     {
       "name": "api.journal-entries.index",
       "method": "GET",
       "path": "/api/v1/journal-entries",
       "controller": "JournalEntryApiController@index",
       "auth_required": true,
-      "abilities_required": ["accounting.view"],
+      "abilities_required": [
+        "accounting.view"
+      ],
       "policy": "viewAny on JournalEntry",
       "request": {
         "query": {
-          "status": { "type": "string", "required": false, "values": ["draft", "posted"] },
-          "from": { "type": "date", "required": false, "inclusive": true },
-          "to": { "type": "date", "required": false, "inclusive": true },
-          "reference": { "type": "string", "required": false },
-          "page": { "type": "integer", "required": false },
-          "per_page": { "type": "integer", "required": false, "default": 20, "max": 100 }
+          "status": {
+            "type": "string",
+            "required": false,
+            "values": [
+              "draft",
+              "posted"
+            ]
+          },
+          "from": {
+            "type": "date",
+            "required": false,
+            "inclusive": true
+          },
+          "to": {
+            "type": "date",
+            "required": false,
+            "inclusive": true
+          },
+          "reference": {
+            "type": "string",
+            "required": false
+          },
+          "page": {
+            "type": "integer",
+            "required": false
+          },
+          "per_page": {
+            "type": "integer",
+            "required": false,
+            "default": 20,
+            "max": 100
+          }
         }
       },
-      "response_200": { "data": ["JournalEntryResource[]"], "links": {}, "meta": { "current_page": "int", "per_page": "int", "total": "int" } }
+      "response_200": {
+        "data": [
+          "JournalEntryResource[]"
+        ],
+        "links": {},
+        "meta": {
+          "current_page": "int",
+          "per_page": "int",
+          "total": "int"
+        }
+      }
     },
-
     {
       "name": "api.journal-entries.show",
       "method": "GET",
       "path": "/api/v1/journal-entries/{journalEntry}",
       "controller": "JournalEntryApiController@show",
       "auth_required": true,
-      "abilities_required": ["accounting.view"],
+      "abilities_required": [
+        "accounting.view"
+      ],
       "policy": "view on JournalEntry",
-      "request": { "params": { "journalEntry": "uuid" } },
-      "response_200": { "data": "JournalEntryResource" }
+      "request": {
+        "params": {
+          "journalEntry": "uuid"
+        }
+      },
+      "response_200": {
+        "data": "JournalEntryResource"
+      }
     },
-
     {
       "name": "api.journal-entries.store",
       "method": "POST",
       "path": "/api/v1/journal-entries",
       "controller": "JournalEntryApiController@store",
       "auth_required": true,
-      "abilities_required": ["accounting.create"],
+      "abilities_required": [
+        "accounting.create"
+      ],
       "policy": "create on JournalEntry",
       "request": {
-        "headers": { "Idempotency-Key": "string|null" },
+        "headers": {
+          "Idempotency-Key": "string|null"
+        },
         "body": {
-          "date": { "type": "date", "required": true },
-          "reference": { "type": "string|null", "required": false, "max": 100 },
-          "description": { "type": "string|null", "required": false, "max": 1000 },
-          "status": { "type": "string", "required": true, "values": ["draft", "posted"] },
-          "lines": { "type": "array", "required": true, "min_items": 2, "max_items": 100, "account_identifier": "account_code", "amount_precision": "maximum two fractional digits" }
+          "date": {
+            "type": "date",
+            "required": true
+          },
+          "reference": {
+            "type": "string|null",
+            "required": false,
+            "max": 100
+          },
+          "description": {
+            "type": "string|null",
+            "required": false,
+            "max": 1000
+          },
+          "status": {
+            "type": "string",
+            "required": true,
+            "values": [
+              "draft",
+              "posted"
+            ]
+          },
+          "lines": {
+            "type": "array",
+            "required": true,
+            "min_items": "2 for explicit lines, 1 for shorthand lines",
+            "max_items": 100,
+            "account_identifier": "account_code",
+            "amount_precision": "maximum two fractional digits",
+            "forms": {
+              "explicit": {
+                "account_code": "string, required",
+                "debit": "string, required",
+                "credit": "string, required",
+                "description": "string|null",
+                "vat_rate_id": "uuid|null — required when vat_type is set",
+                "vat_type": "input|input_investment|output|acquisition|null",
+                "vat_amount": "string|null",
+                "vat_figure": "220|221|225|230|235|280|null"
+              },
+              "shorthand": {
+                "account_code": "string, required",
+                "contra_account_code": "string, required",
+                "gross": "string, required — gross for V/M/I codes, net for B codes",
+                "vat_code": "string, required — see vat_codes below",
+                "vat_figure": "220|221|225|230|235|280|null — required for V0",
+                "description": "string|null",
+                "expands_to": "explicit lines; the ledger never stores the code itself"
+              }
+            },
+            "mixing_forms": "rejected with 422"
+          },
+          "vat_codes": {
+            "V81|V26|V38": "output VAT at the normal, reduced or accommodation rate",
+            "M81|M26|M38": "input VAT on material and services — figure 400",
+            "I81|I26|I38": "input VAT on investments and other operating costs — figure 405",
+            "B81|B26|B38": "acquisition tax on foreign services; books 1170 and 2202, bank pays net",
+            "V0": "zero-rated turnover; counts in figure 200 and is deducted under vat_figure",
+            "M0|I0": "no VAT; the entry is booked without a VAT line"
+          }
         }
       },
-      "response_201": { "data": "JournalEntryResource" }
+      "response_201": {
+        "data": "JournalEntryResource"
+      },
+      "errors": {
+        "422 unknown_vat_code": "the shorthand line names a VAT code the API does not know",
+        "422 invalid_entry_data": "a VAT type without a rate, or an unknown VAT type",
+        "422 journal_entry_unbalanced": "debits do not equal credits",
+        "422 idempotency_key_required": "neither an Idempotency-Key header nor a reference was given",
+        "409 duplicate_reference": "the reference is already in use",
+        "409 idempotency_conflict": "the same key was used with a different payload"
+      }
     },
-
     {
       "name": "api.journal-entries.post",
       "method": "POST",
       "path": "/api/v1/journal-entries/{journalEntry}/post",
       "controller": "JournalEntryApiController@post",
       "auth_required": true,
-      "abilities_required": ["accounting.edit"],
+      "abilities_required": [
+        "accounting.edit"
+      ],
       "policy": "post on JournalEntry",
-      "request": { "params": { "journalEntry": "uuid" }, "headers": { "Idempotency-Key": "string|null" } },
-      "response_200": { "data": "JournalEntryResource" }
+      "request": {
+        "params": {
+          "journalEntry": "uuid"
+        },
+        "headers": {
+          "Idempotency-Key": "string|null"
+        }
+      },
+      "response_200": {
+        "data": "JournalEntryResource"
+      }
     },
-
     {
       "name": "api.journal-entries.reverse",
       "method": "POST",
       "path": "/api/v1/journal-entries/{journalEntry}/reverse",
       "controller": "JournalEntryApiController@reverse",
       "auth_required": true,
-      "abilities_required": ["accounting.edit"],
+      "abilities_required": [
+        "accounting.edit"
+      ],
       "policy": "reverse on JournalEntry",
-      "request": { "params": { "journalEntry": "uuid" }, "headers": { "Idempotency-Key": "string|null" }, "body": { "description": "string|null" } },
-      "response_200": { "data": "JournalEntryResource" }
+      "request": {
+        "params": {
+          "journalEntry": "uuid"
+        },
+        "headers": {
+          "Idempotency-Key": "string|null"
+        },
+        "body": {
+          "description": "string|null"
+        }
+      },
+      "response_200": {
+        "data": "JournalEntryResource"
+      }
     },
-
     {
       "name": "api.journal-entries.destroy",
       "method": "DELETE",
       "path": "/api/v1/journal-entries/{journalEntry}",
       "controller": "JournalEntryApiController@destroy",
       "auth_required": true,
-      "abilities_required": ["accounting.delete"],
+      "abilities_required": [
+        "accounting.delete"
+      ],
       "policy": "delete on JournalEntry",
-      "request": { "params": { "journalEntry": "uuid" }, "headers": { "Idempotency-Key": "string|null" } },
+      "request": {
+        "params": {
+          "journalEntry": "uuid"
+        },
+        "headers": {
+          "Idempotency-Key": "string|null"
+        }
+      },
       "response_204": null,
       "notes": "Only unarchived drafts can be deleted."
     },
-
     {
       "name": "api.bank-accounts.import-camt053",
       "method": "POST",
       "path": "/api/v1/bank-accounts/{bankAccount}/imports/camt053",
       "controller": "BankImportApiController@store",
       "auth_required": true,
-      "abilities_required": ["banking.import"],
+      "abilities_required": [
+        "banking.import"
+      ],
       "policy": "import on BankAccount",
       "request": {
-        "params": { "bankAccount": "uuid" },
-        "headers": { "Idempotency-Key": "string|null" },
-        "body": { "camt_file": { "type": "file", "required": true, "max": "configured document limit" } }
+        "params": {
+          "bankAccount": "uuid"
+        },
+        "headers": {
+          "Idempotency-Key": "string|null"
+        },
+        "body": {
+          "camt_file": {
+            "type": "file",
+            "required": true,
+            "max": "configured document limit"
+          }
+        }
       },
-      "response_201": { "data": "BankImportResource" }
+      "response_201": {
+        "data": "BankImportResource"
+      }
     },
-
     {
       "name": "api.accounts.index",
       "method": "GET",
       "path": "/api/v1/accounts",
       "controller": "AccountApiController@index",
       "auth_required": true,
-      "abilities_required": ["accounting.view"],
+      "abilities_required": [
+        "accounting.view"
+      ],
       "policy": "viewAny on Account",
       "request": {
         "query": {
-          "type": { "type": "string", "required": false, "note": "Filter by account type — UNVALIDATED against enum" },
-          "active_only": { "type": "boolean", "required": false },
-          "per_page": { "type": "integer", "required": false, "default": 50, "note": "ISSUE: No max limit enforced" }
+          "type": {
+            "type": "string",
+            "required": false,
+            "note": "Filter by account type — UNVALIDATED against enum"
+          },
+          "active_only": {
+            "type": "boolean",
+            "required": false
+          },
+          "per_page": {
+            "type": "integer",
+            "required": false,
+            "default": 50,
+            "note": "ISSUE: No max limit enforced"
+          }
         }
       },
       "response_200": {
@@ -864,20 +1506,27 @@
           }
         ],
         "links": {},
-        "meta": { "current_page": "int", "per_page": "int", "total": "int" }
+        "meta": {
+          "current_page": "int",
+          "per_page": "int",
+          "total": "int"
+        }
       }
     },
-
     {
       "name": "api.accounts.show",
       "method": "GET",
       "path": "/api/v1/accounts/{account}",
       "controller": "AccountApiController@show",
       "auth_required": true,
-      "abilities_required": ["accounting.view"],
+      "abilities_required": [
+        "accounting.view"
+      ],
       "policy": "view on Account",
       "request": {
-        "params": { "account": "uuid" }
+        "params": {
+          "account": "uuid"
+        }
       },
       "response_200": {
         "data": {
@@ -891,19 +1540,28 @@
         }
       }
     },
-
     {
       "name": "api.bank-accounts.index",
       "method": "GET",
       "path": "/api/v1/bank-accounts",
       "controller": "BankAccountApiController@index",
       "auth_required": true,
-      "abilities_required": ["banking.view"],
+      "abilities_required": [
+        "banking.view"
+      ],
       "policy": "viewAny on BankAccount",
       "request": {
         "query": {
-          "active_only": { "type": "boolean", "required": false },
-          "per_page": { "type": "integer", "required": false, "default": 25, "note": "ISSUE: No max limit enforced" }
+          "active_only": {
+            "type": "boolean",
+            "required": false
+          },
+          "per_page": {
+            "type": "integer",
+            "required": false,
+            "default": 25,
+            "note": "ISSUE: No max limit enforced"
+          }
         }
       },
       "response_200": {
@@ -927,47 +1585,92 @@
           }
         ],
         "links": {},
-        "meta": { "current_page": "int", "per_page": "int", "total": "int" }
+        "meta": {
+          "current_page": "int",
+          "per_page": "int",
+          "total": "int"
+        }
       }
     },
-
     {
       "name": "api.bank-accounts.store",
       "method": "POST",
       "path": "/api/v1/bank-accounts",
       "controller": "BankAccountApiController@store",
       "auth_required": true,
-      "abilities_required": ["banking.create"],
+      "abilities_required": [
+        "banking.create"
+      ],
       "policy": "create on BankAccount",
       "request": {
-        "headers": { "Idempotency-Key": "string|null" },
+        "headers": {
+          "Idempotency-Key": "string|null"
+        },
         "body": {
-          "name": { "type": "string", "required": true, "max": 255 },
-          "iban": { "type": "string|null", "max": 34 },
-          "qr_iban": { "type": "string|null", "max": 34 },
-          "bank_name": { "type": "string|null", "max": 255 },
-          "bic": { "type": "string|null", "max": 11 },
-          "currency": { "type": "string|null", "length": 3, "default": "CHF" },
-          "account_code": { "type": "string", "required": true, "note": "Active GL account code in the token organization" },
-          "is_mixed_use": { "type": "boolean", "required": false },
-          "is_default_for_invoicing": { "type": "boolean", "required": false }
+          "name": {
+            "type": "string",
+            "required": true,
+            "max": 255
+          },
+          "iban": {
+            "type": "string|null",
+            "max": 34
+          },
+          "qr_iban": {
+            "type": "string|null",
+            "max": 34
+          },
+          "bank_name": {
+            "type": "string|null",
+            "max": 255
+          },
+          "bic": {
+            "type": "string|null",
+            "max": 11
+          },
+          "currency": {
+            "type": "string|null",
+            "length": 3,
+            "default": "CHF"
+          },
+          "account_code": {
+            "type": "string",
+            "required": true,
+            "note": "Active GL account code in the token organization"
+          },
+          "is_mixed_use": {
+            "type": "boolean",
+            "required": false
+          },
+          "is_default_for_invoicing": {
+            "type": "boolean",
+            "required": false
+          }
         }
       },
-      "response_201": { "data": "BankAccountResource" },
-      "response_422": { "message": "string", "code": "validation_error|domain_error" },
+      "response_201": {
+        "data": "BankAccountResource"
+      },
+      "response_422": {
+        "message": "string",
+        "code": "validation_error|domain_error"
+      },
       "notes": "The account_code is resolved within the token organization. The action also preserves mixed-use and default-invoicing side effects."
     },
-
     {
       "name": "api.bank-accounts.show",
       "method": "GET",
       "path": "/api/v1/bank-accounts/{bankAccount}",
       "controller": "BankAccountApiController@show",
       "auth_required": true,
-      "abilities_required": ["banking.view"],
+      "abilities_required": [
+        "banking.view"
+      ],
       "policy": "view on BankAccount",
       "request": {
-        "params": { "bankAccount": "uuid" }
+        "params": {
+          "bankAccount": "uuid"
+        }
       },
       "response_200": {
         "data": {
@@ -989,18 +1692,22 @@
         }
       }
     },
-
     {
       "name": "api.webhooks.index",
       "method": "GET",
       "path": "/api/v1/webhooks",
       "controller": "WebhookApiController@index",
       "auth_required": true,
-      "abilities_required": ["organization.edit"],
+      "abilities_required": [
+        "organization.edit"
+      ],
       "policy": "viewAny on Webhook",
       "request": {
         "query": {
-          "page": { "type": "integer", "required": false }
+          "page": {
+            "type": "integer",
+            "required": false
+          }
         }
       },
       "response_200": {
@@ -1008,7 +1715,9 @@
           {
             "id": "uuid",
             "url": "string",
-            "events": ["string"],
+            "events": [
+              "string"
+            ],
             "is_active": "boolean",
             "last_triggered_at": "ISO8601|null",
             "created_at": "ISO8601|null",
@@ -1016,39 +1725,63 @@
           }
         ],
         "links": {},
-        "meta": { "current_page": "int", "per_page": 25, "total": "int" }
+        "meta": {
+          "current_page": "int",
+          "per_page": 25,
+          "total": "int"
+        }
       },
       "notes": "Pagination fixed at 25 (from config). Org scope enforced by BelongsToOrganization global scope."
     },
-
     {
       "name": "api.webhooks.show",
       "method": "GET",
       "path": "/api/v1/webhooks/{webhook}",
       "controller": "WebhookApiController@show",
       "auth_required": true,
-      "abilities_required": ["organization.edit"],
+      "abilities_required": [
+        "organization.edit"
+      ],
       "policy": "view on Webhook",
       "request": {
-        "params": { "webhook": "uuid" }
+        "params": {
+          "webhook": "uuid"
+        }
       },
-      "response_200": { "data": "WebhookResource" }
+      "response_200": {
+        "data": "WebhookResource"
+      }
     },
-
     {
       "name": "api.webhooks.store",
       "method": "POST",
       "path": "/api/v1/webhooks",
       "controller": "WebhookApiController@store",
       "auth_required": true,
-      "abilities_required": ["organization.edit"],
+      "abilities_required": [
+        "organization.edit"
+      ],
       "policy": "create on Webhook",
       "request": {
         "validation_class": "StoreWebhookRequest",
         "body": {
-          "url": { "type": "string", "required": true, "max": 2048, "note": "Must be HTTPS. Blocked: RFC1918, loopback, link-local, cloud metadata IPs." },
-          "events": { "type": "array of string", "required": true, "min_items": 1, "values": "WebhookEvent enum values" },
-          "is_active": { "type": "boolean", "required": false, "default": true }
+          "url": {
+            "type": "string",
+            "required": true,
+            "max": 2048,
+            "note": "Must be HTTPS. Blocked: RFC1918, loopback, link-local, cloud metadata IPs."
+          },
+          "events": {
+            "type": "array of string",
+            "required": true,
+            "min_items": 1,
+            "values": "WebhookEvent enum values"
+          },
+          "is_active": {
+            "type": "boolean",
+            "required": false,
+            "default": true
+          }
         }
       },
       "response_201": {
@@ -1057,302 +1790,559 @@
       },
       "notes": "Secret is in additional data outside the resource wrapper. ValidWebhookUrl blocks SSRF vectors."
     },
-
     {
       "name": "api.webhooks.update",
       "method": "PUT",
       "path": "/api/v1/webhooks/{webhook}",
       "controller": "WebhookApiController@update",
       "auth_required": true,
-      "abilities_required": ["organization.edit"],
+      "abilities_required": [
+        "organization.edit"
+      ],
       "policy": "update on Webhook",
       "request": {
         "validation_class": "UpdateWebhookRequest",
-        "params": { "webhook": "uuid" },
+        "params": {
+          "webhook": "uuid"
+        },
         "body": {
-          "url": { "type": "string", "required": false, "max": 2048 },
-          "events": { "type": "array of string", "required": false, "min_items": 1 },
-          "is_active": { "type": "boolean", "required": false }
+          "url": {
+            "type": "string",
+            "required": false,
+            "max": 2048
+          },
+          "events": {
+            "type": "array of string",
+            "required": false,
+            "min_items": 1
+          },
+          "is_active": {
+            "type": "boolean",
+            "required": false
+          }
         }
       },
-      "response_200": { "data": "WebhookResource" }
+      "response_200": {
+        "data": "WebhookResource"
+      }
     },
-
     {
       "name": "api.webhooks.destroy",
       "method": "DELETE",
       "path": "/api/v1/webhooks/{webhook}",
       "controller": "WebhookApiController@destroy",
       "auth_required": true,
-      "abilities_required": ["organization.edit"],
+      "abilities_required": [
+        "organization.edit"
+      ],
       "policy": "delete on Webhook",
       "request": {
-        "params": { "webhook": "uuid" }
+        "params": {
+          "webhook": "uuid"
+        }
       },
       "response_204": null
     },
-
     {
       "name": "api.webhooks.regenerate-secret",
       "method": "POST",
       "path": "/api/v1/webhooks/{webhook}/regenerate-secret",
       "controller": "WebhookApiController@regenerateSecret",
       "auth_required": true,
-      "abilities_required": ["organization.edit"],
+      "abilities_required": [
+        "organization.edit"
+      ],
       "policy": "regenerateSecret on Webhook",
       "request": {
-        "params": { "webhook": "uuid" }
+        "params": {
+          "webhook": "uuid"
+        }
       },
       "response_200": {
         "secret": "string (new 64-char random)",
         "message": "string (translated)"
       }
     },
-
     {
       "name": "api.suppliers.index",
       "method": "GET",
       "path": "/api/v1/suppliers",
       "controller": "SupplierApiController@index",
       "auth_required": true,
-      "abilities_required": ["contacts.view"],
+      "abilities_required": [
+        "contacts.view"
+      ],
       "policy": "viewAny on Supplier (ContactPolicy)",
       "request": {
         "query": {
-          "page": { "type": "integer", "required": false },
-          "search": { "type": "string", "required": false },
-          "sort": { "type": "string", "required": false, "allowed": ["name", "email", "city", "country", "created_at"] },
-          "filter[country]": { "type": "string", "required": false },
-          "filter[currency]": { "type": "string", "required": false },
-          "filter[default_expense_category]": { "type": "string", "required": false }
+          "page": {
+            "type": "integer",
+            "required": false
+          },
+          "search": {
+            "type": "string",
+            "required": false
+          },
+          "sort": {
+            "type": "string",
+            "required": false,
+            "allowed": [
+              "name",
+              "email",
+              "city",
+              "country",
+              "created_at"
+            ]
+          },
+          "filter[country]": {
+            "type": "string",
+            "required": false
+          },
+          "filter[currency]": {
+            "type": "string",
+            "required": false
+          },
+          "filter[default_expense_category]": {
+            "type": "string",
+            "required": false
+          }
         }
       },
       "response_200": {
-        "data": ["SupplierResource[]"],
+        "data": [
+          "SupplierResource[]"
+        ],
         "links": {},
-        "meta": { "current_page": "int", "per_page": "int", "total": "int" }
+        "meta": {
+          "current_page": "int",
+          "per_page": "int",
+          "total": "int"
+        }
       }
     },
-
     {
       "name": "api.suppliers.show",
       "method": "GET",
       "path": "/api/v1/suppliers/{supplier}",
       "controller": "SupplierApiController@show",
       "auth_required": true,
-      "abilities_required": ["contacts.view"],
+      "abilities_required": [
+        "contacts.view"
+      ],
       "policy": "view on Supplier (ContactPolicy)",
-      "request": { "params": { "supplier": "uuid" } },
-      "response_200": { "data": "SupplierResource" }
+      "request": {
+        "params": {
+          "supplier": "uuid"
+        }
+      },
+      "response_200": {
+        "data": "SupplierResource"
+      }
     },
-
     {
       "name": "api.suppliers.store",
       "method": "POST",
       "path": "/api/v1/suppliers",
       "controller": "SupplierApiController@store",
       "auth_required": true,
-      "abilities_required": ["contacts.create"],
+      "abilities_required": [
+        "contacts.create"
+      ],
       "policy": "create on Supplier (ContactPolicy)",
       "request": {
         "validation_class": "StoreSupplierApiRequest",
         "body": {
-          "name": { "type": "string", "required": true, "max": 255 },
-          "email": { "type": "string|null", "format": "email", "max": 255 },
-          "phone": { "type": "string|null", "max": 50 },
-          "address": { "type": "string|null", "max": 500 },
-          "city": { "type": "string|null", "max": 100 },
-          "postal_code": { "type": "string|null", "max": 10 },
-          "country": { "type": "string|null", "format": "ISO 3166-1 alpha-2", "size": 2 },
-          "vat_number": { "type": "string|null", "max": 50 },
-          "default_expense_category": { "type": "string|null", "max": 100 },
-          "currency": { "type": "string|null", "format": "ISO 4217", "size": 3 },
-          "iban": { "type": "string|null", "max": 34 },
-          "internal_notes": { "type": "string|null" }
+          "name": {
+            "type": "string",
+            "required": true,
+            "max": 255
+          },
+          "email": {
+            "type": "string|null",
+            "format": "email",
+            "max": 255
+          },
+          "phone": {
+            "type": "string|null",
+            "max": 50
+          },
+          "address": {
+            "type": "string|null",
+            "max": 500
+          },
+          "city": {
+            "type": "string|null",
+            "max": 100
+          },
+          "postal_code": {
+            "type": "string|null",
+            "max": 10
+          },
+          "country": {
+            "type": "string|null",
+            "format": "ISO 3166-1 alpha-2",
+            "size": 2
+          },
+          "vat_number": {
+            "type": "string|null",
+            "max": 50
+          },
+          "default_expense_category": {
+            "type": "string|null",
+            "max": 100
+          },
+          "currency": {
+            "type": "string|null",
+            "format": "ISO 4217",
+            "size": 3
+          },
+          "iban": {
+            "type": "string|null",
+            "max": 34
+          },
+          "internal_notes": {
+            "type": "string|null"
+          }
         }
       },
-      "response_201": { "data": "SupplierResource" }
+      "response_201": {
+        "data": "SupplierResource"
+      }
     },
-
     {
       "name": "api.suppliers.update",
       "method": "PUT",
       "path": "/api/v1/suppliers/{supplier}",
       "controller": "SupplierApiController@update",
       "auth_required": true,
-      "abilities_required": ["contacts.edit"],
+      "abilities_required": [
+        "contacts.edit"
+      ],
       "policy": "update on Supplier (ContactPolicy)",
       "request": {
-        "params": { "supplier": "uuid" },
+        "params": {
+          "supplier": "uuid"
+        },
         "validation_class": "UpdateSupplierApiRequest",
         "body": {
-          "name": { "type": "string", "required": false, "max": 255 },
-          "email": { "type": "string|null", "format": "email" },
-          "phone": { "type": "string|null" },
-          "address": { "type": "string|null" },
-          "city": { "type": "string|null" },
-          "postal_code": { "type": "string|null" },
-          "country": { "type": "string|null", "format": "ISO 3166-1 alpha-2" },
-          "vat_number": { "type": "string|null" },
-          "default_expense_category": { "type": "string|null" },
-          "currency": { "type": "string|null", "format": "ISO 4217" },
-          "iban": { "type": "string|null" },
-          "internal_notes": { "type": "string|null" }
+          "name": {
+            "type": "string",
+            "required": false,
+            "max": 255
+          },
+          "email": {
+            "type": "string|null",
+            "format": "email"
+          },
+          "phone": {
+            "type": "string|null"
+          },
+          "address": {
+            "type": "string|null"
+          },
+          "city": {
+            "type": "string|null"
+          },
+          "postal_code": {
+            "type": "string|null"
+          },
+          "country": {
+            "type": "string|null",
+            "format": "ISO 3166-1 alpha-2"
+          },
+          "vat_number": {
+            "type": "string|null"
+          },
+          "default_expense_category": {
+            "type": "string|null"
+          },
+          "currency": {
+            "type": "string|null",
+            "format": "ISO 4217"
+          },
+          "iban": {
+            "type": "string|null"
+          },
+          "internal_notes": {
+            "type": "string|null"
+          }
         }
       },
-      "response_200": { "data": "SupplierResource" }
+      "response_200": {
+        "data": "SupplierResource"
+      }
     },
-
     {
       "name": "api.suppliers.destroy",
       "method": "DELETE",
       "path": "/api/v1/suppliers/{supplier}",
       "controller": "SupplierApiController@destroy",
       "auth_required": true,
-      "abilities_required": ["contacts.delete"],
+      "abilities_required": [
+        "contacts.delete"
+      ],
       "policy": "delete on Supplier (ContactPolicy)",
-      "request": { "params": { "supplier": "uuid" } },
+      "request": {
+        "params": {
+          "supplier": "uuid"
+        }
+      },
       "response_204": null,
-      "response_409": { "message": "string (supplier has linked expenses)" }
+      "response_409": {
+        "message": "string (supplier has linked expenses)"
+      }
     },
-
     {
       "name": "api.invoices.finalize",
       "method": "POST",
       "path": "/api/v1/invoices/{invoice}/finalize",
       "controller": "InvoiceApiController@finalize",
       "auth_required": true,
-      "abilities_required": ["invoicing.finalize"],
+      "abilities_required": [
+        "invoicing.finalize"
+      ],
       "policy": "finalize on Invoice",
-      "request": { "params": { "invoice": "uuid" } },
-      "response_200": { "data": "InvoiceResource" },
-      "response_422": { "message": "string (invalid state)" }
+      "request": {
+        "params": {
+          "invoice": "uuid"
+        }
+      },
+      "response_200": {
+        "data": "InvoiceResource"
+      },
+      "response_422": {
+        "message": "string (invalid state)"
+      }
     },
-
     {
       "name": "api.invoices.cancel",
       "method": "POST",
       "path": "/api/v1/invoices/{invoice}/cancel",
       "controller": "InvoiceApiController@cancel",
       "auth_required": true,
-      "abilities_required": ["invoicing.edit"],
+      "abilities_required": [
+        "invoicing.edit"
+      ],
       "policy": "cancel on Invoice",
-      "request": { "params": { "invoice": "uuid" } },
-      "response_200": { "data": "InvoiceResource" },
-      "response_422": { "message": "string (invalid state)" }
+      "request": {
+        "params": {
+          "invoice": "uuid"
+        }
+      },
+      "response_200": {
+        "data": "InvoiceResource"
+      },
+      "response_422": {
+        "message": "string (invalid state)"
+      }
     },
-
     {
       "name": "api.invoices.record-payment",
       "method": "POST",
       "path": "/api/v1/invoices/{invoice}/record-payment",
       "controller": "InvoiceApiController@recordPayment",
       "auth_required": true,
-      "abilities_required": ["invoicing.record-payment"],
+      "abilities_required": [
+        "invoicing.record-payment"
+      ],
       "policy": "view on Invoice",
       "request": {
-        "params": { "invoice": "uuid" },
+        "params": {
+          "invoice": "uuid"
+        },
         "validation_class": "RecordPaymentApiRequest",
         "body": {
-          "amount": { "type": "numeric", "required": true, "min": 0.01 },
-          "payment_date": { "type": "date", "required": true },
-          "payment_method": { "type": "string", "required": true, "enum": ["bank_transfer", "cash", "card", "other"] },
-          "reference": { "type": "string|null", "max": 100 },
-          "bank_account_code": { "type": "string|null", "max": 20 }
+          "amount": {
+            "type": "numeric",
+            "required": true,
+            "min": 0.01
+          },
+          "payment_date": {
+            "type": "date",
+            "required": true
+          },
+          "payment_method": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "bank_transfer",
+              "cash",
+              "card",
+              "other"
+            ]
+          },
+          "reference": {
+            "type": "string|null",
+            "max": 100
+          },
+          "bank_account_code": {
+            "type": "string|null",
+            "max": 20
+          }
         }
       },
-      "response_200": { "data": "InvoiceResource" },
-      "response_422": { "message": "string (invalid state or payment)" }
+      "response_200": {
+        "data": "InvoiceResource"
+      },
+      "response_422": {
+        "message": "string (invalid state or payment)"
+      }
     },
-
     {
       "name": "api.invoices.send",
       "method": "POST",
       "path": "/api/v1/invoices/{invoice}/send",
       "controller": "InvoiceApiController@send",
       "auth_required": true,
-      "abilities_required": ["invoicing.edit"],
+      "abilities_required": [
+        "invoicing.edit"
+      ],
       "policy": "send on Invoice",
-      "request": { "params": { "invoice": "uuid" } },
-      "response_200": { "data": "InvoiceResource" },
-      "response_422": { "message": "string (invalid state)" }
+      "request": {
+        "params": {
+          "invoice": "uuid"
+        }
+      },
+      "response_200": {
+        "data": "InvoiceResource"
+      },
+      "response_422": {
+        "message": "string (invalid state)"
+      }
     },
-
     {
       "name": "api.invoices.reminder",
       "method": "POST",
       "path": "/api/v1/invoices/{invoice}/reminder",
       "controller": "InvoiceApiController@reminder",
       "auth_required": true,
-      "abilities_required": ["invoicing.edit"],
+      "abilities_required": [
+        "invoicing.edit"
+      ],
       "policy": "send on Invoice",
-      "request": { "params": { "invoice": "uuid" } },
-      "response_200": { "data": "InvoiceResource" },
-      "response_422": { "message": "string (invalid state)" }
+      "request": {
+        "params": {
+          "invoice": "uuid"
+        }
+      },
+      "response_200": {
+        "data": "InvoiceResource"
+      },
+      "response_422": {
+        "message": "string (invalid state)"
+      }
     },
-
     {
       "name": "api.invoices.credit-note",
       "method": "POST",
       "path": "/api/v1/invoices/{invoice}/credit-note",
       "controller": "InvoiceApiController@creditNote",
       "auth_required": true,
-      "abilities_required": ["invoicing.create"],
+      "abilities_required": [
+        "invoicing.create"
+      ],
       "policy": "view on Invoice",
-      "request": { "params": { "invoice": "uuid" } },
-      "response_201": { "data": "InvoiceResource (credit note)" },
-      "response_422": { "message": "string (invalid state)" }
+      "request": {
+        "params": {
+          "invoice": "uuid"
+        }
+      },
+      "response_201": {
+        "data": "InvoiceResource (credit note)"
+      },
+      "response_422": {
+        "message": "string (invalid state)"
+      }
     },
-
     {
       "name": "api.invoices.pdf",
       "method": "GET",
       "path": "/api/v1/invoices/{invoice}/pdf",
       "controller": "InvoicePdfApiController@__invoke",
       "auth_required": true,
-      "abilities_required": ["invoicing.view"],
+      "abilities_required": [
+        "invoicing.view"
+      ],
       "policy": "view on Invoice",
-      "request": { "params": { "invoice": "uuid" } },
-      "response_200": { "content_type": "application/pdf", "body": "PDF bytes" },
-      "response_404": { "message": "Resource not found.", "code": "not_found" },
-      "response_422": { "message": "string", "code": "qr_iban_required|qr_bill_invalid" },
+      "request": {
+        "params": {
+          "invoice": "uuid"
+        }
+      },
+      "response_200": {
+        "content_type": "application/pdf",
+        "body": "PDF bytes"
+      },
+      "response_404": {
+        "message": "Resource not found.",
+        "code": "not_found"
+      },
+      "response_422": {
+        "message": "string",
+        "code": "qr_iban_required|qr_bill_invalid"
+      },
       "notes": "Returns the invoice content and Swiss QR payment slip. The token-authenticated endpoint does not require a browser session."
     },
-
     {
       "name": "api.expenses.approve",
       "method": "POST",
       "path": "/api/v1/expenses/{expense}/approve",
       "controller": "ExpenseApiController@approve",
       "auth_required": true,
-      "abilities_required": ["expenses.approve"],
+      "abilities_required": [
+        "expenses.approve"
+      ],
       "policy": "update on Expense",
-      "request": { "params": { "expense": "uuid" } },
-      "response_200": { "data": "ExpenseResource" },
-      "response_422": { "message": "string (invalid state)" }
+      "request": {
+        "params": {
+          "expense": "uuid"
+        }
+      },
+      "response_200": {
+        "data": "ExpenseResource"
+      },
+      "response_422": {
+        "message": "string (invalid state)"
+      }
     },
-
     {
       "name": "api.expenses.post-to-ledger",
       "method": "POST",
       "path": "/api/v1/expenses/{expense}/post-to-ledger",
       "controller": "ExpenseApiController@postToLedger",
       "auth_required": true,
-      "abilities_required": ["expenses.edit"],
+      "abilities_required": [
+        "expenses.edit"
+      ],
       "policy": "update on Expense",
       "request": {
-        "params": { "expense": "uuid" },
+        "params": {
+          "expense": "uuid"
+        },
         "body": {
-          "expense_account_code": { "type": "string", "required": true, "max": 20 },
-          "bank_account_code": { "type": "string|null", "max": 20, "default": "1020 (BANK_CASH)" }
+          "expense_account_code": {
+            "type": "string",
+            "required": true,
+            "max": 20
+          },
+          "bank_account_code": {
+            "type": "string|null",
+            "max": 20,
+            "default": "1020 (BANK_CASH)"
+          }
         }
       },
-      "response_200": { "data": "ExpenseResource" },
-      "response_422": { "message": "string (invalid state or posting error)" },
-      "response_404": { "message": "Account not found." }
+      "response_200": {
+        "data": "ExpenseResource"
+      },
+      "response_422": {
+        "message": "string (invalid state or posting error)"
+      },
+      "response_404": {
+        "message": "Account not found."
+      }
     }
   ],
-
   "audit_findings": {
     "critical_blockers": [
       {
@@ -1390,7 +2380,6 @@
         "fix": "Acceptable for a public endpoint, but document that it's not a real health check. The /up health route exists separately."
       }
     ],
-
     "incomplete_features": [
       {
         "id": "IF-1",
@@ -1426,7 +2415,6 @@
         "status": "uncertain"
       }
     ],
-
     "hallucinations_and_fake_logic": [
       {
         "id": "HL-1",
@@ -1441,7 +2429,6 @@
         "severity": "INFO"
       }
     ],
-
     "verified_working": [
       "Organization data isolation via BelongsToOrganization global scope",
       "Token ability enforcement via Gate::before in EnsureApiOrganization middleware",
