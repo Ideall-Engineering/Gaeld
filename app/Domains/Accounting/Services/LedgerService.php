@@ -4,6 +4,7 @@ namespace App\Domains\Accounting\Services;
 
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
+use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Events\JournalDraftCreated;
 use App\Domains\Accounting\Events\JournalDraftPosted;
 use App\Domains\Accounting\Events\JournalEntryPosted;
@@ -17,6 +18,8 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Accounting\Models\VatEntry;
+use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Organizations\Models\Organization;
 use App\Support\Money;
 use Illuminate\Database\QueryException;
@@ -65,9 +68,10 @@ class LedgerService
         $this->guardClosedFiscalYear($organizationId, $entry->date, $fiscalYearId);
         $this->validateBalance($entry->lines);
         $this->validateAccounts($organizationId, $entry->lines);
+        $vatRateIds = $this->resolveVatRateIds($organizationId, $entry->lines);
         $this->throwIfDuplicateReference($organizationId, $entry->reference);
 
-        $journalEntry = $this->persistEntry($organizationId, $entry, true);
+        $journalEntry = $this->persistEntry($organizationId, $entry, true, $vatRateIds);
 
         JournalEntryPosted::dispatch($journalEntry);
 
@@ -84,9 +88,10 @@ class LedgerService
     {
         $this->validateBalance($entry->lines);
         $this->validateAccounts($organizationId, $entry->lines);
+        $vatRateIds = $this->resolveVatRateIds($organizationId, $entry->lines);
         $this->throwIfDuplicateReference($organizationId, $entry->reference);
 
-        $journalEntry = $this->persistEntry($organizationId, $entry, false);
+        $journalEntry = $this->persistEntry($organizationId, $entry, false, $vatRateIds);
 
         JournalDraftCreated::dispatch($journalEntry);
 
@@ -118,7 +123,22 @@ class LedgerService
                 throw new UnbalancedEntryException('Journal entry is not balanced.');
             }
 
+            $vatLines = $lockedEntry->lines->map(fn (TransactionLine $line) => new JournalLineData(
+                accountId: (string) $line->account_id,
+                debit: (string) $line->debit,
+                credit: (string) $line->credit,
+                description: $line->description,
+                vatRateId: $line->vat_rate_id,
+                vatAmount: $line->vat_amount,
+                vatType: $line->vat_type?->value,
+                vatFigure: $line->vat_figure,
+            ))->all();
+            $vatRateIds = $this->resolveVatRateIds($lockedEntry->organization_id, $vatLines);
+
             $lockedEntry->update(['is_posted' => true]);
+            foreach ($lockedEntry->lines as $line) {
+                $this->createVatEntries($lockedEntry, $line, $vatRateIds);
+            }
             $this->flushCache($lockedEntry->organization_id);
             JournalDraftPosted::dispatch($lockedEntry);
 
@@ -181,6 +201,10 @@ class LedgerService
                 debit: (string) $line->credit,
                 credit: (string) $line->debit,
                 description: 'Reversal: '.($line->description ?? ''),
+                vatRateId: $line->vat_rate_id,
+                vatAmount: $line->vat_amount,
+                vatType: $line->vat_type?->value,
+                vatFigure: $line->vat_figure,
             ))->all();
 
             $reversalEntry = $this->createDraft($original->organization_id, new JournalEntryData(
@@ -240,6 +264,52 @@ class LedgerService
     }
 
     /**
+     * @param  JournalLineData[]  $lines
+     * @return array<string, int>
+     */
+    private function resolveVatRateIds(string $organizationId, array $lines): array
+    {
+        $vatRateUuids = [];
+
+        foreach ($lines as $line) {
+            if ($line->vatType === null) {
+                continue;
+            }
+
+            if (VatEntryType::tryFrom($line->vatType) === null) {
+                throw new InvalidEntryDataException("Unknown VAT entry type '{$line->vatType}'.");
+            }
+
+            if ($line->vatRateId === null) {
+                throw new InvalidEntryDataException('A VAT rate is required when a VAT type is set.');
+            }
+
+            $vatRateUuids[] = $line->vatRateId;
+        }
+
+        $vatRateUuids = array_values(array_unique($vatRateUuids));
+        if ($vatRateUuids === []) {
+            return [];
+        }
+
+        /** @var array<string, int> $vatRateIds */
+        $vatRateIds = VatRate::query()
+            ->where('organization_id', $organizationId)
+            ->whereIn('uuid', $vatRateUuids)
+            ->pluck('id', 'uuid')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+
+        if (count($vatRateIds) !== count($vatRateUuids)) {
+            throw new InvalidEntryDataException(
+                'One or more VAT rates do not exist or do not belong to this organization.'
+            );
+        }
+
+        return $vatRateIds;
+    }
+
+    /**
      * Guard against duplicate references within the same organization.
      *
      * Null references are always allowed (e.g. bank imports without ref).
@@ -263,10 +333,15 @@ class LedgerService
     //  Helpers
     // ──────────────────────────────────────────────────────────────
 
-    private function persistEntry(string $organizationId, JournalEntryData $entry, bool $isPosted): JournalEntry
-    {
+    /** @param array<string, int> $vatRateIds */
+    private function persistEntry(
+        string $organizationId,
+        JournalEntryData $entry,
+        bool $isPosted,
+        array $vatRateIds,
+    ): JournalEntry {
         try {
-            return DB::transaction(function () use ($organizationId, $entry, $isPosted) {
+            return DB::transaction(function () use ($organizationId, $entry, $isPosted, $vatRateIds) {
                 $journalEntry = JournalEntry::create([
                     'organization_id' => $organizationId,
                     'date' => $entry->date,
@@ -277,13 +352,21 @@ class LedgerService
                 ]);
 
                 foreach ($entry->lines as $line) {
-                    TransactionLine::create([
+                    $transactionLine = TransactionLine::create([
                         'journal_entry_id' => $journalEntry->id,
                         'account_id' => $line->accountId,
                         'debit' => $line->debit,
                         'credit' => $line->credit,
                         'description' => $line->description,
+                        'vat_rate_id' => $line->vatRateId,
+                        'vat_amount' => $line->vatAmount,
+                        'vat_type' => $line->vatType,
+                        'vat_figure' => $line->vatFigure,
                     ]);
+
+                    if ($isPosted) {
+                        $this->createVatEntries($journalEntry, $transactionLine, $vatRateIds);
+                    }
                 }
 
                 if ($isPosted) {
@@ -303,6 +386,52 @@ class LedgerService
 
             throw $exception;
         }
+    }
+
+    /** @param array<string, int> $vatRateIds */
+    private function createVatEntries(JournalEntry $journalEntry, TransactionLine $line, array $vatRateIds): void
+    {
+        if ($line->vat_type === null || $line->vat_rate_id === null) {
+            return;
+        }
+
+        $vatType = $line->vat_type;
+        $baseAmount = Money::isZero((string) $line->debit)
+            ? (string) $line->credit
+            : (string) $line->debit;
+        $vatAmount = (string) ($line->vat_amount ?? '0.00');
+
+        if ($this->isVatReversalLine($line, $vatType)) {
+            $baseAmount = Money::negate($baseAmount);
+            $vatAmount = Money::negate(Money::absoluteAmount($vatAmount));
+        } else {
+            $vatAmount = Money::absoluteAmount($vatAmount);
+        }
+
+        $entryTypes = $vatType === VatEntryType::Acquisition
+            ? [VatEntryType::Acquisition, VatEntryType::Input]
+            : [$vatType];
+
+        foreach ($entryTypes as $entryType) {
+            VatEntry::create([
+                'journal_entry_id' => $journalEntry->id,
+                'vat_rate_id' => $vatRateIds[$line->vat_rate_id],
+                'base_amount' => $baseAmount,
+                'vat_amount' => $vatAmount,
+                'type' => $entryType,
+                'figure' => $line->vat_figure,
+            ]);
+        }
+    }
+
+    private function isVatReversalLine(TransactionLine $line, VatEntryType $vatType): bool
+    {
+        $isDebitLine = ! Money::isZero((string) $line->debit);
+
+        return match ($vatType) {
+            VatEntryType::Output => $isDebitLine,
+            VatEntryType::Input, VatEntryType::InputInvestment, VatEntryType::Acquisition => ! $isDebitLine,
+        };
     }
 
     private function isJournalReferenceConflict(QueryException $exception): bool

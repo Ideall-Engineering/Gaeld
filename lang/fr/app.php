@@ -1217,6 +1217,8 @@ return [
     'vat_line_400' => 'Total impôt préalable (chiffre 400)',
     'vat_line_500' => 'TVA nette (chiffre 500)',
     'vat_line_510' => 'TVA à payer / à rembourser (chiffre 510)',
+
+    'vat_entry_type_input_investment' => 'Impôt préalable sur investissements et autres charges d’exploitation',
     'vat_form_help_title' => 'Guide du formulaire TVA suisse',
     'vat_form_help_200' => 'Chiffres 200-299 : Total du chiffre d\'affaires soumis à la TVA par taux',
     'vat_form_help_300' => 'Chiffres 300-399 : TVA calculée sur le chiffre d\'affaires imposable',

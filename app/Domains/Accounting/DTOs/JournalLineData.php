@@ -21,6 +21,10 @@ readonly class JournalLineData
         public string $debit,
         public string $credit,
         public ?string $description = null,
+        public ?string $vatRateId = null,
+        public ?string $vatAmount = null,
+        public ?string $vatType = null,
+        public ?string $vatFigure = null,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -33,6 +37,10 @@ readonly class JournalLineData
             debit: (string) $data['debit'],
             credit: (string) $data['credit'],
             description: $data['description'] ?? null,
+            vatRateId: $data['vat_rate_id'] ?? null,
+            vatAmount: isset($data['vat_amount']) ? (string) $data['vat_amount'] : null,
+            vatType: $data['vat_type'] ?? null,
+            vatFigure: $data['vat_figure'] ?? null,
         );
     }
 }

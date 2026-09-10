@@ -10,6 +10,7 @@ namespace App\Domains\Accounting\Enums;
 enum VatEntryType: string
 {
     case Input = 'input';   // VAT on purchases (Vorsteuer)
+    case InputInvestment = 'input_investment'; // VAT on investments (Vorsteuer Investitionen)
     case Output = 'output'; // VAT on sales (Umsatzsteuer)
     case Acquisition = 'acquisition'; // VAT owed on foreign services (Bezugsteuer)
 
@@ -17,6 +18,7 @@ enum VatEntryType: string
     {
         return match ($this) {
             self::Input => __('app.vat_entry_type_input'),
+            self::InputInvestment => __('app.vat_entry_type_input_investment'),
             self::Output => __('app.vat_entry_type_output'),
             self::Acquisition => __('app.vat_entry_type_acquisition'),
         };

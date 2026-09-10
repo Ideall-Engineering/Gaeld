@@ -1222,6 +1222,8 @@ return [
     'vat_line_400' => 'Gesamte Vorsteuer (Ziffer 400)',
     'vat_line_500' => 'Netto MWST (Ziffer 500)',
     'vat_line_510' => 'Zahlbare/erstattungsfähige MWST (Ziffer 510)',
+
+    'vat_entry_type_input_investment' => 'Vorsteuer auf Investitionen und übrigem Betriebsaufwand',
     'vat_form_help_title' => 'Schweizer MWST-Formular Guide',
     'vat_form_help_200' => 'Ziffern 200-299: Gesamtumsatz nach Steuersatz',
     'vat_form_help_300' => 'Ziffern 300-399: Geschuldete Steuer auf dem steuerbaren Umsatz',

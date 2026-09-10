@@ -1300,6 +1300,8 @@ return [
     'vat_line_400' => 'Total Input VAT (line 400)',
     'vat_line_500' => 'Net VAT (line 500)',
     'vat_line_510' => 'VAT Payable / Refundable (line 510)',
+
+    'vat_entry_type_input_investment' => 'Input VAT on investments and other operating expenses',
     'vat_form_help_title' => 'Swiss VAT Form Guide',
     'vat_form_help_200' => 'Lines 200-299: Total revenue subject to VAT by rate',
     'vat_form_help_300' => 'Lines 300-399: Output VAT calculated on taxable revenue',

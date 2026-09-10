@@ -17,9 +17,15 @@ class VatEntryTypeTest extends TestCase
         $this->assertSame('output', VatEntryType::Output->value);
     }
 
+    public function test_input_investment_has_correct_value(): void
+    {
+        $this->assertSame('input_investment', VatEntryType::InputInvestment->value);
+    }
+
     public function test_from_valid_values(): void
     {
         $this->assertSame(VatEntryType::Input, VatEntryType::from('input'));
+        $this->assertSame(VatEntryType::InputInvestment, VatEntryType::from('input_investment'));
         $this->assertSame(VatEntryType::Output, VatEntryType::from('output'));
     }
 }

@@ -1185,6 +1185,8 @@ return [
     'vat_line_400' => 'IVA a credito totale (cifra 400)',
     'vat_line_500' => 'IVA netta (cifra 500)',
     'vat_line_510' => 'IVA da versare / da rimborsare (cifra 510)',
+
+    'vat_entry_type_input_investment' => 'Imposta precedente su investimenti e altre spese d’esercizio',
     'vat_form_help_title' => 'Guida al modulo IVA svizzero',
     'vat_form_help_200' => 'Cifre 200-299: Cifra d\'affari totale soggetta all\'IVA per aliquota',
     'vat_form_help_300' => 'Cifre 300-399: IVA calcolata sulla cifra d\'affari imponibile',

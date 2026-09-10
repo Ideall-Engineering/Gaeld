@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $base_amount
  * @property string $vat_amount
  * @property VatEntryType $type
+ * @property string|null $figure
  */
 class VatEntry extends Model
 {
@@ -34,6 +35,7 @@ class VatEntry extends Model
         'base_amount',
         'vat_amount',
         'type',
+        'figure',
     ];
 
     protected function casts(): array
