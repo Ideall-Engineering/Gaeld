@@ -6,6 +6,7 @@ use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Models\VatRate;
 use App\Support\Money;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -14,26 +15,19 @@ use Illuminate\Support\Facades\Cache;
  */
 class VatReportService
 {
+    /** @var array<string, string> */
+    private const OUTPUT_LINES_BY_RATE_CODE = [
+        'NORMAL' => '302',
+        'REDUCED' => '312',
+        'ACCOMMODATION' => '342',
+    ];
+
+    /** @var string[] */
+    private const DEDUCTION_LINES = ['220', '221', '225', '230', '235', '280'];
+
     /**
      * Generate a VAT report for the given period, matching Swiss AFC/ESTV form structure.
      *
-     * Returns data for chiffres 200–510 of the Swiss VAT declaration.
-     *
-     * @param  string  $orgId  Organization UUID
-     * @param  string  $fromDate  Period start (Y-m-d)
-     * @param  string  $toDate  Period end (Y-m-d)
-     * @return array{
-     *   period: array{from: string, to: string},
-     *   revenue_by_rate: array,
-     *   total_revenue: string,
-     *   output_vat_by_rate: array,
-     *   total_output_vat: string,
-     *   input_vat: string,
-     *   net_vat: string,
-     *   vat_payable: string,
-     * }
-     */
-    /**
      * @return array<string, mixed>
      */
     public function generate(string $orgId, string $fromDate, string $toDate): array
@@ -41,122 +35,100 @@ class VatReportService
         $cacheKey = "vat_report:{$orgId}:{$fromDate}:{$toDate}";
         $orgTag = "org:{$orgId}:reports";
 
-        return Cache::tags([$orgTag])->remember($cacheKey, now()->addMinutes(30), function () use ($orgId, $fromDate, $toDate) {
-
-            // Load all VatEntries for this org + period via the JournalEntry relationship
-            $entries = VatEntry::with('vatRate')
-                ->whereHas('journalEntry', function ($q) use ($orgId, $fromDate, $toDate) {
-                    $q->where('organization_id', $orgId)
+        return Cache::tags([$orgTag])->remember($cacheKey, now()->addMinutes(30), function () use ($orgId, $fromDate, $toDate): array {
+            $entries = VatEntry::query()
+                ->with('vatRate')
+                ->whereHas('journalEntry', function ($query) use ($orgId, $fromDate, $toDate): void {
+                    $query->where('organization_id', $orgId)
                         ->where('is_posted', true)
-                        ->where('date', '>=', $fromDate)
-                        ->where('date', '<=', $toDate);
+                        ->whereBetween('date', [$fromDate, $toDate]);
                 })
                 ->get();
 
-            // Separate Output (sales) and Input (purchases) entries
             $outputEntries = $entries->where('type', VatEntryType::Output);
             $inputEntries = $entries->where('type', VatEntryType::Input);
+            $inputInvestmentEntries = $entries->where('type', VatEntryType::InputInvestment);
             $acquisitionEntries = $entries->where('type', VatEntryType::Acquisition);
 
-            // Aggregate Output by rate → chiffres 200 & 300
-            $revenueByRate = [];
-            $outputVatByRate = [];
+            [$revenueByRate, $outputVatByRate] = $this->aggregateOutputByRate($outputEntries);
+            $totalRevenue = $this->sumEntries($outputEntries, 'base_amount');
+            $totalOutputVat = $this->sumEntries($outputEntries, 'vat_amount');
 
-            foreach ($outputEntries->groupBy('vat_rate_id') as $rateId => $rateEntries) {
-                /** @var VatEntry $firstEntry */
-                $firstEntry = $rateEntries->first();
-                /** @var VatRate|null $vatRate */
-                $vatRate = $firstEntry->vatRate;
-                $rateName = $vatRate ? (string) $vatRate->name : 'Unknown';
-                $rateValue = $vatRate ? number_format((float) $vatRate->rate, 2, '.', '') : '0.00';
-
-                $baseAmount = '0.00';
-                $vatAmount = '0.00';
-                foreach ($rateEntries as $entry) {
-                    $baseAmount = Money::add($baseAmount, (string) $entry->base_amount);
-                    $vatAmount = Money::add($vatAmount, (string) $entry->vat_amount);
+            $deductionsByFigure = array_fill_keys(self::DEDUCTION_LINES, '0.00');
+            foreach ($outputEntries as $entry) {
+                if ($entry->figure !== null && array_key_exists($entry->figure, $deductionsByFigure)) {
+                    $deductionsByFigure[$entry->figure] = Money::add(
+                        $deductionsByFigure[$entry->figure],
+                        (string) $entry->base_amount,
+                    );
                 }
-
-                $revenueByRate[] = [
-                    'rate_id' => $rateId,
-                    'rate_name' => $rateName,
-                    'rate' => $rateValue,
-                    'base_amount' => $baseAmount,
-                    'vat_amount' => $vatAmount,
-                ];
-
-                $outputVatByRate[] = [
-                    'rate_id' => $rateId,
-                    'rate_name' => $rateName,
-                    'rate' => $rateValue,
-                    'base_amount' => $baseAmount,
-                    'vat_amount' => $vatAmount,
-                    'amount' => $vatAmount,
-                ];
             }
 
-            // Aggregate Input by rate → chiffre 400
-            $totalInputVat = '0.00';
-            foreach ($inputEntries as $entry) {
-                $totalInputVat = Money::add($totalInputVat, (string) $entry->vat_amount);
-            }
+            $totalDeductions = array_reduce(
+                $deductionsByFigure,
+                fn (string $total, string $amount): string => Money::add($total, $amount),
+                '0.00',
+            );
+            $totalTaxable = Money::subtract($totalRevenue, $totalDeductions);
 
-            // Aggregate acquisition tax on foreign services → chiffre 381.
-            // Owed like output VAT; the matching deduction rides along in 400.
-            $totalAcquisitionTax = '0.00';
-            $acquisitionBase = '0.00';
-            foreach ($acquisitionEntries as $entry) {
-                $totalAcquisitionTax = Money::add($totalAcquisitionTax, (string) $entry->vat_amount);
-                $acquisitionBase = Money::add($acquisitionBase, (string) $entry->base_amount);
-            }
-
-            // Totals
-            $totalRevenue = array_reduce($revenueByRate, fn ($carry, $row) => Money::add($carry, $row['base_amount']), '0.00');
-            $totalTaxable = array_reduce($outputVatByRate, fn ($carry, $row) => Money::add($carry, $row['base_amount']), '0.00');
-            $totalOutputVat = array_reduce($outputVatByRate, fn ($carry, $row) => Money::add($carry, $row['amount']), '0.00');
+            $outputVatRows = $this->buildOutputVatRows($orgId, $outputEntries);
+            $totalInputVat400 = $this->sumEntries($inputEntries, 'vat_amount');
+            $totalInputVat405 = $this->sumEntries($inputInvestmentEntries, 'vat_amount');
+            $totalInputVat = Money::add($totalInputVat400, $totalInputVat405);
+            $totalAcquisitionTax = $this->sumEntries($acquisitionEntries, 'vat_amount');
+            $acquisitionBase = $this->sumEntries($acquisitionEntries, 'base_amount');
             $totalTaxOwed = Money::add($totalOutputVat, $totalAcquisitionTax);
             $netVat = Money::subtract($totalTaxOwed, $totalInputVat);
+            $line500 = Money::isNegative($netVat) ? '0.00' : $netVat;
+            $line510 = Money::isNegative($netVat) ? Money::negate($netVat) : '0.00';
 
-            $revenueRows = array_map(fn ($row) => [
-                'line' => '200',
-                'label' => $row['rate_name'],
-                'amount' => $row['base_amount'],
-                'rate' => $row['rate'],
-                'vat' => $row['vat_amount'],
-            ], $revenueByRate);
-
-            $outputVatRows = array_map(fn ($row) => [
-                'line' => '300',
-                'label' => $row['rate_name'],
-                'taxable' => $row['base_amount'],
-                'rate' => $row['rate'],
-                'vat' => $row['vat_amount'],
-            ], $outputVatByRate);
+            $turnoverRows = [['line' => '200', 'amount' => $totalRevenue]];
+            foreach ($deductionsByFigure as $line => $amount) {
+                $turnoverRows[] = ['line' => $line, 'amount' => $amount];
+            }
+            $turnoverRows[] = ['line' => '289', 'amount' => $totalDeductions];
+            $turnoverRows[] = ['line' => '299', 'amount' => $totalTaxable];
 
             return [
                 'period' => ['from' => $fromDate, 'to' => $toDate],
-                'revenue_by_rate' => $revenueByRate,      // chiffre 200
-                'revenue_rows' => $revenueRows,
-                'total_revenue' => $totalRevenue,        // chiffre 299
-                'output_vat_by_rate' => $outputVatByRate,  // chiffre 300
+                'revenue_by_rate' => $revenueByRate,
+                'revenue_rows' => $turnoverRows,
+                'turnover_rows' => $turnoverRows,
+                'total_revenue' => $totalRevenue,
+                'deductions_by_figure' => $deductionsByFigure,
+                'total_deductions' => $totalDeductions,
+                'output_vat_by_rate' => $outputVatByRate,
                 'output_vat_rows' => $outputVatRows,
                 'total_taxable' => $totalTaxable,
-                'total_output_vat' => $totalOutputVat,      // chiffre 399
-                'acquisition_tax_base' => $acquisitionBase,   // chiffre 380
-                'acquisition_tax' => $totalAcquisitionTax,    // chiffre 381
+                'total_output_vat' => $totalOutputVat,
+                'acquisition_tax_base' => $acquisitionBase,
+                'acquisition_tax' => $totalAcquisitionTax,
+                'acquisition_rows' => [
+                    ['line' => '380', 'amount' => $acquisitionBase],
+                    ['line' => '381', 'amount' => $totalAcquisitionTax],
+                ],
                 'total_tax_owed' => $totalTaxOwed,
-                'input_vat' => $totalInputVat,       // chiffre 400
+                'input_vat' => $totalInputVat400,
+                'input_investment_vat' => $totalInputVat405,
                 'total_input_vat' => $totalInputVat,
-                'net_vat' => $netVat,              // chiffre 500
-                'vat_payable' => $netVat,              // chiffre 510 (same as net for standard method)
+                'input_vat_rows' => [
+                    ['line' => '400', 'amount' => $totalInputVat400],
+                    ['line' => '405', 'amount' => $totalInputVat405],
+                    ['line' => '479', 'amount' => $totalInputVat],
+                ],
+                'net_vat' => $netVat,
+                'vat_payable' => $line500,
+                'vat_credit' => $line510,
+                'settlement_rows' => [
+                    ['line' => '500', 'amount' => $line500],
+                    ['line' => '510', 'amount' => $line510],
+                ],
             ];
         });
     }
 
     /**
      * Generate a fresh (non-cached) VAT report by flushing the specific cache entry first.
-     *
-     * Use this when accurate real-time data is required (e.g. before posting a settlement).
      *
      * @return array<string, mixed>
      */
@@ -165,5 +137,78 @@ class VatReportService
         Cache::tags(["org:{$orgId}:reports"])->forget("vat_report:{$orgId}:{$fromDate}:{$toDate}");
 
         return $this->generate($orgId, $fromDate, $toDate);
+    }
+
+    /**
+     * @param  Collection<int, VatEntry>  $entries
+     * @return array{array<int, array<string, mixed>>, array<int, array<string, mixed>>}
+     */
+    private function aggregateOutputByRate(Collection $entries): array
+    {
+        $revenueByRate = [];
+        $outputVatByRate = [];
+
+        foreach ($entries->groupBy('vat_rate_id') as $rateId => $rateEntries) {
+            /** @var VatEntry $firstEntry */
+            $firstEntry = $rateEntries->first();
+            // vat_entries.vat_rate_id is NOT NULL with a restricting foreign key,
+            // and the relation is eager-loaded above, so it always resolves.
+            $vatRate = $firstEntry->vatRate;
+            $rateName = (string) $vatRate->name;
+            $rateValue = (string) $vatRate->rate;
+            $baseAmount = $this->sumEntries($rateEntries, 'base_amount');
+            $vatAmount = $this->sumEntries($rateEntries, 'vat_amount');
+
+            $row = [
+                'rate_id' => $rateId,
+                'rate_name' => $rateName,
+                'rate' => $rateValue,
+                'base_amount' => $baseAmount,
+                'vat_amount' => $vatAmount,
+            ];
+            $revenueByRate[] = $row;
+            $outputVatByRate[] = [...$row, 'amount' => $vatAmount];
+        }
+
+        return [$revenueByRate, $outputVatByRate];
+    }
+
+    /**
+     * @param  Collection<int, VatEntry>  $entries
+     * @return array<int, array{line: string, taxable: string, rate: string, vat: string}>
+     */
+    private function buildOutputVatRows(string $orgId, Collection $entries): array
+    {
+        $configuredRates = VatRate::query()
+            ->where('organization_id', $orgId)
+            ->whereIn('code', array_keys(self::OUTPUT_LINES_BY_RATE_CODE))
+            ->get()
+            ->keyBy('code');
+
+        $rows = [];
+        foreach (self::OUTPUT_LINES_BY_RATE_CODE as $rateCode => $line) {
+            $vatRate = $configuredRates->get($rateCode);
+            $rateEntries = $entries->filter(
+                fn (VatEntry $entry): bool => $entry->vatRate?->code === $rateCode,
+            );
+
+            $rows[] = [
+                'line' => $line,
+                'taxable' => $this->sumEntries($rateEntries, 'base_amount'),
+                'rate' => $vatRate !== null ? (string) $vatRate->rate : '0.00',
+                'vat' => $this->sumEntries($rateEntries, 'vat_amount'),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /** @param Collection<int, VatEntry> $entries */
+    private function sumEntries(Collection $entries, string $field): string
+    {
+        return $entries->reduce(
+            fn (string $total, VatEntry $entry): string => Money::add($total, (string) $entry->getAttribute($field)),
+            '0.00',
+        );
     }
 }

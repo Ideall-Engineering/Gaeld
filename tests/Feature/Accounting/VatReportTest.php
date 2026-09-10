@@ -39,6 +39,7 @@ class VatReportTest extends TestCase
         Account::create(['organization_id' => $this->organization->id, 'code' => '1170', 'name' => 'VAT Input (recoverable)', 'type' => AccountType::Asset->value]);
         Account::create(['organization_id' => $this->organization->id, 'code' => '2200', 'name' => 'VAT Output', 'type' => AccountType::Liability->value]);
         Account::create(['organization_id' => $this->organization->id, 'code' => '2201', 'name' => 'VAT Settlement', 'type' => AccountType::Liability->value]);
+        Account::create(['organization_id' => $this->organization->id, 'code' => '2202', 'name' => 'Acquisition Tax', 'type' => AccountType::Liability->value]);
         Account::create(['organization_id' => $this->organization->id, 'code' => '3000', 'name' => 'Revenue', 'type' => AccountType::Revenue->value]);
         Account::create(['organization_id' => $this->organization->id, 'code' => '6530', 'name' => 'Expense', 'type' => AccountType::Expense->value]);
 
@@ -68,14 +69,20 @@ class VatReportTest extends TestCase
         ]);
     }
 
-    private function createVatEntry(JournalEntry $journalEntry, VatEntryType $type, float $base, float $vat): VatEntry
-    {
+    private function createVatEntry(
+        JournalEntry $journalEntry,
+        VatEntryType $type,
+        float $base,
+        float $vat,
+        ?string $figure = null,
+    ): VatEntry {
         return VatEntry::create([
             'journal_entry_id' => $journalEntry->id,
             'vat_rate_id' => $this->vatRate->id,
             'base_amount' => $base,
             'vat_amount' => $vat,
             'type' => $type->value,
+            'figure' => $figure,
         ]);
     }
 
@@ -125,6 +132,57 @@ class VatReportTest extends TestCase
         $expected = bcsub('81.00', '40.50', 2);
         $this->assertEquals($expected, $report['net_vat']);
         $this->assertEquals($expected, $report['vat_payable']);
+    }
+
+    public function test_input_investment_is_reported_separately_in_405_and_included_in_479(): void
+    {
+        $journalEntry = $this->createPostedJournalEntry('2026-01-20');
+        $this->createVatEntry($journalEntry, VatEntryType::Input, 100.00, 8.10);
+        $this->createVatEntry($journalEntry, VatEntryType::InputInvestment, 50.00, 4.05);
+
+        $report = app(VatReportService::class)->generate(
+            $this->organization->id,
+            '2026-01-01',
+            '2026-03-31',
+        );
+
+        $this->assertSame('8.10', $report['input_vat']);
+        $this->assertSame('4.05', $report['input_investment_vat']);
+        $this->assertSame('12.15', $report['total_input_vat']);
+        $this->assertSame('4.05', collect($report['input_vat_rows'])->firstWhere('line', '405')['amount']);
+    }
+
+    public function test_exempt_output_is_included_in_200_and_deducted_in_230(): void
+    {
+        $journalEntry = $this->createPostedJournalEntry('2026-01-20');
+        $this->createVatEntry($journalEntry, VatEntryType::Output, 2808.00, 0.00, '230');
+
+        $report = app(VatReportService::class)->generate(
+            $this->organization->id,
+            '2026-01-01',
+            '2026-03-31',
+        );
+
+        $this->assertSame('2808.00', $report['total_revenue']);
+        $this->assertSame('2808.00', $report['deductions_by_figure']['230']);
+        $this->assertSame('2808.00', $report['total_deductions']);
+        $this->assertSame('0.00', $report['total_taxable']);
+    }
+
+    public function test_input_vat_surplus_separates_500_and_510(): void
+    {
+        $journalEntry = $this->createPostedJournalEntry('2026-01-20');
+        $this->createVatEntry($journalEntry, VatEntryType::Input, 1000.00, 81.00);
+
+        $report = app(VatReportService::class)->generate(
+            $this->organization->id,
+            '2026-01-01',
+            '2026-03-31',
+        );
+
+        $this->assertSame('-81.00', $report['net_vat']);
+        $this->assertSame('0.00', $report['vat_payable']);
+        $this->assertSame('81.00', $report['vat_credit']);
     }
 
     public function test_vat_report_excludes_entries_outside_period(): void
@@ -207,6 +265,29 @@ class VatReportTest extends TestCase
         $this->assertEquals('40.50', number_format((float) $credit1170->credit, 2, '.', ''));
     }
 
+    public function test_vat_settlement_with_acquisition_tax_is_balanced_and_clears_2202(): void
+    {
+        $journalEntry = $this->createPostedJournalEntry('2026-01-20');
+        $this->createVatEntry($journalEntry, VatEntryType::Acquisition, 1000.00, 81.00);
+        $this->createVatEntry($journalEntry, VatEntryType::Input, 1000.00, 81.00);
+
+        $settlement = app(PostVatSettlementAction::class)->execute(
+            $this->organization->id,
+            '2026-01-01',
+            '2026-03-31',
+        );
+
+        $settlement->load('lines.account');
+        $acquisitionLine = $settlement->lines->first(
+            fn ($line): bool => $line->account->code === '2202',
+        );
+
+        $this->assertTrue($settlement->isBalanced());
+        $this->assertNotNull($acquisitionLine);
+        $this->assertSame('81.00', $acquisitionLine->debit);
+        $this->assertSame('0.00', $acquisitionLine->credit);
+    }
+
     // ──────────────────────────────────────────────────────────────
     //  HTTP route tests
     // ──────────────────────────────────────────────────────────────
@@ -252,6 +333,56 @@ class VatReportTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
+    }
+
+    public function test_acquisition_tax_appears_in_view_csv_and_pdf(): void
+    {
+        $journalEntry = $this->createPostedJournalEntry('2026-01-20');
+        $this->createVatEntry($journalEntry, VatEntryType::Acquisition, 1000.00, 81.00);
+        $this->createVatEntry($journalEntry, VatEntryType::Input, 1000.00, 81.00);
+
+        $viewResponse = $this->actingAs($this->user)
+            ->withSession(['current_organization_id' => $this->organization->id])
+            ->get(route('reports.vat', ['from_date' => '2026-01-01', 'to_date' => '2026-03-31']));
+
+        $viewResponse->assertInertia(fn ($page) => $page
+            ->where('report.acquisition_rows.0.line', '380')
+            ->where('report.acquisition_rows.0.amount', '1000.00')
+            ->where('report.acquisition_rows.1.line', '381')
+            ->where('report.acquisition_rows.1.amount', '81.00'));
+
+        $csv = $this->actingAs($this->user)
+            ->withSession(['current_organization_id' => $this->organization->id])
+            ->get(route('reports.vat.export', ['format' => 'csv', 'from_date' => '2026-01-01', 'to_date' => '2026-03-31']))
+            ->streamedContent();
+
+        $this->assertStringContainsString('380;', $csv);
+        $this->assertStringContainsString('381;', $csv);
+
+        $report = app(VatReportService::class)->generate(
+            $this->organization->id,
+            '2026-01-01',
+            '2026-03-31',
+        );
+        $html = view('exports.vat-report', [
+            'organization' => $this->organization,
+            'report' => $report,
+        ])->render();
+
+        $this->assertMatchesRegularExpression('/>\s*380\s*</', $html);
+        $this->assertMatchesRegularExpression('/>\s*381\s*</', $html);
+    }
+
+    public function test_csv_contains_every_declaration_line_shown_in_the_view(): void
+    {
+        $csv = $this->actingAs($this->user)
+            ->withSession(['current_organization_id' => $this->organization->id])
+            ->get(route('reports.vat.export', ['format' => 'csv', 'from_date' => '2026-01-01', 'to_date' => '2026-03-31']))
+            ->streamedContent();
+
+        foreach (['200', '220', '221', '225', '230', '235', '280', '289', '299', '302', '312', '342', '380', '381', '399', '400', '405', '479', '500', '510'] as $line) {
+            $this->assertStringContainsString("\n{$line};", $csv, "VAT line {$line} is missing from CSV.");
+        }
     }
 
     public function test_post_settlement_route_creates_journal_entry_and_redirects(): void

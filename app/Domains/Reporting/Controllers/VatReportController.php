@@ -8,6 +8,7 @@ use App\Domains\Accounting\Exceptions\VatPeriodLockedException;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Services\VatReportService;
+use App\Domains\Accounting\Support\VatDeclarationLines;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Reporting\Requests\VatReportRequest;
 use App\Domains\Reporting\Services\ExportReportService;
@@ -113,21 +114,18 @@ class VatReportController extends Controller
         return $exporter->export(
             $format,
             csvBuilder: function () use ($exporter, $report, $from, $to) {
-                $headers = ['Chiffre', 'Description', 'Base amount', 'VAT amount'];
-                $rows = [];
-                foreach ($report['revenue_by_rate'] as $line) {
-                    $rows[] = ['200', $line['rate'].'%', $line['base_amount'], $line['vat_amount']];
-                }
-                $rows[] = ['299', 'Total revenue', $report['total_revenue'], ''];
-                foreach ($report['output_vat_by_rate'] as $line) {
-                    $rows[] = ['300', $line['rate'].'%', $line['base_amount'], $line['vat_amount']];
-                }
-                $rows[] = ['399', 'Total output VAT', '', $report['total_output_vat']];
-                $rows[] = ['400', 'Input VAT', '', $report['input_vat']];
-                $rows[] = ['500', 'Net VAT', '', $report['net_vat']];
-                $rows[] = ['510', 'VAT payable', '', $report['vat_payable']];
+                $headers = [
+                    __('exports.vat.code'),
+                    __('exports.vat.description'),
+                    __('exports.vat.base_amount'),
+                    __('exports.vat.vat_amount'),
+                ];
 
-                return $exporter->csv()->export($headers, $rows, "vat-report-{$from}-{$to}.csv");
+                return $exporter->csv()->export(
+                    $headers,
+                    $this->vatCsvRows($report),
+                    "vat-report-{$from}-{$to}.csv",
+                );
             },
             pdfBuilder: fn () => $exporter->pdf()->download('exports.vat-report', [
                 'organization' => $org,
@@ -162,5 +160,44 @@ class VatReportController extends Controller
             'from_date' => $validated['from_date'],
             'to_date' => $validated['to_date'],
         ])->with('success', __('app.vat_settlement_posted'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     * @return array<int, array<int, string>>
+     */
+    private function vatCsvRows(array $report): array
+    {
+        $rows = [];
+
+        foreach ($report['turnover_rows'] as $row) {
+            $rows[] = [$row['line'], VatDeclarationLines::label($row['line']), $row['amount'], ''];
+        }
+
+        foreach ($report['output_vat_rows'] as $row) {
+            $rows[] = [
+                $row['line'],
+                VatDeclarationLines::label($row['line']),
+                $row['taxable'],
+                $row['vat'],
+            ];
+        }
+
+        foreach ($report['acquisition_rows'] as $row) {
+            $rows[] = [
+                $row['line'],
+                VatDeclarationLines::label($row['line']),
+                $row['line'] === '380' ? $row['amount'] : '',
+                $row['line'] === '381' ? $row['amount'] : '',
+            ];
+        }
+
+        $rows[] = ['399', VatDeclarationLines::label('399'), '', $report['total_output_vat']];
+
+        foreach ([...$report['input_vat_rows'], ...$report['settlement_rows']] as $row) {
+            $rows[] = [$row['line'], VatDeclarationLines::label($row['line']), '', $row['amount']];
+        }
+
+        return $rows;
     }
 }

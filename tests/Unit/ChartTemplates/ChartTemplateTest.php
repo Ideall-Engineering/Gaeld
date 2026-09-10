@@ -132,6 +132,7 @@ class ChartTemplateTest extends TestCase
         $this->assertContains(AccountCode::ACCOUNTS_RECEIVABLE, $codes);
         $this->assertContains(AccountCode::BANK_CASH, $codes);
         $this->assertContains(AccountCode::VAT_OUTPUT, $codes);
+        $this->assertContains(AccountCode::VAT_ACQUISITION_TAX_PAYABLE, $codes);
         $this->assertContains(AccountCode::REVENUE, $codes);
         $this->assertContains(AccountCode::ROUNDING_DIFFERENCE, $codes);
         $this->assertContains(AccountCode::OPENING_BALANCE, $codes);

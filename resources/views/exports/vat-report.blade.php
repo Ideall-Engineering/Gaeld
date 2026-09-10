@@ -1,3 +1,5 @@
+@php($report = \App\Domains\Accounting\Support\VatDeclarationLines::attach($report))
+
 <!DOCTYPE html>
 <html lang="{{ app()->getLocale() }}">
 <head>
@@ -11,94 +13,100 @@
         'docPeriod' => __('exports.vat.period', ['from' => $report['period']['from'], 'to' => $report['period']['to']]),
     ])
 
-    {{-- Chiffres 200–299: Revenue by rate --}}
     <div class="section">
         <div class="section-title">{{ __('exports.vat.section_1') }}</div>
         <table>
             <thead>
                 <tr>
                     <th class="num">{{ __('exports.vat.code') }}</th>
-                    <th>{{ __('exports.vat.rate') }}</th>
+                    <th>{{ __('exports.vat.description') }}</th>
                     <th class="num">{{ __('exports.vat.base_amount') }}</th>
-                    <th class="num">{{ __('exports.vat.vat_amount') }}</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach ($report['revenue_by_rate'] as $row)
-                    <tr>
-                        <td class="chiffre">200</td>
-                        <td>{{ $row['rate_name'] }} ({{ $row['rate'] }}%)</td>
-                        <td class="amount">{{ number_format((float) $row['base_amount'], 2, '.', "'") }}</td>
-                        <td class="amount">{{ number_format((float) $row['vat_amount'], 2, '.', "'") }}</td>
+                @foreach ($report['turnover_rows'] as $row)
+                    <tr @class(['total' => in_array($row['line'], ['200', '289', '299'], true)])>
+                        <td class="chiffre">{{ $row['line'] }}</td>
+                        <td>{{ $row['label'] }}</td>
+                        <td class="amount">{{ number_format((float) $row['amount'], 2, '.', "'") }}</td>
                     </tr>
                 @endforeach
-                <tr class="total">
-                    <td class="chiffre">299</td>
-                    <td>{{ __('exports.vat.taxable_turnover_total') }}</td>
-                    <td class="amount">{{ number_format((float) $report['total_revenue'], 2, '.', "'") }}</td>
-                    <td class="amount"></td>
-                </tr>
             </tbody>
         </table>
     </div>
 
-    {{-- Chiffres 300–399: Output VAT --}}
     <div class="section">
         <div class="section-title">{{ __('exports.vat.section_2') }}</div>
         <table>
             <thead>
                 <tr>
                     <th class="num">{{ __('exports.vat.code') }}</th>
-                    <th>{{ __('exports.vat.rate') }}</th>
+                    <th>{{ __('exports.vat.description') }}</th>
+                    <th class="num">{{ __('exports.vat.base_amount') }}</th>
+                    <th class="num">{{ __('exports.vat.rate') }}</th>
                     <th class="num">{{ __('exports.vat.vat_amount') }}</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach ($report['output_vat_by_rate'] as $row)
+                @foreach ($report['output_vat_rows'] as $row)
                     <tr>
-                        <td class="chiffre">300</td>
-                        <td>{{ $row['rate_name'] }} ({{ $row['rate'] }}%)</td>
-                        <td class="amount">{{ number_format((float) $row['amount'], 2, '.', "'") }}</td>
+                        <td class="chiffre">{{ $row['line'] }}</td>
+                        <td>{{ $row['label'] }}</td>
+                        <td class="amount">{{ number_format((float) $row['taxable'], 2, '.', "'") }}</td>
+                        <td class="amount">{{ $row['rate'] }}%</td>
+                        <td class="amount">{{ number_format((float) $row['vat'], 2, '.', "'") }}</td>
+                    </tr>
+                @endforeach
+                @foreach ($report['acquisition_rows'] as $row)
+                    <tr>
+                        <td class="chiffre">{{ $row['line'] }}</td>
+                        <td>{{ $row['label'] }}</td>
+                        <td class="amount">
+                            {{ $row['line'] === '380' ? number_format((float) $row['amount'], 2, '.', "'") : '' }}
+                        </td>
+                        <td class="amount"></td>
+                        <td class="amount">
+                            {{ $row['line'] === '381' ? number_format((float) $row['amount'], 2, '.', "'") : '' }}
+                        </td>
                     </tr>
                 @endforeach
                 <tr class="total">
                     <td class="chiffre">399</td>
-                    <td>{{ __('exports.vat.output_vat_total') }}</td>
+                    <td>{{ __('app.vat_line_399') }}</td>
+                    <td class="amount">{{ number_format((float) $report['total_taxable'], 2, '.', "'") }}</td>
+                    <td class="amount"></td>
                     <td class="amount">{{ number_format((float) $report['total_output_vat'], 2, '.', "'") }}</td>
                 </tr>
             </tbody>
         </table>
     </div>
 
-    {{-- Chiffre 400: Input VAT --}}
     <div class="section">
         <div class="section-title">{{ __('exports.vat.section_3') }}</div>
         <table>
             <tbody>
-                <tr>
-                    <td class="chiffre">400</td>
-                    <td>{{ __('exports.vat.input_vat') }}</td>
-                    <td class="amount">{{ number_format((float) $report['input_vat'], 2, '.', "'") }}</td>
-                </tr>
+                @foreach ($report['input_vat_rows'] as $row)
+                    <tr @class(['total' => $row['line'] === '479'])>
+                        <td class="chiffre">{{ $row['line'] }}</td>
+                        <td>{{ $row['label'] }}</td>
+                        <td class="amount">{{ number_format((float) $row['amount'], 2, '.', "'") }}</td>
+                    </tr>
+                @endforeach
             </tbody>
         </table>
     </div>
 
-    {{-- Chiffres 500–510: Net VAT --}}
     <div class="section">
         <div class="section-title">{{ __('exports.vat.section_4') }}</div>
         <table>
             <tbody>
-                <tr>
-                    <td class="chiffre">500</td>
-                    <td>{{ __('exports.vat.net_vat') }}</td>
-                    <td class="amount">{{ number_format((float) $report['net_vat'], 2, '.', "'") }}</td>
-                </tr>
-                <tr class="payable">
-                    <td class="chiffre">510</td>
-                    <td>{{ __('exports.vat.vat_payable') }}</td>
-                    <td class="amount">{{ number_format((float) $report['vat_payable'], 2, '.', "'") }}</td>
-                </tr>
+                @foreach ($report['settlement_rows'] as $row)
+                    <tr @class(['payable' => $row['line'] === '500', 'total' => $row['line'] === '510'])>
+                        <td class="chiffre">{{ $row['line'] }}</td>
+                        <td>{{ $row['label'] }}</td>
+                        <td class="amount">{{ number_format((float) $row['amount'], 2, '.', "'") }}</td>
+                    </tr>
+                @endforeach
             </tbody>
         </table>
     </div>

@@ -156,7 +156,7 @@ const { isClosed: isPeriodClosed, closedYear } = useClosedFiscalYear(periodDate)
     <ClosedYearBanner v-if="isPeriodClosed" :year="closedYear" />
 
     <template v-if="report">
-      <!-- Section 200: Umsatz (Revenue) -->
+      <!-- Section 200: Turnover and deductions -->
       <Card class="mb-4">
         <CardHeader>
           <CardTitle>{{ t('vat_section_200') }}</CardTitle>
@@ -172,15 +172,15 @@ const { isClosed: isPeriodClosed, closedYear } = useClosedFiscalYear(periodDate)
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in report.revenue_rows" :key="row.line" class="border-b last:border-0">
+              <tr
+                v-for="row in report.turnover_rows"
+                :key="row.line"
+                class="border-b last:border-0"
+                :class="{ 'font-semibold': ['200', '289', '299'].includes(row.line) }"
+              >
                 <td class="py-2 pr-4 font-mono text-xs text-[hsl(var(--muted-foreground))]">{{ row.line }}</td>
-                <td class="py-2 pr-4">{{ row.label }}</td>
+                <td class="py-2 pr-4">{{ t(`vat_line_${row.line}`) }}</td>
                 <td class="py-2 text-right tabular-nums">{{ formatCurrency(row.amount) }}</td>
-              </tr>
-              <tr class="border-t font-semibold">
-                <td class="py-2 pr-4 font-mono text-xs">299</td>
-                <td class="py-2 pr-4">{{ t('vat_line_299') }}</td>
-                <td class="py-2 text-right tabular-nums">{{ formatCurrency(report.total_revenue) }}</td>
               </tr>
             </tbody>
           </table>
@@ -188,7 +188,7 @@ const { isClosed: isPeriodClosed, closedYear } = useClosedFiscalYear(periodDate)
         </CardContent>
       </Card>
 
-      <!-- Section 300: Steuerberechnung (Output VAT) -->
+      <!-- Section 300: Output and acquisition tax -->
       <Card class="mb-4">
         <CardHeader>
           <CardTitle>{{ t('vat_section_300') }}</CardTitle>
@@ -208,10 +208,21 @@ const { isClosed: isPeriodClosed, closedYear } = useClosedFiscalYear(periodDate)
             <tbody>
               <tr v-for="row in report.output_vat_rows" :key="row.line" class="border-b last:border-0">
                 <td class="py-2 pr-4 font-mono text-xs text-[hsl(var(--muted-foreground))]">{{ row.line }}</td>
-                <td class="py-2 pr-4">{{ row.label }}</td>
+                <td class="py-2 pr-4">{{ t(`vat_line_${row.line}`) }}</td>
                 <td class="py-2 pr-4 text-right tabular-nums">{{ formatCurrency(row.taxable) }}</td>
                 <td class="py-2 pr-4 text-right">{{ row.rate }}%</td>
                 <td class="py-2 text-right tabular-nums">{{ formatCurrency(row.vat) }}</td>
+              </tr>
+              <tr v-for="row in report.acquisition_rows" :key="row.line" class="border-b last:border-0">
+                <td class="py-2 pr-4 font-mono text-xs text-[hsl(var(--muted-foreground))]">{{ row.line }}</td>
+                <td class="py-2 pr-4">{{ t(`vat_line_${row.line}`) }}</td>
+                <td class="py-2 pr-4 text-right tabular-nums">
+                  {{ row.line === '380' ? formatCurrency(row.amount) : '' }}
+                </td>
+                <td class="py-2 pr-4" />
+                <td class="py-2 text-right tabular-nums">
+                  {{ row.line === '381' ? formatCurrency(row.amount) : '' }}
+                </td>
               </tr>
               <tr class="border-t font-semibold">
                 <td class="py-2 pr-4 font-mono text-xs">399</td>
@@ -226,18 +237,25 @@ const { isClosed: isPeriodClosed, closedYear } = useClosedFiscalYear(periodDate)
         </CardContent>
       </Card>
 
-      <!-- Section 400: Vorsteuer (Input VAT) -->
+      <!-- Section 400: Input VAT -->
       <Card class="mb-4">
         <CardHeader>
           <CardTitle>{{ t('vat_section_400') }}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div class="flex items-center justify-between py-2 text-sm">
-            <div class="flex gap-4">
-              <span class="font-mono text-xs text-[hsl(var(--muted-foreground))]">400</span>
-              <span>{{ t('vat_line_400') }}</span>
+          <div class="space-y-2 text-sm">
+            <div
+              v-for="row in report.input_vat_rows"
+              :key="row.line"
+              class="flex items-center justify-between py-2"
+              :class="{ 'border-t font-semibold': row.line === '479' }"
+            >
+              <div class="flex gap-4">
+                <span class="font-mono text-xs text-[hsl(var(--muted-foreground))]">{{ row.line }}</span>
+                <span>{{ t(`vat_line_${row.line}`) }}</span>
+              </div>
+              <span class="tabular-nums font-medium">{{ formatCurrency(row.amount) }}</span>
             </div>
-            <span class="tabular-nums font-medium">{{ formatCurrency(report.total_input_vat) }}</span>
           </div>
         </CardContent>
       </Card>
@@ -254,18 +272,15 @@ const { isClosed: isPeriodClosed, closedYear } = useClosedFiscalYear(periodDate)
                 <span class="font-mono text-xs text-[hsl(var(--muted-foreground))]">500</span>
                 <span>{{ t('vat_line_500') }}</span>
               </div>
-              <span class="tabular-nums">{{ formatCurrency(report.net_vat) }}</span>
+              <span class="tabular-nums text-red-600">{{ formatCurrency(report.vat_payable) }}</span>
             </div>
             <div class="flex items-center justify-between border-t py-2 font-bold">
               <div class="flex gap-4">
                 <span class="font-mono text-xs">510</span>
                 <span>{{ t('vat_line_510') }}</span>
               </div>
-              <span
-                class="tabular-nums text-base"
-                :class="(report.vat_payable ?? 0) >= 0 ? 'text-red-600' : 'text-green-600'"
-              >
-                {{ formatCurrency(report.vat_payable) }}
+              <span class="tabular-nums text-base text-green-600">
+                {{ formatCurrency(report.vat_credit) }}
               </span>
             </div>
           </div>

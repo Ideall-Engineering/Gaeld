@@ -145,6 +145,9 @@ class ChartTemplateService
             ['code' => AccountCode::VAT_PAYABLE_AFC, 'type' => AccountType::Liability, 'name' => [
                 'en' => 'VAT Payable AFC', 'fr' => 'TVA à payer AFC', 'de' => 'MWST-Zahllast ESTV', 'it' => 'IVA da versare AFC',
             ]],
+            ['code' => AccountCode::VAT_ACQUISITION_TAX_PAYABLE, 'type' => AccountType::Liability, 'name' => [
+                'en' => 'Acquisition Tax Payable', 'fr' => 'Impôt sur les acquisitions dû', 'de' => 'Bezugsteuer geschuldet', 'it' => 'Imposta sull’acquisto dovuta',
+            ]],
             ['code' => AccountCode::REVENUE, 'type' => AccountType::Revenue, 'name' => [
                 'en' => 'Revenue from Services', 'fr' => 'Produits des prestations de services', 'de' => 'Dienstleistungserlöse', 'it' => 'Ricavi da prestazioni di servizi',
             ]],

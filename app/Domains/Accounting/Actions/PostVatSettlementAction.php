@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Log;
  *
  * Accounting logic:
  *   Debit  2200 (TVA collectée / VAT Output) — clears the output VAT liability
+ *   Debit  2202 (Impôt sur les acquisitions) — clears acquisition tax owed
  *   Credit 1170 (TVA déductible / VAT Input) — clears the input VAT asset
  *   Credit 2201 (TVA à payer / VAT payable)  — net amount payable to AFC
  *   (or Debit 2201 if net is negative, i.e. a refund is due)
@@ -39,7 +40,8 @@ final class PostVatSettlementAction
         $report = $this->vatReportService->generateFresh($orgId, $fromDate, $toDate);
 
         $totalOutputVat = $report['total_output_vat'];
-        $totalInputVat = $report['input_vat'];
+        $totalAcquisitionTax = $report['acquisition_tax'];
+        $totalInputVat = $report['total_input_vat'];
         $netVat = $report['net_vat'];
 
         $vatOutputAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::VAT_OUTPUT);
@@ -56,6 +58,19 @@ final class PostVatSettlementAction
             credit: '0.00',
             description: 'VAT settlement: output VAT cleared',
         );
+
+        if (! Money::isZero($totalAcquisitionTax)) {
+            $vatAcquisitionAccount = $this->ledgerQuery->resolveAccount(
+                $orgId,
+                AccountCode::VAT_ACQUISITION_TAX_PAYABLE,
+            );
+            $lines[] = new JournalLineData(
+                accountId: (string) $vatAcquisitionAccount->id,
+                debit: $totalAcquisitionTax,
+                credit: '0.00',
+                description: 'VAT settlement: acquisition tax cleared',
+            );
+        }
 
         // Credit 1170 — clears input VAT recoverable
         $lines[] = new JournalLineData(
@@ -84,7 +99,7 @@ final class PostVatSettlementAction
 
         $reference = $this->resolveReference($orgId, $fromDate, $toDate);
 
-        return DB::transaction(function () use ($orgId, $reference, $toDate, $fromDate, $lines, $totalOutputVat, $totalInputVat, $netVat, $lockedByUserId): JournalEntry {
+        return DB::transaction(function () use ($orgId, $reference, $toDate, $fromDate, $lines, $totalOutputVat, $totalAcquisitionTax, $totalInputVat, $netVat, $lockedByUserId): JournalEntry {
             $journalEntry = $this->ledgerService->postEntry($orgId, new JournalEntryData(
                 date: $toDate,
                 reference: $reference,
@@ -105,6 +120,7 @@ final class PostVatSettlementAction
                 'period' => "{$fromDate} to {$toDate}",
                 'reference' => $reference,
                 'output_vat' => $totalOutputVat,
+                'acquisition_tax' => $totalAcquisitionTax,
                 'input_vat' => $totalInputVat,
                 'net_vat' => $netVat,
                 'journal_entry_id' => $journalEntry->id,
