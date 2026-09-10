@@ -119,6 +119,31 @@ class JournalEntryVatApiTest extends SecurityTestCase
         $this->assertSame($this->normalRate->uuid, $expenseLine['vat_rate_id']);
     }
 
+    public function test_lines_are_returned_in_the_order_they_were_written(): void
+    {
+        $this->withToken($this->token)->postJson('/api/v1/journal-entries', [
+            'date' => '2026-01-05',
+            'reference' => 'ORDERED',
+            'status' => 'posted',
+            'lines' => [
+                ['account_code' => '6033', 'debit' => '10.00', 'credit' => '0.00'],
+                ['account_code' => '1170', 'debit' => '5.00', 'credit' => '0.00'],
+                ['account_code' => '1020', 'debit' => '0.00', 'credit' => '15.00'],
+            ],
+        ])->assertCreated();
+
+        $entry = JournalEntry::where('reference', 'ORDERED')->firstOrFail();
+
+        $codes = collect(
+            $this->withToken($this->token)
+                ->getJson("/api/v1/journal-entries/{$entry->id}")
+                ->assertOk()
+                ->json('data.lines')
+        )->pluck('account_code')->all();
+
+        $this->assertSame(['6033', '1170', '1020'], $codes);
+    }
+
     public function test_a_vat_type_without_a_rate_is_rejected(): void
     {
         $this->withToken($this->token)->postJson('/api/v1/journal-entries', [

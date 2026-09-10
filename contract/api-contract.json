@@ -1276,7 +1276,8 @@
       },
       "response_200": {
         "data": "JournalEntryResource"
-      }
+      },
+      "notes": "Lines are returned in the order they were written (debit before credit, as supplied)."
     },
     {
       "name": "api.journal-entries.store",
@@ -1365,7 +1366,8 @@
         "422 idempotency_key_required": "neither an Idempotency-Key header nor a reference was given",
         "409 duplicate_reference": "the reference is already in use",
         "409 idempotency_conflict": "the same key was used with a different payload"
-      }
+      },
+      "notes": "Lines are returned in the order they were written (debit before credit, as supplied)."
     },
     {
       "name": "api.journal-entries.post",

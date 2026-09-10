@@ -24,7 +24,12 @@ class JournalEntryResource extends JsonResource
             'source' => $this->type ?? 'manual',
             'debit_total' => $this->totalDebit(),
             'credit_total' => $this->totalCredit(),
-            'lines' => TransactionLineResource::collection($this->whenLoaded('lines')),
+            // Insertion order — debit before credit, as the entry was written.
+            // The relation itself stays unsorted: it is also used for SUM()
+            // aggregates, and an ORDER BY breaks those in Postgres.
+            'lines' => TransactionLineResource::collection(
+                $this->whenLoaded('lines', fn () => $this->lines->sortBy('id')->values()),
+            ),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
