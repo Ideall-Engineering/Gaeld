@@ -8,6 +8,7 @@ use App\Domains\Automation\DTOs\AutomationResult;
 use App\Domains\Automation\Enums\AutomationStatus;
 use App\Domains\Automation\Models\AutomationRun;
 use App\Domains\Automation\Models\AutomationSetting;
+use App\Domains\Automation\Notifications\AutomationFailedNotification;
 use App\Domains\Automation\Services\AutomationRegistry;
 use App\Domains\Automation\Services\AutomationRunner;
 use App\Domains\Organizations\Enums\Permission;
@@ -264,7 +265,7 @@ class AutomationRunnerTest extends TestCase
 
         Notification::assertSentTo(
             $this->user,
-            \App\Domains\Automation\Notifications\AutomationFailedNotification::class,
+            AutomationFailedNotification::class,
         );
     }
 

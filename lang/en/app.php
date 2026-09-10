@@ -2041,6 +2041,9 @@ return [
     'item' => 'Item',
     'user' => 'User',
 
+    // Checklist
+    'checklist_data_imported' => 'Import existing data',
+
     // Migration / Data Import
     'migration.migration' => 'Data Import',
     'migration.migration_description' => 'Import your existing accounting data from another platform.',

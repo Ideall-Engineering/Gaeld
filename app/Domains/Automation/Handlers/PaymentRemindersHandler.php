@@ -10,6 +10,7 @@ use App\Domains\Invoicing\Services\InvoiceMailerService;
 use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Organizations\Models\Organization;
 use App\Support\FeatureFlag;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -87,7 +88,7 @@ class PaymentRemindersHandler implements AutomationHandler
      *
      * Shared with the legacy scheduled job so both agree on the cooldown.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, Invoice>
+     * @return Collection<int, Invoice>
      */
     public static function dueForReminder(Organization $organization)
     {
