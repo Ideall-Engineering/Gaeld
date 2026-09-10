@@ -1,18 +1,21 @@
-# Gaeld local pilot deployment
+# Gäld private Tailscale deployment
 
-This runbook describes the local-only pilot stack in `compose.production.yml`.
-It is pinned to upstream release `v3.8.6` (commit
-`3a92e1c25008c3de47da6c6409b4f16b3920ffee`), built as
-`gaeld/app:v3.8.6-ideall.1` and `gaeld/web:v3.8.6-ideall.1`.
+This runbook describes the private single-instance stack in
+`compose.production.yml`. It is based on upstream release `v3.8.6` and
+currently runs the project-specific images `gaeld/app:v3.8.6-ideall.5` and
+`gaeld/web:v3.8.6-ideall.5`.
 
 The deployment source is `/home/gmk/Gaeld`; there is no second checkout.
 The compose project is named `gaeld` in the compose file itself, so never
 pass `-p` — it would override that name and detach the stack from its
 explicitly named volumes.
 
-The stack is intentionally reachable only on `127.0.0.1:8088`. It does not
-use the server's existing Traefik network and does not expose PostgreSQL or
-Redis to the host network.
+The host port remains intentionally bound to `127.0.0.1:8088`. Normal remote
+access is provided by Tailscale Serve at
+`https://gmk.tailc7653b.ts.net`, which is available only inside the tailnet.
+Nginx also joins the existing `proxy` network for the internal
+`gaeld.home.arpa` Traefik route. PostgreSQL, Redis and PHP-FPM are not exposed
+to the host network.
 
 ## Services
 
@@ -26,8 +29,9 @@ Redis to the host network.
 The Redis queue reservation is set to 900 seconds so it remains longer than
 the application's longest queued-job timeout (600 seconds).
 
-Meilisearch and SMTP delivery are disabled for the initial pilot. Search uses
-the database and outbound mail is written to the application log.
+Meilisearch is disabled and search uses the database.
+Outbound mail is delivered over SMTP through mail.cyon.ch on port 587 with
+STARTTLS, sending as noreply@gaeld.ideall.ch (configured 8 September 2026).
 
 ## Configuration
 
@@ -59,7 +63,8 @@ GAELD_ENV_FILE=.env.production.pilot.example \
 
 ## Build and start
 
-These commands belong to Phase 3 or later and must not be run during Phase 2:
+Build and start commands change the local Docker runtime and must be run
+deliberately:
 
 ```bash
 docker compose --env-file .env.production -f compose.production.yml build
@@ -85,20 +90,44 @@ docker compose --env-file .env.production -f compose.production.yml ps
 docker compose --env-file .env.production -f compose.production.yml logs --tail=200 app nginx horizon scheduler
 ```
 
-Application mail can be inspected in the `app` and `horizon` logs while
-`MAIL_MAILER=log` is active.
+Mail is sent through the queue, so delivery problems appear in the `horizon`
+log and in `php artisan queue:failed`. Tinker is not installed in the
+production image, so test delivery by triggering a password reset for a known
+account, or by copying a short script into the container and running it with
+`php`.
 
-## Local access
+Setting `MAIL_MAILER=log` in `.env.production` switches delivery back to the
+application log without removing the SMTP credentials.
+
+## Access
+
+From an authorized tailnet device, open:
+
+```text
+https://gmk.tailc7653b.ts.net
+```
+
+Tailscale Serve terminates HTTPS and proxies to `http://127.0.0.1:8088`.
+This is the intended remote access path and is not a public Internet release.
 
 On the server, open `http://localhost:8088`.
 
-From another workstation, create an SSH tunnel:
+An SSH tunnel remains available as a fallback:
 
 ```bash
 ssh -L 8088:127.0.0.1:8088 gmk@SERVER_IP
 ```
 
 Then open `http://localhost:8088` on that workstation.
+
+The REST API under `/api/v1` is enabled and uses the same private access path.
+See `/home/gmk/Documents/gaeld-api-anleitung.md` for token handling and request
+examples.
+
+`TRUSTED_PROXIES=*` is currently functional because the application port is
+not publicly exposed, but it is broader than necessary. Pin the relevant
+Docker networks or proxy addresses and then restrict this setting to the
+Tailscale/Docker gateway hop and, while the internal route is used, Traefik.
 
 ## Migrations and updates
 
@@ -123,7 +152,7 @@ tags for Gaeld images.
 
 ## Stop and removal
 
-Stop the pilot without deleting its persistent data:
+Stop the deployment without deleting its persistent data:
 
 ```bash
 docker compose --env-file .env.production -f compose.production.yml stop
@@ -132,8 +161,13 @@ docker compose --env-file .env.production -f compose.production.yml stop
 Removing volumes with `down --volumes` deletes the database and stored files.
 That operation is intentionally not part of this runbook.
 
-## Pilot limitation
+## Remaining operational work
 
-No external backup is configured yet. Until backup and restore have been
-implemented and tested, only test or otherwise reproducible data may be kept
-in this installation and it must not be treated as a public production system.
+No automated external backup is configured yet. Local pre-change backups with
+checksums exist, but they do not protect against loss of the server. Before
+relying on the instance for non-reproducible or business-critical records,
+configure encrypted off-server backups and complete a documented restore test.
+
+A public Internet domain is optional and intentionally deferred. If access
+without Tailscale is required later, treat public DNS, TLS, reverse-proxy
+hardening, monitoring and the go-live rollback path as a separate change.

@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $vat_amount
  * @property VatEntryType|null $vat_type
  * @property string|null $vat_figure
+ * @property int|null $cost_center_id
  */
 class TransactionLine extends Model
 {
@@ -66,5 +67,11 @@ class TransactionLine extends Model
     public function vatRate(): BelongsTo
     {
         return $this->belongsTo(VatRate::class, 'vat_rate_id', 'uuid');
+    }
+
+    /** @return BelongsTo<CostCenter, $this> */
+    public function costCenter(): BelongsTo
+    {
+        return $this->belongsTo(CostCenter::class);
     }
 }

@@ -34,6 +34,9 @@ class QueryBuilder
     /** @var array<int, string> */
     private array $searchColumns = [];
 
+    /** @var array<int, string> */
+    private array $numericSearchColumns = [];
+
     private string $defaultSort = 'created_at';
 
     private string $defaultDirection = 'desc';
@@ -46,7 +49,10 @@ class QueryBuilder
     }
 
     /**
-     * @param  Builder<Model>  $query
+     * @template TFor of Model
+     *
+     * @param  Builder<TFor>  $query
+     * @return static<TFor>
      */
     public static function for(Builder $query, Request $request): static
     {
@@ -92,6 +98,23 @@ class QueryBuilder
     }
 
     /**
+     * Define which numeric columns are searched by exact value.
+     *
+     * A LIKE over an amount would make "250" match 1'250.00, which is noise
+     * rather than a hit, so an amount is matched outright. The term is
+     * stripped of thousands separators first, so that a figure copied off the
+     * screen as "1'250.00" still finds the row storing 1250.00.
+     *
+     * @param  array<string>  $columns
+     */
+    public function searchableNumeric(array $columns): static
+    {
+        $this->numericSearchColumns = $columns;
+
+        return $this;
+    }
+
+    /**
      * Apply sorting, filtering, search from request and return the builder.
      *
      * @return Builder<TModel>
@@ -120,7 +143,7 @@ class QueryBuilder
     {
         $search = $this->request->input('search');
 
-        if (empty($search) || empty($this->searchColumns)) {
+        if (empty($search) || (empty($this->searchColumns) && empty($this->numericSearchColumns))) {
             return;
         }
 
@@ -166,19 +189,67 @@ class QueryBuilder
     private function applyDatabaseSearch(string $search): void
     {
         $likeOperator = $this->likeOperator();
+        $numericSearch = $this->normalizeNumericSearch($search);
 
-        $this->query->where(function (Builder $q) use ($search, $likeOperator) {
+        $this->query->where(function (Builder $q) use ($search, $numericSearch, $likeOperator) {
             foreach ($this->searchColumns as $column) {
-                if (str_contains($column, '.')) {
-                    [$relation, $field] = explode('.', $column, 2);
-                    $q->orWhereHas($relation, function (Builder $rq) use ($field, $search, $likeOperator) {
-                        $rq->where($field, $likeOperator, "%{$search}%");
-                    });
-                } else {
-                    $q->orWhere($column, $likeOperator, "%{$search}%");
-                }
+                $this->orWhereColumnMatches($q, $column, function (Builder $b, string $field) use ($search, $likeOperator) {
+                    $b->where($b->qualifyColumn($field), $likeOperator, "%{$search}%");
+                });
+            }
+
+            if ($numericSearch === null) {
+                return;
+            }
+
+            foreach ($this->numericSearchColumns as $column) {
+                $this->orWhereColumnMatches($q, $column, function (Builder $b, string $field) use ($numericSearch) {
+                    $b->where($b->qualifyColumn($field), '=', $numericSearch);
+                });
             }
         });
+    }
+
+    /**
+     * Add one OR-branch for a search column, resolving a dotted path such as
+     * `lines.account.code` into a whereHas() on `lines.account` matching `code`.
+     *
+     * @param  Builder<covariant Model>  $query
+     * @param  \Closure(Builder<covariant Model>, string): void  $match
+     */
+    private function orWhereColumnMatches(Builder $query, string $column, \Closure $match): void
+    {
+        $separator = strrpos($column, '.');
+
+        if ($separator === false) {
+            $query->orWhere(function (Builder $q) use ($match, $column) {
+                $match($q, $column);
+            });
+
+            return;
+        }
+
+        $relation = substr($column, 0, $separator);
+        $field = substr($column, $separator + 1);
+
+        $query->orWhereHas($relation, function (Builder $q) use ($match, $field) {
+            $match($q, $field);
+        });
+    }
+
+    /**
+     * Reduce a search term to the plain decimal form used in the database, or
+     * null when the term is not an amount at all and no numeric column should
+     * be consulted.
+     *
+     * Accepts the Swiss apostrophe grouping ("1'250.50") and stray spaces so
+     * that a figure copied straight off the screen still matches.
+     */
+    private function normalizeNumericSearch(string $search): ?string
+    {
+        $normalized = str_replace(["'", "\u{2019}", ' ', "\u{00A0}"], '', $search);
+
+        return preg_match('/^\d+(\.\d{1,2})?$/', $normalized) === 1 ? $normalized : null;
     }
 
     private function applySorting(): void

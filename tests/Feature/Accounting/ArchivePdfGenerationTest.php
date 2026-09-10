@@ -8,9 +8,11 @@ use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\LegalArchive;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 use Tests\Traits\WithAuthenticatedOrganization;
+use Tests\Traits\WithRealConcurrency;
 
 /**
  * Phase 6: Per-fiscal-year PDF archive generation
@@ -18,7 +20,7 @@ use Tests\Traits\WithAuthenticatedOrganization;
  */
 class ArchivePdfGenerationTest extends TestCase
 {
-    use RefreshDatabase, WithAuthenticatedOrganization;
+    use RefreshDatabase, WithAuthenticatedOrganization, WithRealConcurrency;
 
     protected function setUp(): void
     {
@@ -87,6 +89,77 @@ class ArchivePdfGenerationTest extends TestCase
         Cache::shouldHaveReceived('lock')
             ->once()
             ->with("archive-pdf:{$this->organization->id}:2024", 600);
+    }
+
+    /**
+     * FR-006: the mocked test above only proves `Cache::lock()` is invoked.
+     * The action's own "already sealed" check (`$existing === null`) is a
+     * read-then-write race: without genuine cross-process exclusion, two
+     * callers starting at the same instant could both see no existing
+     * archive and both insert a version-1 row for the same artifact. This
+     * forks two real OS processes racing to generate the same fiscal year's
+     * PDFs against the real Redis-backed lock and proves exactly one
+     * version of each artifact is ever created.
+     */
+    public function test_action_serializes_real_concurrent_pdf_generation(): void
+    {
+        // Cache::lock() on the test suite's default "array" driver is an
+        // in-memory mutex with no cross-process effect. Use the real
+        // Redis-backed store production uses, so the lock this proves is
+        // the lock that actually ships.
+        config(['cache.default' => 'redis']);
+
+        $orgId = $this->organization->id;
+        $year = 2024;
+
+        try {
+            $results = $this->runConcurrently(2, function () use ($orgId, $year): array {
+                $outcome = app(GenerateArchivePdfAction::class)->execute($orgId, $year);
+
+                return array_map(fn (array $r): array => [
+                    'type' => $r['type'],
+                    'version' => $r['version'],
+                    'regenerated' => $r['regenerated'],
+                ], $outcome);
+            });
+
+            $this->assertCount(2, $results);
+
+            foreach (['pdf_pnl', 'pdf_balance_sheet', 'pdf_journal'] as $documentType) {
+                $archives = LegalArchive::where('organization_id', $orgId)
+                    ->where('document_type', $documentType)
+                    ->get();
+
+                $this->assertCount(1, $archives, "Expected exactly one {$documentType} archive despite two concurrent callers.");
+                $this->assertSame(1, $archives->first()->version);
+                $this->assertTrue(Storage::exists($archives->first()->storage_path));
+            }
+
+            // Exactly one of the two callers actually did the rendering
+            // work; the other, unblocked after the lock released, found a
+            // freshly sealed archive and skipped regeneration.
+            $regeneratedCounts = collect($results)
+                ->pluck('result')
+                ->collapse()
+                ->groupBy('type')
+                ->map(fn ($group) => $group->where('regenerated', true)->count());
+
+            foreach ($regeneratedCounts as $type => $count) {
+                $this->assertSame(1, $count, "Expected exactly one concurrent caller to regenerate {$type}.");
+            }
+        } finally {
+            // The lock proof above required committing fixtures for real
+            // cross-process visibility (see WithRealConcurrency); undo that
+            // by hard-deleting everything this test created, via
+            // withCommittedCleanup() so the deletes actually take effect
+            // instead of being silently undone by RefreshDatabase's own
+            // rollback.
+            $this->withCommittedCleanup(function () use ($orgId): void {
+                DB::table('legal_archives')->where('organization_id', $orgId)->delete();
+                $this->organization->forceDelete();
+                $this->user->delete();
+            });
+        }
     }
 
     public function test_action_regenerates_when_forced(): void

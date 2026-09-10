@@ -152,8 +152,8 @@ non-destructive, explicit migration to a supported runtime mode.
 - [X] T042 Run Pint and PHPStan on every changed PHP path through Sail.
 - [X] T043 [P] Run web Vitest, localized Playwright pricing tests, offer checks, and production build in `../web/package.json` and `../web/tests/`.
 - [X] T044 [P] Add and run the `check:edition-boundary` script, Docusaurus build, stale-offer scan, and localized documentation check in `../docs/package.json` and `../docs/scripts/check-edition-boundary.mjs`.
-- [ ] T045 Perform staging acceptance with EE absent and enabled, including CE install, SaaS onboarding, billing, quotas, API denial/allowance, migration, rollback, and all four locales using `scripts/qa/staging-runner.mjs`.
-- [ ] T046 Record the final boundary matrix, compatibility pair, registry artifact digests, migration evidence, and rollback reference in `../wiki/api/OFFER_READINESS_CHECKLIST.md`.
+- [ ] T045 Perform staging acceptance with EE absent and enabled, including CE install, SaaS onboarding, billing, quotas, API denial/allowance, migration, rollback, and all four locales using `scripts/qa/staging-runner.mjs`. **Deferred (2026-09-10)**: this runs against the live `https://staging.home.nectoria.com` environment (`scripts/qa/.env.qa` credentials not configured here) and the EE-enabled half additionally needs the private `plugins/gaeld-ee` checkout, which is not present in this environment. User chose to run staging/live work themselves rather than have it executed here.
+- [ ] T046 Record the final boundary matrix, compatibility pair, registry artifact digests, migration evidence, and rollback reference in `../wiki/api/OFFER_READINESS_CHECKLIST.md`. **Blocked on T045**: depends on the staging acceptance run above.
 - [X] T047 Run `/speckit-converge` against the final code, `specs/006-ce-commercial-boundary/spec.md`, `specs/006-ce-commercial-boundary/plan.md`, and `specs/006-ce-commercial-boundary/tasks.md`, then resolve or explicitly defer every reported gap.
 
 ## Dependencies and Execution Order

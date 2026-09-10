@@ -105,6 +105,9 @@ class VatReportTest extends TestCase
         $this->assertCount(1, $report['output_vat_by_rate']); // one rate
         $this->assertEquals('243.00', $report['total_output_vat']);
         $this->assertEquals('3000.00', $report['total_revenue']);
+        $this->assertSame('3000.00', collect($report['turnover_rows'])->firstWhere('line', '200')['amount']);
+        $this->assertSame('3000.00', collect($report['turnover_rows'])->firstWhere('line', '299')['amount']);
+        $this->assertSame('3000.00', collect($report['output_vat_rows'])->firstWhere('line', '303')['taxable']);
     }
 
     public function test_vat_report_aggregates_input_vat(): void

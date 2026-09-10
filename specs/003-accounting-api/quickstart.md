@@ -7,8 +7,13 @@ Community Edition installation.
 
 - Services are running through Laravel Sail.
 - The database has an organization with the standard Swiss chart of accounts.
-- The operator has created an API token with `accounting.view`,
-  `accounting.create`, and `accounting.edit` abilities.
+- The operator has created an API token with the abilities below. Steps 1-8
+  only need the first three; the full walkthrough (invoices, expenses, and
+  CAMT import in steps 9-12) needs all of them — each resource has its own
+  ability, `accounting.*` does not imply the others:
+  `accounting.view`, `accounting.create`, `accounting.edit`,
+  `contacts.create`, `invoicing.create`, `invoicing.edit`,
+  `expenses.create`, `expenses.edit`, `banking.import`.
 - Set the base URL and token in the shell running the client:
 
 ```bash
