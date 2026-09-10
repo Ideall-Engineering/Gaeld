@@ -4,6 +4,7 @@ namespace App\Http\Middleware\Api;
 
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Api\Contracts\AbilityCatalog;
 use App\Domains\Api\Models\Webhook;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Contacts\Models\Contact;
@@ -126,7 +127,7 @@ final class TokenPermissionMap
      */
     public static function get(): array
     {
-        return [
+        return AbilityCatalog::mergeInto([
             Contact::class => [
                 'viewAny' => Permission::ContactsView,
                 'view' => Permission::ContactsView,
@@ -188,6 +189,6 @@ final class TokenPermissionMap
                 'delete' => Permission::OrganizationEdit,
                 'regenerateSecret' => Permission::OrganizationEdit,
             ],
-        ];
+        ]);
     }
 }

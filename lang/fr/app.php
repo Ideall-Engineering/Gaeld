@@ -2215,6 +2215,7 @@ return [
     'webhook_event_expense_approved' => 'Dépense approuvée',
     'webhook_event_journal_entry_posted' => 'Écriture comptable enregistrée',
     'webhook_event_journal_entry_reversed' => 'Écriture comptable extournée',
+    'webhook_event_journal_entry_corrected' => 'Écriture comptable corrigée',
     'salary_slip_generated' => 'Fiche de salaire générée.',
     'salary_slip_already_posted' => 'Cette fiche de salaire a déjà été comptabilisée.',
     'salary_slip_posted' => 'Fiche de salaire comptabilisée.',

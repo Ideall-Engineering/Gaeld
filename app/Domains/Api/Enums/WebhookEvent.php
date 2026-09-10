@@ -22,6 +22,7 @@ enum WebhookEvent: string
 
     case JournalEntryPosted = 'journal_entry.posted';
     case JournalEntryReversed = 'journal_entry.reversed';
+    case JournalEntryCorrected = 'journal_entry.corrected';
 
     /**
      * @return array<int, string>
@@ -53,6 +54,7 @@ enum WebhookEvent: string
             self::ExpenseApproved => __('app.webhook_event_expense_approved'),
             self::JournalEntryPosted => __('app.webhook_event_journal_entry_posted'),
             self::JournalEntryReversed => __('app.webhook_event_journal_entry_reversed'),
+            self::JournalEntryCorrected => __('app.webhook_event_journal_entry_corrected'),
         };
     }
 }

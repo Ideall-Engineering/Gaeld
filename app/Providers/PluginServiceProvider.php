@@ -2,12 +2,15 @@
 
 namespace App\Providers;
 
+use App\Domains\Api\Contracts\PluginContractVersion;
+use App\Domains\Api\Support\RouteCollisionGuard;
 use App\Domains\Migration\Contracts\AccountMapperInterface;
 use App\Domains\Migration\Contracts\MigrationConnectorInterface;
 use App\Domains\Migration\Contracts\PlatformParserInterface;
 use App\Domains\Migration\Contracts\PluginDataTypeImporterInterface;
 use App\Domains\Migration\Services\PluginMigrationRegistrar;
 use App\Support\Contracts\EditionCompatibility;
+use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
@@ -17,7 +20,7 @@ use Illuminate\Support\ServiceProvider;
  */
 class PluginServiceProvider extends ServiceProvider
 {
-    /** @var array<string, bool> */
+    /** @var array<string, string> Slug => version */
     private array $loadedPlugins = [];
 
     /** @var array<string, array<string, mixed>> */
@@ -35,18 +38,59 @@ class PluginServiceProvider extends ServiceProvider
             return;
         }
 
+        $allowedSlugs = config('plugins.allowed_slugs', []);
+
         foreach (File::directories($pluginPath) as $dir) {
             $manifest = $this->readManifest($dir);
-            if ($manifest) {
-                $this->manifests[$manifest['slug']] = ['dir' => $dir, 'manifest' => $manifest];
+            if (! $manifest) {
+                continue;
             }
+
+            if ($allowedSlugs !== [] && ! in_array($manifest['slug'], $allowedSlugs, true)) {
+                Log::info("Plugin not on the deployment allow-list, skipping: {$manifest['slug']}");
+
+                continue;
+            }
+
+            $this->manifests[$manifest['slug']] = ['dir' => $dir, 'manifest' => $manifest];
         }
+    }
+
+    /**
+     * Slug => version of every plugin that finished loading. Public for
+     * tests/Feature/Plugins/AccountantApiModuleBootTest.php's boot/smoke
+     * matrix, which constructs its own instance per scenario rather than
+     * relying on the container's provider (providers are not resolvable
+     * singletons in the usual sense).
+     *
+     * @return array<string, string>
+     */
+    public function loadedPlugins(): array
+    {
+        return $this->loadedPlugins;
     }
 
     public function boot(): void
     {
+        if ($this->manifests === []) {
+            return;
+        }
+
+        $routeGuard = $this->app->make(RouteCollisionGuard::class);
+        $routesBeforePlugins = $routeGuard->snapshot($this->app->make(Router::class));
+
         foreach ($this->manifests as $slug => $entry) {
             $this->loadPluginWithDeps($slug, $this->manifests, []);
+        }
+
+        if ($this->loadedPlugins !== []) {
+            // Route registration across all providers is only guaranteed
+            // complete once every provider's own boot() has run, so the
+            // comparison must be deferred to the application's `booted`
+            // hook rather than checked inline here.
+            $this->app->booted(function () use ($routeGuard, $routesBeforePlugins): void {
+                $routeGuard->assertNoCollisionsAgainst($routesBeforePlugins, $this->app->make(Router::class));
+            });
         }
     }
 
@@ -93,6 +137,20 @@ class PluginServiceProvider extends ServiceProvider
             $reason = $this->app->make(EditionCompatibility::class)->incompatibilityReason($compatibility);
             if ($reason !== null) {
                 Log::warning("Plugin manifest rejected ({$reason}): {$pluginDir}");
+
+                return null;
+            }
+        }
+
+        // Generic (non-EE-bound) core-extension contract, additive to the
+        // EE-specific `compatibility` check above: a manifest that declares
+        // it is silently ignored unless it fails-closed. A manifest that
+        // omits the field is unaffected — pre-existing plugins that predate
+        // this contract still boot exactly as before.
+        $coreContractVersion = $manifest['core_contract_version'] ?? null;
+        if ($coreContractVersion !== null) {
+            if (! is_string($coreContractVersion) || ! PluginContractVersion::isSupported($coreContractVersion)) {
+                Log::warning("Plugin core contract version unsupported: {$pluginDir}");
 
                 return null;
             }

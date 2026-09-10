@@ -2289,6 +2289,7 @@ return [
     'webhook_event_expense_approved' => 'Expense Approved',
     'webhook_event_journal_entry_posted' => 'Journal Entry Posted',
     'webhook_event_journal_entry_reversed' => 'Journal Entry Reversed',
+    'webhook_event_journal_entry_corrected' => 'Journal Entry Corrected',
     'salary_slip_generated' => 'Salary slip generated.',
     'salary_slip_already_posted' => 'This salary slip has already been posted.',
     'salary_slip_posted' => 'Salary slip posted.',

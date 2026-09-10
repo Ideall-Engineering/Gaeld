@@ -2,7 +2,7 @@
 
 namespace App\Domains\Api\Requests;
 
-use App\Domains\Api\Enums\WebhookEvent;
+use App\Domains\Api\Contracts\WebhookEventCatalog;
 use App\Support\Rules\ValidWebhookUrl;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -29,7 +29,7 @@ class UpdateWebhookRequest extends FormRequest
     private function webhookEventRule(): \Closure
     {
         return function (string $attribute, mixed $value, \Closure $fail) {
-            if (! WebhookEvent::isValid($value)) {
+            if (! WebhookEventCatalog::isValid($value)) {
                 $fail("The event '{$value}' is not a valid webhook event.");
             }
         };

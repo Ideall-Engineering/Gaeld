@@ -2157,6 +2157,7 @@ return [
     'webhook_event_expense_approved' => 'Spesa approvata',
     'webhook_event_journal_entry_posted' => 'Registrazione contabile effettuata',
     'webhook_event_journal_entry_reversed' => 'Registrazione contabile stornata',
+    'webhook_event_journal_entry_corrected' => 'Registrazione contabile corretta',
     'salary_slip_generated' => 'Busta paga generata.',
     'salary_slip_already_posted' => 'Questa busta paga è già stata registrata.',
     'salary_slip_posted' => 'Busta paga registrata.',

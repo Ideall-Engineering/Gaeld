@@ -2208,6 +2208,7 @@ return [
     'webhook_event_expense_approved' => 'Ausgabe genehmigt',
     'webhook_event_journal_entry_posted' => 'Buchung verbucht',
     'webhook_event_journal_entry_reversed' => 'Buchung storniert',
+    'webhook_event_journal_entry_corrected' => 'Buchung korrigiert',
     'salary_slip_generated' => 'Gehaltsabrechnung erstellt.',
     'salary_slip_already_posted' => 'Diese Gehaltsabrechnung wurde bereits verbucht.',
     'salary_slip_posted' => 'Gehaltsabrechnung verbucht.',

@@ -2,8 +2,8 @@
 
 namespace App\Domains\Api\Controllers;
 
+use App\Domains\Api\Contracts\WebhookEventCatalog;
 use App\Domains\Api\Enums\TokenType;
-use App\Domains\Api\Enums\WebhookEvent;
 use App\Domains\Api\Requests\StoreApiTokenRequest;
 use App\Domains\Api\Resources\ApiTokenResource;
 use App\Domains\Organizations\Services\CurrentOrganization;
@@ -132,7 +132,7 @@ class ApiTokenController extends Controller
     public function webhookEvents(): JsonResponse
     {
         return response()->json([
-            'data' => WebhookEvent::all(),
+            'data' => WebhookEventCatalog::all(),
         ]);
     }
 }
