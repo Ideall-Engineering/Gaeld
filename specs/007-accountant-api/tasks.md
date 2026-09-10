@@ -136,18 +136,22 @@ but the API surface cannot go live until Phase 2 (Foundational) below is done.
 
 ### Tests First
 
-- [ ] T053 [P] [US3] Frontend/feature tests for the correction dialog, required fields, replacement editing, joint posting, full cancel, error display, and action locking in `tests/Feature/Accounting/JournalCorrectionWebTest.php`
+- [x] T053 [P] [US3] Frontend/feature tests for the correction dialog, required fields, replacement editing, joint posting, full cancel, error display, and action locking in `tests/Feature/Accounting/JournalCorrectionWebTest.php` — 10 tests, all passing
 
 ### Implementation
 
-- [ ] T054 [US3] Add web routes in `routes/web/accounting.php`: `POST journal-entries/{journalEntry}/corrections` (prepare), `PUT journal-corrections/{correction}/replacement`, `POST journal-corrections/{correction}/post`, `DELETE journal-corrections/{correction}`
-- [ ] T055 [US3] Add `prepareCorrection`, `updateCorrectionReplacement`, `postCorrection`, `cancelCorrection` methods to `app/Domains/Accounting/Controllers/AccountingController.php`, calling only Phase 3 actions (mirrors the existing `postJournalEntry`/`reverseJournalEntry` pattern at lines 227-253)
-- [ ] T056 [US3] Replace the single-entry `Stornieren`-only path with `Korrigieren` for eligible posted entries in `resources/js/Pages/Accounting/JournalEntries.vue` and `resources/js/Pages/Accounting/JournalEntryShow.vue`; keep `Stornieren` available for a deliberate plain reversal
-- [ ] T057 [US3] Build the correction dialog (original / locked reversal / editable replacement, required `reason` + `correction_date`, explicit "beide Buchungen werden gemeinsam wirksam" notice) as a new component, e.g. `resources/js/Components/Accounting/JournalCorrectionDialog.vue`
-- [ ] T058 [US3] After prepare, redirect directly into the replacement draft edit view; add `korrigiert`/`Gegenbuchung`/`Ersatzbuchung` badges and cross-links in `JournalEntries.vue` and `JournalEntryShow.vue`
-- [ ] T059 [US3] Add German translations for the new labels/errors to the relevant `lang/de/*.php` file(s) used by `AccountingController`
+- [x] T054 [US3] Add web routes in `routes/web/accounting.php`: `POST journal-entries/{journalEntry}/corrections` (prepare), `PUT journal-corrections/{correction}/replacement`, `POST journal-corrections/{correction}/post`, `DELETE journal-corrections/{correction}`
+- [x] T055 [US3] Add `prepareCorrection`, `updateCorrectionReplacement`, `postCorrection`, `cancelCorrection` methods to `app/Domains/Accounting/Controllers/AccountingController.php`, calling only Phase 3 actions. Also extended `showJournalEntry`/`journalEntries` to compute `correction`/`correctionRole` context per entry, and to catch the wider global `\DomainException` (not just the app-namespaced one) — needed because `FiscalYearClosedException`/`VatPeriodLockedException` extend the built-in `\DomainException` directly, a pre-existing inconsistency elsewhere in the codebase that would otherwise surface as an uncaught 500 here.
+- [x] T056 [US3] Replace the single-entry `Stornieren`-only path with `Korrigieren` for eligible posted entries in `resources/js/Pages/Accounting/JournalEntries.vue` and `resources/js/Pages/Accounting/JournalEntryShow.vue`; `Stornieren` remains available on both for a deliberate plain reversal
+- [x] T057 [US3] Build the correction dialog (required `reason` + `correction_date`, explicit intro notice) as `resources/js/Components/Accounting/JournalCorrectionDialog.vue`. **Scope note**: the dialog itself only collects the two required fields, not a side-by-side original/reversal/replacement preview — that comparison happens on the detail page after prepare, per T058.
+- [x] T058 [US3] After prepare, redirect directly into the replacement draft's detail page (`JournalEntryShow.vue`), which gained an inline editable-lines section for open replacement drafts, `korrigiert`/`Gegenbuchung`/`Ersatzbuchung` badges, and cross-links between all three entries, in both `JournalEntries.vue` (list) and `JournalEntryShow.vue` (detail)
+- [x] T059 [US3] Added translations to all four locales (`lang/{de,en,fr,it}/app.php`), not only German, matching the repo's existing per-locale parity
 
-**Checkpoint**: T053 passes; an API-created correction (once Phase 4 ships) renders identically in this UI after reload.
+**Checkpoint reached**: T053's 10 tests plus the existing `ManualJournalEntryTest` (23 tests) and the Phase 3 domain/period suites all pass together, and the full `tests/Feature/Accounting` + `tests/Unit/Accounting` + `tests/Security/Authorization` suites pass at 322 tests / 1441 assertions (the only 2 errors are `ZipArchive` temp-file failures in an unrelated pre-existing export test, not touched by this work). Verified against a temporary, isolated `testing_gmk08` database created and dropped for this check alone, to route around a concurrent session's own test runs against the shared `testing` database without disturbing it. Pint and PHPStan clean on all new/changed files.
+
+Added `app/Domains/Accounting/Policies/JournalCorrectionPolicy.php` during this checkpoint: `tests/Security/Authorization/OrganizationScopedModelPolicyCoverageTest` requires every `BelongsToOrganization` model to resolve a policy, and `JournalCorrection` had none (the actual authorization decision still lives on `JournalEntryPolicy::correct()` against the original entry, per T035 — this policy exists so the model itself has a resolvable authorization surface, matching the coverage test's own documented expectation).
+
+An API-created correction will render identically in this UI once Phase 4 ships (the `correction`/`correctionRole` props are computed from `journal_corrections` alone, with no web-vs-API distinction).
 
 ---
 
