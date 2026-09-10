@@ -13,6 +13,7 @@ use App\Domains\Accounting\Enums\JournalCorrectionSource;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalCorrection;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Requests\StoreJournalEntryRequest;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Controller;
 use App\Support\CsvExportService;
 use App\Support\Exceptions\DomainException;
 use App\Support\PdfExportService;
+use App\Support\QueryBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -77,9 +79,22 @@ class AccountingController extends Controller
     {
         $this->authorize('viewAny', JournalEntry::class);
 
-        $entries = JournalEntry::with('lines.account')
-            ->orderByDesc('date')
-            ->paginate(config('accounting.pagination.default'));
+        $query = JournalEntry::with(['lines.account', 'lines.vatRate', 'lines.costCenter']);
+
+        // Account is a filter over the entry's lines, so it cannot go through
+        // QueryBuilder's exact-match filters, which only address base columns.
+        if ($accountId = $request->input('filter.account_id')) {
+            $query->whereHas('lines', fn ($q) => $q->where('account_id', $accountId));
+        }
+
+        $entries = QueryBuilder::for($query, $request)
+            ->allowedSorts(['date', 'reference', 'description', 'is_posted'], 'date', 'desc')
+            ->allowedFilters(['is_posted'])
+            ->searchable(['reference', 'description', 'lines.description', 'lines.account.code', 'lines.account.name'])
+            ->searchableNumeric(['lines.debit', 'lines.credit'])
+            ->apply()
+            ->paginate(config('accounting.pagination.default'))
+            ->withQueryString();
 
         $corrections = JournalCorrection::query()
             ->where(function ($query) use ($entries) {
@@ -104,6 +119,7 @@ class AccountingController extends Controller
 
             return [
                 ...$entry->toArray(),
+                ...$this->summariseJournalLines($entry),
                 'correction_role' => $role,
                 'correction_id' => $correction?->id,
                 'correction_status' => $correction?->status?->value,
@@ -125,12 +141,61 @@ class AccountingController extends Controller
         return Inertia::render('Accounting/JournalEntries', [
             'entries' => $entries,
             'accounts' => $accounts,
+            'query' => [
+                'sort' => $request->input('sort', 'date'),
+                'direction' => $request->input('direction', 'desc'),
+                'search' => $request->input('search', ''),
+                'filter' => [
+                    'is_posted' => $request->input('filter.is_posted', ''),
+                    'account_id' => $request->input('filter.account_id', ''),
+                ],
+            ],
             'can' => [
                 'create' => $user?->can('create', JournalEntry::class) ?? false,
                 'edit' => $user?->hasPermissionTo(Permission::AccountingEdit) ?? false,
                 'delete' => $user?->hasPermissionTo(Permission::AccountingDelete) ?? false,
             ],
         ]);
+    }
+
+    /**
+     * Condense an entry's lines into the flat debit/credit/amount shape the
+     * journal list shows on a single row.
+     *
+     * A plain two-line entry names both accounts outright. A split entry can
+     * only name the side that has a single account; the other side is left
+     * null and the row is marked as a split so the table can say how many
+     * positions are hidden behind it.
+     *
+     * @return array<string, mixed>
+     */
+    private function summariseJournalLines(JournalEntry $entry): array
+    {
+        $lines = $entry->lines;
+
+        $debits = $lines->filter(fn (TransactionLine $line) => (float) $line->debit > 0);
+        $credits = $lines->filter(fn (TransactionLine $line) => (float) $line->credit > 0);
+
+        $describe = fn (TransactionLine $line) => $line->account === null ? null : [
+            'id' => $line->account->id,
+            'code' => $line->account->code,
+            'name' => $line->account->display_name,
+        ];
+
+        $vatCodes = $lines->map(fn (TransactionLine $line) => $line->vatRate?->code)->filter()->unique();
+        $costCentres = $lines->map(fn (TransactionLine $line) => $line->costCenter?->code)->filter()->unique();
+
+        return [
+            'debit_account' => $debits->count() === 1 ? $describe($debits->first()) : null,
+            'credit_account' => $credits->count() === 1 ? $describe($credits->first()) : null,
+            'amount' => number_format($lines->sum(fn (TransactionLine $line) => (float) $line->debit), 2, '.', ''),
+            'line_count' => $lines->count(),
+            'is_split' => $lines->count() > 2,
+            'vat_code' => $vatCodes->count() === 1 ? $vatCodes->first() : null,
+            'vat_amount' => number_format($lines->sum(fn (TransactionLine $line) => (float) $line->vat_amount), 2, '.', ''),
+            'cost_center' => $costCentres->count() === 1 ? $costCentres->first() : null,
+            'line_description' => $lines->first(fn (TransactionLine $line) => filled($line->description))?->description,
+        ];
     }
 
     public function showJournalEntry(Request $request, JournalEntry $journalEntry): Response

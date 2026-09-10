@@ -109,30 +109,6 @@ parameters:
 			path: app/Domains/Assets/Models/FixedAsset.php
 
 		-
-			message: '#^Method App\\Domains\\Assets\\Queries\\FixedAssetQuery\:\:list\(\) should return Illuminate\\Contracts\\Pagination\\LengthAwarePaginator\<int, App\\Domains\\Assets\\Models\\FixedAsset\> but returns Illuminate\\Pagination\\LengthAwarePaginator\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Domains/Assets/Queries/FixedAssetQuery.php
-
-		-
-			message: '#^Parameter \#1 \$query of static method App\\Support\\QueryBuilder\<Illuminate\\Database\\Eloquent\\Model\>\:\:for\(\) expects Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Database\\Eloquent\\Builder\<App\\Domains\\Assets\\Models\\FixedAsset\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Domains/Assets/Queries/FixedAssetQuery.php
-
-		-
-			message: '#^Method App\\Domains\\Banking\\Queries\\BankAccountQuery\:\:list\(\) should return Illuminate\\Contracts\\Pagination\\LengthAwarePaginator\<int, App\\Domains\\Banking\\Models\\BankAccount\> but returns Illuminate\\Pagination\\LengthAwarePaginator\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Domains/Banking/Queries/BankAccountQuery.php
-
-		-
-			message: '#^Parameter \#1 \$query of static method App\\Support\\QueryBuilder\<Illuminate\\Database\\Eloquent\\Model\>\:\:for\(\) expects Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Database\\Eloquent\\Builder\<App\\Domains\\Banking\\Models\\BankAccount\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Domains/Banking/Queries/BankAccountQuery.php
-
-		-
 			message: '#^Access to an undefined property \(object\|string\)\:\:\$bankAccount\.$#'
 			identifier: property.notFound
 			count: 1
@@ -181,24 +157,6 @@ parameters:
 			path: app/Domains/Contacts/Controllers/ContactPersonController.php
 
 		-
-			message: '#^Method App\\Domains\\Contacts\\Queries\\ContactQuery\:\:list\(\) should return Illuminate\\Contracts\\Pagination\\LengthAwarePaginator\<int, App\\Domains\\Contacts\\Models\\Contact\> but returns Illuminate\\Pagination\\LengthAwarePaginator\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Domains/Contacts/Queries/ContactQuery.php
-
-		-
-			message: '#^Method App\\Domains\\Contacts\\Queries\\ContactQuery\:\:trashed\(\) should return Illuminate\\Contracts\\Pagination\\LengthAwarePaginator\<int, App\\Domains\\Contacts\\Models\\Contact\> but returns Illuminate\\Pagination\\LengthAwarePaginator\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Domains/Contacts/Queries/ContactQuery.php
-
-		-
-			message: '#^Parameter \#1 \$query of static method App\\Support\\QueryBuilder\<Illuminate\\Database\\Eloquent\\Model\>\:\:for\(\) expects Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Database\\Eloquent\\Builder\<App\\Domains\\Contacts\\Models\\Contact\> given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Domains/Contacts/Queries/ContactQuery.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$city\.$#'
 			identifier: property.notFound
 			count: 1
@@ -233,30 +191,6 @@ parameters:
 			identifier: nullCoalesce.expr
 			count: 1
 			path: app/Domains/Expenses/Models/Expense.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$supplier\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Domains/Expenses/Queries/ExpenseQuery.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$vendor\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Domains/Expenses/Queries/ExpenseQuery.php
-
-		-
-			message: '#^Method App\\Domains\\Expenses\\Queries\\ExpenseQuery\:\:list\(\) should return Illuminate\\Contracts\\Pagination\\LengthAwarePaginator\<int, App\\Domains\\Expenses\\Models\\Expense\> but returns Illuminate\\Pagination\\LengthAwarePaginator\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Domains/Expenses/Queries/ExpenseQuery.php
-
-		-
-			message: '#^Parameter \#1 \$query of static method App\\Support\\QueryBuilder\<Illuminate\\Database\\Eloquent\\Model\>\:\:for\(\) expects Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Database\\Eloquent\\Builder\<App\\Domains\\Expenses\\Models\\Expense\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Domains/Expenses/Queries/ExpenseQuery.php
 
 		-
 			message: '#^Access to an undefined property \(object\|string\)\:\:\$organization_id\.$#'
@@ -311,19 +245,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Domains/Invoicing/Models/Invoice.php
-
-		-
-			message: '#^Method App\\Domains\\Invoicing\\Queries\\InvoiceQuery\:\:list\(\) should return Illuminate\\Contracts\\Pagination\\LengthAwarePaginator\<int, App\\Domains\\Invoicing\\Models\\Invoice\> but returns Illuminate\\Pagination\\LengthAwarePaginator\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Domains/Invoicing/Queries/InvoiceQuery.php
-
-		-
-			message: '#^Parameter \#1 \$query of static method App\\Support\\QueryBuilder\<Illuminate\\Database\\Eloquent\\Model\>\:\:for\(\) expects Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Database\\Eloquent\\Builder\<App\\Domains\\Invoicing\\Models\\Invoice\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Domains/Invoicing/Queries/InvoiceQuery.php
-
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$currency\.$#'
@@ -420,18 +341,6 @@ parameters:
 			identifier: missingType.generics
 			count: 1
 			path: app/Domains/Organizations/Models/Organization.php
-
-		-
-			message: '#^Method App\\Domains\\Payroll\\Queries\\EmployeeQuery\:\:list\(\) should return Illuminate\\Contracts\\Pagination\\LengthAwarePaginator\<int, App\\Domains\\Payroll\\Models\\Employee\> but returns Illuminate\\Pagination\\LengthAwarePaginator\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Domains/Payroll/Queries/EmployeeQuery.php
-
-		-
-			message: '#^Parameter \#1 \$query of static method App\\Support\\QueryBuilder\<Illuminate\\Database\\Eloquent\\Model\>\:\:for\(\) expects Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Database\\Eloquent\\Builder\<App\\Domains\\Payroll\\Models\\Employee\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Domains/Payroll/Queries/EmployeeQuery.php
 
 		-
 			message: '#^Method App\\Domains\\Payroll\\Services\\SwissDeductionService\:\:calculateDeductions\(\) should return array\{avs_employee\: string, avs_employer\: string, ac_employee\: string, ac_employer\: string, aanp_employee\: string, lpp_employee\: string, lpp_employer\: string, total_employee\: string, \.\.\.\} but returns non\-empty\-array\<string, numeric\-string\>\.$#'
@@ -652,12 +561,6 @@ parameters:
 		-
 			message: '#^Cannot call method getTable\(\) on class\-string\<Illuminate\\Database\\Eloquent\\Model\>\.$#'
 			identifier: method.nonObject
-			count: 1
-			path: app/Support/QueryBuilder.php
-
-		-
-			message: '#^Method App\\Support\\QueryBuilder\:\:for\(\) should return static\(App\\Support\\QueryBuilder\<TModel of Illuminate\\Database\\Eloquent\\Model\>\) but returns static\(App\\Support\\QueryBuilder\<Illuminate\\Database\\Eloquent\\Model\>\)\.$#'
-			identifier: return.type
 			count: 1
 			path: app/Support/QueryBuilder.php
 

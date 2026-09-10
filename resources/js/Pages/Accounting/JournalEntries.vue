@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Link, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
@@ -25,19 +25,115 @@ import { BookText, Plus, Check, RotateCcw, Replace, Trash2, Pencil, HelpCircle }
 const props = defineProps({
   entries: Object,
   accounts: { type: Array, default: () => [] },
+  query: {
+    type: Object,
+    default: () => ({ sort: 'date', direction: 'desc', search: '', filter: {} }),
+  },
   can: { type: Object, default: () => ({ create: false, edit: false, delete: false }) },
 })
 
 const { t } = useTranslations()
 const { formatCurrency, formatDate } = useFormatters()
 
-const columns = computed(() => [
-  { key: 'date', label: t('date'), format: v => formatDate(v) },
-  { key: 'reference', label: t('reference') },
-  { key: 'description', label: t('description') },
-  { key: 'is_posted', label: t('status') },
-  { key: 'actions', label: '', align: 'right' },
+// Server-side query state -----------------------------------------------
+
+function applyQuery(params) {
+  router.get('/accounting/journal-entries', {
+    ...props.query,
+    ...params,
+    page: 1,
+  }, { preserveState: true, replace: true })
+}
+
+function handleSort({ sort, direction }) {
+  applyQuery({ sort, direction })
+}
+
+function handleSearch(search) {
+  applyQuery({ search })
+}
+
+function handleFilter({ key, value }) {
+  applyQuery({ filter: { ...props.query.filter, [key]: value } })
+}
+
+const filters = computed(() => [
+  {
+    key: 'is_posted',
+    label: t('status'),
+    value: props.query.filter?.is_posted ?? '',
+    options: [
+      { value: '1', label: t('posted') },
+      { value: '0', label: t('draft') },
+    ],
+  },
+  {
+    key: 'account_id',
+    label: t('account'),
+    value: props.query.filter?.account_id ?? '',
+    options: props.accounts.map(a => ({ value: String(a.id), label: `${a.code} — ${a.name}` })),
+  },
 ])
+
+// Column presets ---------------------------------------------------------
+// Named views in the spirit of Banana: each one is a fixed column set the
+// bookkeeper switches between, with the table's own column menu left for
+// ad-hoc tweaks on top of the chosen preset.
+
+const VIEW_STORAGE_KEY = 'gaeld.journal-entries.view'
+
+const VIEW_COLUMNS = {
+  basic: ['date', 'reference', 'description', 'debit_account', 'credit_account', 'amount', 'is_posted', 'actions'],
+  complete: ['date', 'reference', 'description', 'line_description', 'debit_account', 'credit_account', 'amount', 'vat_code', 'vat_amount', 'cost_center', 'is_posted', 'actions'],
+  vat: ['date', 'reference', 'description', 'debit_account', 'credit_account', 'amount', 'vat_code', 'vat_amount', 'is_posted', 'actions'],
+  cost_centers: ['date', 'reference', 'description', 'debit_account', 'credit_account', 'amount', 'cost_center', 'is_posted', 'actions'],
+}
+
+const views = computed(() => [
+  { value: 'basic', label: t('journal_view_basic') },
+  { value: 'complete', label: t('journal_view_complete') },
+  { value: 'vat', label: t('journal_view_vat') },
+  { value: 'cost_centers', label: t('journal_view_cost_centers') },
+])
+
+function storedView() {
+  try {
+    const stored = localStorage.getItem(VIEW_STORAGE_KEY)
+    if (stored && VIEW_COLUMNS[stored]) return stored
+  } catch {
+    // Private windows and blocked site data both throw; fall back to the default.
+  }
+  return 'basic'
+}
+
+const activeView = ref(storedView())
+
+watch(activeView, view => {
+  try {
+    localStorage.setItem(VIEW_STORAGE_KEY, view)
+  } catch {
+    // Remembering the view is a convenience, never a requirement.
+  }
+})
+
+const columnDefinitions = computed(() => ({
+  date: { key: 'date', label: t('date'), format: v => formatDate(v), sortable: true },
+  reference: { key: 'reference', label: t('reference'), sortable: true },
+  description: { key: 'description', label: t('description'), sortable: true },
+  line_description: { key: 'line_description', label: t('journal_line_description') },
+  debit_account: { key: 'debit_account', label: t('debit'), minWidth: 120 },
+  credit_account: { key: 'credit_account', label: t('credit'), minWidth: 120 },
+  amount: { key: 'amount', label: t('amount'), class: 'text-right whitespace-nowrap' },
+  vat_code: { key: 'vat_code', label: t('vat_code') },
+  vat_amount: { key: 'vat_amount', label: t('vat_amount'), class: 'text-right whitespace-nowrap' },
+  cost_center: { key: 'cost_center', label: t('cost_center') },
+  is_posted: { key: 'is_posted', label: t('status'), sortable: true },
+  actions: { key: 'actions', label: '', class: 'text-right' },
+}))
+
+const columns = computed(() =>
+  VIEW_COLUMNS[activeView.value].map(key => columnDefinitions.value[key])
+)
 
 const accountOptions = computed(() => [
   { value: '', label: t('select_placeholder') },
@@ -193,9 +289,41 @@ function doDelete() {
     </div>
 
     <Card>
-      <CardHeader><CardTitle>{{ t('journal_entries') }}</CardTitle></CardHeader>
+      <CardHeader class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <CardTitle>{{ t('journal_entries') }}</CardTitle>
+        <div class="flex flex-wrap gap-1 rounded-md border border-[hsl(var(--border))] p-1" role="tablist" :aria-label="t('journal_views')">
+          <button
+            v-for="view in views"
+            :key="view.value"
+            type="button"
+            role="tab"
+            :aria-selected="activeView === view.value"
+            class="rounded px-3 py-1 text-sm transition-colors"
+            :class="activeView === view.value
+              ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'
+              : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]/50'"
+            @click="activeView = view.value"
+          >
+            {{ view.label }}
+          </button>
+        </div>
+      </CardHeader>
       <CardContent>
-        <DataTable :columns="columns" :rows="entries?.data ?? []" :pagination="entries" expandable>
+        <DataTable
+          :columns="columns"
+          :rows="entries?.data ?? []"
+          :pagination="entries"
+          :sort="query.sort"
+          :direction="query.direction"
+          :search-value="query.search"
+          :search-placeholder="t('journal_search_placeholder')"
+          :filters="filters"
+          searchable
+          expandable
+          @sort="handleSort"
+          @search="handleSearch"
+          @filter="handleFilter"
+        >
           <template #empty>
             <EmptyState
               :icon="BookText"
@@ -211,11 +339,49 @@ function doDelete() {
           <template #cell-reference="{ value, row }">
             <span class="inline-flex items-center gap-2">
               <Link :href="`/accounting/journal-entries/${row.id}`" class="hover:underline">{{ value || t('journal_entry') }}</Link>
+              <Badge v-if="row.is_split" variant="outline">{{ t('journal_split_positions', { count: row.line_count }) }}</Badge>
               <Badge v-if="row.type === 'historical_summary'" variant="secondary">{{ t('historical_summary_badge') }}</Badge>
               <Badge v-if="row.correction_role === 'original'" variant="warning">{{ t('journal_correction_corrected_badge') }}</Badge>
               <Badge v-else-if="row.correction_role === 'reversal'" variant="secondary">{{ t('journal_correction_reversal_badge') }}</Badge>
               <Badge v-else-if="row.correction_role === 'replacement'" variant="info">{{ t('journal_correction_replacement_badge') }}</Badge>
             </span>
+          </template>
+          <template #cell-debit_account="{ value, row }">
+            <span v-if="value" class="whitespace-nowrap">
+              <Tooltip :content="value.name" side="top">
+                <span class="font-mono">{{ value.code }}</span>
+              </Tooltip>
+            </span>
+            <Badge v-else-if="row.is_split" variant="secondary">{{ t('journal_multiple_accounts') }}</Badge>
+            <span v-else class="text-[hsl(var(--muted-foreground))]">—</span>
+          </template>
+          <template #cell-credit_account="{ value, row }">
+            <span v-if="value" class="whitespace-nowrap">
+              <Tooltip :content="value.name" side="top">
+                <span class="font-mono">{{ value.code }}</span>
+              </Tooltip>
+            </span>
+            <Badge v-else-if="row.is_split" variant="secondary">{{ t('journal_multiple_accounts') }}</Badge>
+            <span v-else class="text-[hsl(var(--muted-foreground))]">—</span>
+          </template>
+          <template #cell-amount="{ value }">
+            {{ formatCurrency(value) }}
+          </template>
+          <template #cell-vat_amount="{ value }">
+            <span v-if="Number(value) !== 0">{{ formatCurrency(value) }}</span>
+            <span v-else class="text-[hsl(var(--muted-foreground))]">—</span>
+          </template>
+          <template #cell-vat_code="{ value }">
+            <span v-if="value" class="font-mono">{{ value }}</span>
+            <span v-else class="text-[hsl(var(--muted-foreground))]">—</span>
+          </template>
+          <template #cell-cost_center="{ value }">
+            <span v-if="value" class="font-mono">{{ value }}</span>
+            <span v-else class="text-[hsl(var(--muted-foreground))]">—</span>
+          </template>
+          <template #cell-line_description="{ value }">
+            <span v-if="value">{{ value }}</span>
+            <span v-else class="text-[hsl(var(--muted-foreground))]">—</span>
           </template>
           <template #cell-actions="{ row }">
             <div class="flex justify-end gap-1">
