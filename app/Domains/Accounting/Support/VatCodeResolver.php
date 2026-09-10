@@ -47,6 +47,7 @@ final class VatCodeResolver
         'M0' => [null, null],
         'I0' => [null, null],
         'Z0' => [null, null],
+        'Z0-A' => [null, null],
     ];
 
     public static function knows(string $code): bool

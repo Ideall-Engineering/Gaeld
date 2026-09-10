@@ -362,6 +362,26 @@ class JournalEntryVatApiTest extends SecurityTestCase
         $this->assertCount(2, $entry->lines);
     }
 
+    public function test_shorthand_z0_a_creates_no_vat_entry(): void
+    {
+        $this->withToken($this->token)->postJson('/api/v1/journal-entries', [
+            'date' => '2026-07-27',
+            'reference' => 'BAN-20260727-1101',
+            'status' => 'posted',
+            'lines' => [[
+                'account_code' => '3000',
+                'contra_account_code' => '1020',
+                'gross' => '962.09',
+                'vat_code' => 'Z0-A',
+            ]],
+        ])->assertCreated();
+
+        $entry = JournalEntry::where('reference', 'BAN-20260727-1101')->firstOrFail();
+
+        $this->assertSame(0, VatEntry::where('journal_entry_id', $entry->id)->count());
+        $this->assertCount(2, $entry->lines);
+    }
+
     // ──────────────────────────────────────────────────────────────
     //  Errors
     // ──────────────────────────────────────────────────────────────
