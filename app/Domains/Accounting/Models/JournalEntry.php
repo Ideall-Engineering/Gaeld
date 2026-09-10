@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -24,9 +25,10 @@ use Illuminate\Support\Carbon;
  *
  * @property string $id
  * @property Carbon $date
- * @property string $reference
+ * @property string|null $reference
  * @property string|null $description
  * @property bool $is_posted
+ * @property string|null $reversal_of_entry_id
  * @property string|null $type
  * @property Carbon|null $vat_period_start
  * @property Carbon|null $vat_period_end
@@ -47,6 +49,7 @@ class JournalEntry extends Model
         'reference',
         'description',
         'is_posted',
+        'reversal_of_entry_id',
         'type',
         'vat_period_start',
         'vat_period_end',
@@ -83,6 +86,28 @@ class JournalEntry extends Model
     public function vatPeriodLockedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'vat_period_locked_by_user_id');
+    }
+
+    /**
+     * The entry this one reverses, if it is a reversal (plain storno or
+     * correction reversal draft/entry).
+     *
+     * @return BelongsTo<JournalEntry, $this>
+     */
+    public function reversalOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reversal_of_entry_id');
+    }
+
+    /**
+     * The entry that reverses this one, if any. `reversal_of_entry_id` is
+     * unique, so at most one entry ever reverses a given original.
+     *
+     * @return HasOne<JournalEntry, $this>
+     */
+    public function reversedBy(): HasOne
+    {
+        return $this->hasOne(self::class, 'reversal_of_entry_id');
     }
 
     public function isBalanced(): bool
