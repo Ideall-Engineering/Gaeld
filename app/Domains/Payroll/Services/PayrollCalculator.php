@@ -64,6 +64,9 @@ class PayrollCalculator
 
         $rates = DeductionRate::where('organization_id', $employee->organization_id)
             ->where('is_active', true)
+            ->where(fn ($query) => $query
+                ->whereNull('employee_id')
+                ->orWhere('employee_id', $employee->id))
             ->get();
 
         $deductions = $this->deductionService->calculateDeductions($grossSalary, $rates);

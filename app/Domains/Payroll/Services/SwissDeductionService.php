@@ -30,6 +30,17 @@ class SwissDeductionService
         ['code' => 'lpp_employer', 'name' => 'LPP (employer)', 'rate' => '7.0000', 'type' => 'employer'],
     ];
 
+    /**
+     * Codes the built-in defaults provide, so callers can tell a deduction
+     * apart from the other entries in the calculated array.
+     *
+     * @return string[]
+     */
+    public static function defaultCodes(): array
+    {
+        return array_column(self::DEFAULTS, 'code');
+    }
+
     // ──────────────────────────────────────────────────────────────
     //  Calculation
     // ──────────────────────────────────────────────────────────────
@@ -58,7 +69,11 @@ class SwissDeductionService
         $totalEmployer = '0.00';
 
         foreach ($rateMap as $code => $rate) {
-            $amount = Money::percentage($grossSalary, $rate['rate']);
+            // A rate is either a percentage of the gross or a fixed amount per
+            // period — a pension contribution from a contract is the latter.
+            $amount = $rate['amount'] !== null
+                ? Money::normalize($rate['amount'])
+                : Money::percentage($grossSalary, (string) $rate['rate']);
             $deductions[$code] = $amount;
 
             if ($rate['type'] === 'employee') {
@@ -83,22 +98,39 @@ class SwissDeductionService
      * Build the rate map from custom rates or defaults.
      *
      * @param  Collection<int, DeductionRate>|null  $rates
-     * @return array<string, array{code: string, name: string, rate: string, type: string}>
+     * @return array<string, array{code: string, name: string, rate: string|null, amount: string|null, type: string, account_code: string|null, expense_account_code: string|null}>
      */
     private function buildRateMap(?Collection $rates): array
     {
         if ($rates === null || $rates->isEmpty()) {
-            return collect(self::DEFAULTS)->keyBy('code')->toArray();
+            return collect(self::DEFAULTS)
+                ->keyBy('code')
+                ->map(fn (array $rate): array => [
+                    'code' => $rate['code'],
+                    'name' => $rate['name'],
+                    'rate' => $rate['rate'],
+                    'amount' => null,
+                    'type' => $rate['type'],
+                    'account_code' => null,
+                    'expense_account_code' => null,
+                ])
+                ->toArray();
         }
 
+        // keyBy keeps the last match, so an employee-specific rate has to come
+        // after the organization-wide one of the same code.
         return $rates
             ->where('is_active', true)
+            ->sortBy(fn (DeductionRate $rate): int => $rate->employee_id === null ? 0 : 1)
             ->keyBy('code')
             ->map(fn (DeductionRate $rate) => [
                 'code' => $rate->code,
                 'name' => $rate->name,
                 'rate' => $rate->rate,
+                'amount' => $rate->amount,
                 'type' => $rate->type,
+                'account_code' => $rate->account_code,
+                'expense_account_code' => $rate->expense_account_code,
             ])
             ->toArray();
     }

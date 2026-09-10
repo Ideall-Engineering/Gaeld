@@ -14,10 +14,14 @@ use Illuminate\Support\Carbon;
  *
  * @property int $id
  * @property string $organization_id
+ * @property string|null $employee_id
  * @property string $name
  * @property string $code
- * @property string $rate
+ * @property string|null $rate
+ * @property string|null $amount
  * @property string $type
+ * @property string|null $account_code
+ * @property string|null $expense_account_code
  * @property bool $is_active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -28,10 +32,14 @@ class DeductionRate extends Model
 
     protected $fillable = [
         'organization_id',
+        'employee_id',
         'name',
         'code',
         'rate',
+        'amount',
         'type',
+        'account_code',
+        'expense_account_code',
         'is_active',
     ];
 
@@ -39,6 +47,7 @@ class DeductionRate extends Model
     {
         return [
             'rate' => 'decimal:4',
+            'amount' => 'decimal:2',
             'is_active' => 'boolean',
         ];
     }

@@ -8,7 +8,10 @@ use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Payroll\Contracts\SourceTaxServiceInterface;
+use App\Domains\Payroll\Exceptions\UnmappedDeductionException;
+use App\Domains\Payroll\Models\DeductionRate;
 use App\Domains\Payroll\Models\SalarySlip;
+use App\Domains\Payroll\Services\SwissDeductionService;
 use App\Support\Money;
 use Carbon\Carbon;
 
@@ -17,6 +20,23 @@ use Carbon\Carbon;
  */
 class PostPayrollAction
 {
+    /**
+     * Where the built-in Swiss deductions land when a rate names no account.
+     * Keeps an installation that never configured accounts behaving exactly as
+     * it did before.
+     *
+     * @var array<string, string>
+     */
+    private const FALLBACK_LIABILITY_ACCOUNTS = [
+        'avs_employee' => AccountCode::AVS_PAYABLE,
+        'avs_employer' => AccountCode::AVS_PAYABLE,
+        'aanp_employee' => AccountCode::AVS_PAYABLE,
+        'ac_employee' => AccountCode::AC_PAYABLE,
+        'ac_employer' => AccountCode::AC_PAYABLE,
+        'lpp_employee' => AccountCode::LPP_PAYABLE,
+        'lpp_employer' => AccountCode::LPP_PAYABLE,
+    ];
+
     public function __construct(
         private LedgerService $ledger,
         private LedgerQueryService $ledgerQuery,
@@ -34,32 +54,12 @@ class PostPayrollAction
         $employee = $slip->employee;
         $description = "Salary {$employee->fullName()} — {$slip->period_month}/{$slip->period_year}";
 
-        // Resolve accounts
         $salaryAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::SALARIES);
-        $socialChargesAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::SOCIAL_CHARGES_EMPLOYER);
         $bankAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::BANK_CASH);
-        $avsAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::AVS_PAYABLE);
-        $acAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::AC_PAYABLE);
-        $lppAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::LPP_PAYABLE);
 
-        // Calculate aggregated amounts for liability accounts
-        $avsTotal = Money::add(
-            $deductions['avs_employee'] ?? '0',
-            $deductions['avs_employer'] ?? '0',
-        );
-        // Include AANP in AVS payable if present
-        $avsTotal = Money::add($avsTotal, $deductions['aanp_employee'] ?? '0');
-
-        $acTotal = Money::add(
-            $deductions['ac_employee'] ?? '0',
-            $deductions['ac_employer'] ?? '0',
-        );
-
-        $lppTotal = Money::add(
-            $deductions['lpp_employee'] ?? '0',
-            $deductions['lpp_employer'] ?? '0',
-        );
         $sourceTaxAmount = Money::normalize((string) ($deductions['source_tax'] ?? $slip->source_tax_amount ?? '0.00'));
+
+        [$liabilities, $employerCosts] = $this->groupDeductions($slip, $deductions);
 
         $lines = [];
 
@@ -71,24 +71,17 @@ class PostPayrollAction
             description: "Gross salary: {$employee->fullName()}",
         );
 
-        // Debit: Employer social charges
-        $totalEmployer = $deductions['total_employer'] ?? '0';
-        if (Money::isPositive($totalEmployer)) {
+        // Debit: Employer contributions, one line per expense account so a
+        // chart that separates AHV, FAK, BVG, UVG and KTG stays readable.
+        foreach ($employerCosts as $accountCode => $amount) {
+            $account = $this->ledgerQuery->resolveAccount($orgId, (string) $accountCode);
             $lines[] = new JournalLineData(
-                accountId: (string) $socialChargesAccount->id,
-                debit: $totalEmployer,
+                accountId: (string) $account->id,
+                debit: $amount,
                 credit: '0',
                 description: "Employer social charges: {$employee->fullName()}",
             );
         }
-
-        // Credit: Bank (net salary)
-        $lines[] = new JournalLineData(
-            accountId: (string) $bankAccount->id,
-            debit: '0',
-            credit: $slip->net_salary,
-            description: "Net salary paid: {$employee->fullName()}",
-        );
 
         $reimbursementAmount = (string) ($deductions['reimbursement_amount'] ?? '0.00');
         if (Money::isPositive($reimbursementAmount)) {
@@ -101,33 +94,22 @@ class PostPayrollAction
             );
         }
 
-        // Credit: AVS/AI/APG payable
-        if (Money::isPositive($avsTotal)) {
-            $lines[] = new JournalLineData(
-                accountId: (string) $avsAccount->id,
-                debit: '0',
-                credit: $avsTotal,
-                description: 'AVS/AI/APG contributions',
-            );
-        }
+        // Credit: Bank (net salary)
+        $lines[] = new JournalLineData(
+            accountId: (string) $bankAccount->id,
+            debit: '0',
+            credit: $slip->net_salary,
+            description: "Net salary paid: {$employee->fullName()}",
+        );
 
-        // Credit: AC payable
-        if (Money::isPositive($acTotal)) {
+        // Credit: one liability line per account.
+        foreach ($liabilities as $accountCode => $amount) {
+            $account = $this->ledgerQuery->resolveAccount($orgId, (string) $accountCode);
             $lines[] = new JournalLineData(
-                accountId: (string) $acAccount->id,
+                accountId: (string) $account->id,
                 debit: '0',
-                credit: $acTotal,
-                description: 'Unemployment insurance (AC)',
-            );
-        }
-
-        // Credit: LPP payable
-        if (Money::isPositive($lppTotal)) {
-            $lines[] = new JournalLineData(
-                accountId: (string) $lppAccount->id,
-                debit: '0',
-                credit: $lppTotal,
-                description: 'Pension fund (LPP)',
+                credit: $amount,
+                description: 'Social security contributions',
             );
         }
 
@@ -169,6 +151,77 @@ class PostPayrollAction
         $this->sendEmail->execute($postedSlip);
 
         return $postedSlip;
+    }
+
+    /**
+     * Split the calculated deductions into liability totals per account and
+     * employer cost totals per expense account.
+     *
+     * Every deduction must reach an account. A contribution that only appears
+     * in the employer total without a matching credit unbalances the entry, so
+     * an unmapped code is an error here rather than a silent omission.
+     *
+     * @param  array<string, mixed>  $deductions
+     * @return array{0: array<string, string>, 1: array<string, string>}
+     */
+    private function groupDeductions(SalarySlip $slip, array $deductions): array
+    {
+        /** @var array<string, DeductionRate> $rates */
+        $rates = DeductionRate::query()
+            ->where('organization_id', $slip->organization_id)
+            ->where(fn ($query) => $query
+                ->whereNull('employee_id')
+                ->orWhere('employee_id', $slip->employee_id))
+            ->get()
+            // An employee-specific rate has to come last so it wins the keyBy.
+            ->sortBy(fn (DeductionRate $rate): int => $rate->employee_id === null ? 0 : 1)
+            ->keyBy('code')
+            ->all();
+
+        $liabilities = [];
+        $employerCosts = [];
+
+        foreach ($deductions as $code => $amount) {
+            $code = (string) $code;
+            // A code may well have no configured row of its own — the built-in
+            // defaults are not in the table.
+            $rate = $rates[$code] ?? null;
+
+            if ($rate === null && ! in_array($code, SwissDeductionService::defaultCodes(), true)) {
+                continue;
+            }
+
+            $amount = Money::normalize((string) $amount);
+            if (! Money::isPositive($amount)) {
+                continue;
+            }
+
+            $fallbackAccount = self::FALLBACK_LIABILITY_ACCOUNTS[$code] ?? null;
+            $liabilityAccount = $rate === null
+                ? $fallbackAccount
+                : ($rate->account_code ?? $fallbackAccount);
+
+            if ($liabilityAccount === null) {
+                throw new UnmappedDeductionException(
+                    "Deduction '{$code}' has no liability account. Set account_code on the deduction rate."
+                );
+            }
+
+            $liabilities[$liabilityAccount] = Money::add($liabilities[$liabilityAccount] ?? '0.00', $amount);
+
+            $type = $rate === null
+                ? (str_ends_with($code, '_employer') ? 'employer' : 'employee')
+                : $rate->type;
+
+            if ($type === 'employer') {
+                $expenseAccount = $rate === null
+                    ? AccountCode::SOCIAL_CHARGES_EMPLOYER
+                    : ($rate->expense_account_code ?? AccountCode::SOCIAL_CHARGES_EMPLOYER);
+                $employerCosts[$expenseAccount] = Money::add($employerCosts[$expenseAccount] ?? '0.00', $amount);
+            }
+        }
+
+        return [$liabilities, $employerCosts];
     }
 
     private function ensureSourceTaxApplied(SalarySlip $slip): void

@@ -18,6 +18,15 @@ use Tests\TestCase;
 
 class PostPayrollActionTest extends TestCase
 {
+    /**
+     * Real UUIDs: PostPayrollAction looks up the organization's deduction rates,
+     * so the identifiers have to survive a query. No rows exist for them, which
+     * is exactly the built-in-defaults case these tests cover.
+     */
+    private const ORGANIZATION_ID = '019fdcaf-0000-7000-8000-000000000001';
+
+    private const EMPLOYEE_ID = '019fdcaf-0000-7000-8000-000000000002';
+
     private LedgerService $ledger;
 
     private LedgerQueryService $ledgerQuery;
@@ -85,7 +94,7 @@ class PostPayrollActionTest extends TestCase
             grossSalary: '3000.00',
             netSalary: '3000.00',
             deductions: [],
-            employeeId: 'emp-42',
+            employeeId: '019fdcaf-0000-7000-8000-000000000042',
             periodYear: 2026,
             periodMonth: 3,
         );
@@ -97,7 +106,7 @@ class PostPayrollActionTest extends TestCase
         $this->ledger
             ->shouldReceive('postEntry')
             ->once()
-            ->with('org-1', Mockery::on(function ($entry) {
+            ->with(self::ORGANIZATION_ID, Mockery::on(function ($entry) {
                 return $entry->reference === 'PAY-JD-2026-03';
             }))
             ->andReturn($this->makeJournalEntry(99));
@@ -116,13 +125,13 @@ class PostPayrollActionTest extends TestCase
         string $grossSalary,
         string $netSalary,
         array $deductions,
-        string $employeeId = 'emp-1',
+        string $employeeId = self::EMPLOYEE_ID,
         int $periodYear = 2026,
         int $periodMonth = 1,
     ): SalarySlip {
         /** @var SalarySlip&MockInterface $slip */
         $slip = Mockery::mock(SalarySlip::class)->makePartial();
-        $slip->organization_id = 'org-1';
+        $slip->organization_id = self::ORGANIZATION_ID;
         $slip->employee_id = $employeeId;
         $slip->period_year = $periodYear;
         $slip->period_month = $periodMonth;
