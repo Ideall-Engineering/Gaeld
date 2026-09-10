@@ -2,6 +2,7 @@
 
 namespace App\Domains\Accounting\Services;
 
+use App\Domains\Accounting\Actions\UpdateJournalDraftAction;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\VatEntryType;
@@ -215,6 +216,10 @@ class LedgerService
                 type: $type ?? 'reversal',
             ));
 
+            // Structured link alongside the REV- reference prefix, which
+            // remains a readable label only (see journal_corrections).
+            $reversalEntry->update(['reversal_of_entry_id' => $original->id]);
+
             JournalEntryReversed::dispatch($reversalEntry, $original);
 
             return $reversalEntry;
@@ -235,6 +240,25 @@ class LedgerService
         Cache::tags(["org:{$organizationId}:ledger"])->flush();
         Cache::tags(["org:{$organizationId}:reports"])->flush();
         Cache::tags(["org:{$organizationId}:dashboard"])->flush();
+    }
+
+    /**
+     * Validate a set of lines the same way {@see postEntry()} and
+     * {@see createDraft()} do, without persisting anything.
+     *
+     * Shared by {@see UpdateJournalDraftAction}
+     * so draft edits (including a correction's replacement draft) enforce the
+     * same balance, account, and VAT rules as journal creation.
+     *
+     * @param  JournalLineData[]  $lines
+     * @return array<string, int> VAT rate UUID => internal id
+     */
+    public function validateDraftLines(string $organizationId, array $lines): array
+    {
+        $this->validateBalance($lines);
+        $this->validateAccounts($organizationId, $lines);
+
+        return $this->resolveVatRateIds($organizationId, $lines);
     }
 
     // ──────────────────────────────────────────────────────────────
