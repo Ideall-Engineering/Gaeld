@@ -233,6 +233,12 @@ class ArchivePdfGenerationTest extends TestCase
         $zip->close();
         @unlink($tmp);
 
+        // The bundle promises a set of files, not an order: nothing in
+        // GenerateArchivePdfAction sorts the entries, so Postgres is free to
+        // hand them back in whatever order the rows happen to sit in. Compare
+        // as a set, or the test fails on physical row layout alone.
+        sort($entries);
+
         $this->assertSame([
             'balance-sheet-2024-v2.pdf',
             'journal-2024-v2.pdf',

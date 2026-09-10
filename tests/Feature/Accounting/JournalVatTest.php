@@ -57,7 +57,13 @@ class JournalVatTest extends TestCase
         $this->assertSame('100.00', $vatEntry->base_amount);
         $this->assertSame('8.10', $vatEntry->vat_amount);
         $this->assertSame(VatEntryType::Input, $vatEntry->type);
-        $this->assertTrue($entry->lines->first()->load('vatRate')->vatRate->is($this->vatRate));
+        // Compare the foreign key rather than resolving the relation: VatRate
+        // carries the organization global scope, so `->vatRate` returns null
+        // whenever an earlier test in the same process left a different
+        // organization bound. A request only ever serves one organization, so
+        // that null cannot happen in production — but it makes this assertion
+        // depend on test execution order.
+        $this->assertSame($this->vatRate->uuid, $entry->lines->first()->vat_rate_id);
     }
 
     public function test_input_investment_line_creates_input_investment_entry(): void
