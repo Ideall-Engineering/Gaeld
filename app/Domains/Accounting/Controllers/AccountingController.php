@@ -2,11 +2,16 @@
 
 namespace App\Domains\Accounting\Controllers;
 
+use App\Domains\Accounting\Actions\CancelJournalCorrectionAction;
+use App\Domains\Accounting\Actions\PostJournalCorrectionAction;
+use App\Domains\Accounting\Actions\PrepareJournalCorrectionAction;
 use App\Domains\Accounting\Actions\UpdateJournalDraftAction;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Enums\JournalCorrectionSource;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\JournalCorrection;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Requests\StoreJournalEntryRequest;
 use App\Domains\Accounting\Services\LedgerQueryService;
@@ -20,6 +25,7 @@ use App\Support\Exceptions\DomainException;
 use App\Support\PdfExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
@@ -75,6 +81,35 @@ class AccountingController extends Controller
             ->orderByDesc('date')
             ->paginate(config('accounting.pagination.default'));
 
+        $corrections = JournalCorrection::query()
+            ->where(function ($query) use ($entries) {
+                $ids = $entries->pluck('id');
+                $query->whereIn('original_journal_entry_id', $ids)
+                    ->orWhereIn('reversal_journal_entry_id', $ids)
+                    ->orWhereIn('replacement_journal_entry_id', $ids);
+            })
+            ->get(['id', 'status', 'original_journal_entry_id', 'reversal_journal_entry_id', 'replacement_journal_entry_id']);
+
+        $entries->through(function (JournalEntry $entry) use ($corrections) {
+            $correction = $corrections->first(fn (JournalCorrection $c) => in_array($entry->id, [
+                $c->original_journal_entry_id, $c->reversal_journal_entry_id, $c->replacement_journal_entry_id,
+            ], true));
+
+            $role = match ($entry->id) {
+                $correction?->original_journal_entry_id => 'original',
+                $correction?->replacement_journal_entry_id => 'replacement',
+                $correction?->reversal_journal_entry_id => 'reversal',
+                default => null,
+            };
+
+            return [
+                ...$entry->toArray(),
+                'correction_role' => $role,
+                'correction_id' => $correction?->id,
+                'correction_status' => $correction?->status?->value,
+            ];
+        });
+
         $accounts = Account::where('is_active', true)
             ->orderBy('code')
             ->get(['id', 'code', 'name', 'type'])
@@ -98,13 +133,164 @@ class AccountingController extends Controller
         ]);
     }
 
-    public function showJournalEntry(JournalEntry $journalEntry): Response
+    public function showJournalEntry(Request $request, JournalEntry $journalEntry): Response
     {
         $this->authorize('view', $journalEntry);
 
+        $journalEntry->load('lines.account');
+
+        $correction = JournalCorrection::query()
+            ->where('original_journal_entry_id', $journalEntry->id)
+            ->orWhere('replacement_journal_entry_id', $journalEntry->id)
+            ->orWhere('reversal_journal_entry_id', $journalEntry->id)
+            ->with(['original.lines.account', 'reversal.lines.account', 'replacement.lines.account'])
+            ->first();
+
+        $correctionRole = match ($journalEntry->id) {
+            $correction?->original_journal_entry_id => 'original',
+            $correction?->replacement_journal_entry_id => 'replacement',
+            $correction?->reversal_journal_entry_id => 'reversal',
+            default => null,
+        };
+
+        $accounts = Account::query()
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'type'])
+            ->map(fn (Account $a) => [
+                'id' => $a->id,
+                'code' => $a->code,
+                'name' => $a->display_name,
+                'type' => $a->type->value,
+            ]);
+
+        $user = $request->user();
+
         return Inertia::render('Accounting/JournalEntryShow', [
-            'entry' => $journalEntry->load('lines.account'),
+            'entry' => $journalEntry,
+            'correction' => $correction,
+            'correctionRole' => $correctionRole,
+            'accounts' => $accounts,
+            'can' => [
+                'correct' => $user?->can('correct', $journalEntry) ?? false,
+                'reverse' => $user?->can('reverse', $journalEntry) ?? false,
+            ],
         ]);
+    }
+
+    public function prepareCorrection(
+        Request $request,
+        JournalEntry $journalEntry,
+        PrepareJournalCorrectionAction $prepareCorrection,
+    ): RedirectResponse {
+        $this->authorize('correct', $journalEntry);
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+            'correction_date' => ['required', 'date'],
+        ]);
+
+        try {
+            $correction = $prepareCorrection->execute(
+                original: $journalEntry,
+                reason: $validated['reason'],
+                correctionDate: $validated['correction_date'],
+                source: JournalCorrectionSource::Web,
+                userId: $request->user()?->id,
+            );
+        } catch (\DomainException $e) {
+            return $this->backWithError($e);
+        }
+
+        return redirect()->route('accounting.journal-entries.show', $correction->replacement_journal_entry_id)
+            ->with('success', __('app.journal_correction_prepared'));
+    }
+
+    public function updateCorrectionReplacement(
+        Request $request,
+        JournalCorrection $journalCorrection,
+        UpdateJournalDraftAction $updateJournalDraft,
+    ): RedirectResponse {
+        $this->authorize('correct', $journalCorrection->original);
+
+        if (! $journalCorrection->isDraft()) {
+            return redirect()->route('accounting.journal')
+                ->with('error', __('app.journal_correction_not_draft'));
+        }
+
+        $orgId = app(CurrentOrganization::class)->id();
+
+        $validated = $request->validate([
+            'date' => ['required', 'date'],
+            'reference' => ['nullable', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'lines' => ['required', 'array', 'min:2'],
+            'lines.*.account_id' => [
+                'required',
+                'integer',
+                Rule::exists('accounts', 'id')
+                    ->where('organization_id', $orgId)
+                    ->where('is_active', true),
+            ],
+            'lines.*.debit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
+            'lines.*.credit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
+            'lines.*.description' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $lines = array_map(fn (array $line) => new JournalLineData(
+            accountId: (string) $line['account_id'],
+            debit: (string) ($line['debit'] ?? '0'),
+            credit: (string) ($line['credit'] ?? '0'),
+            description: $line['description'] ?? null,
+        ), $validated['lines']);
+
+        $entryData = new JournalEntryData(
+            date: $validated['date'],
+            reference: $validated['reference'] ?? null,
+            description: $validated['description'] ?? null,
+            lines: $lines,
+        );
+
+        try {
+            $updateJournalDraft->execute($journalCorrection->replacement, $entryData);
+        } catch (\DomainException $e) {
+            return $this->backWithError($e);
+        }
+
+        return redirect()->route('accounting.journal-entries.show', $journalCorrection->replacement_journal_entry_id)
+            ->with('success', __('app.journal_entry_updated'));
+    }
+
+    public function postCorrection(
+        JournalCorrection $journalCorrection,
+        PostJournalCorrectionAction $postCorrection,
+    ): RedirectResponse {
+        $this->authorize('correct', $journalCorrection->original);
+
+        try {
+            $postCorrection->execute($journalCorrection);
+        } catch (\DomainException $e) {
+            return $this->backWithError($e);
+        }
+
+        return redirect()->route('accounting.journal')
+            ->with('success', __('app.journal_correction_posted'));
+    }
+
+    public function cancelCorrection(
+        JournalCorrection $journalCorrection,
+        CancelJournalCorrectionAction $cancelCorrection,
+    ): RedirectResponse {
+        $this->authorize('correct', $journalCorrection->original);
+
+        try {
+            $cancelCorrection->execute($journalCorrection);
+        } catch (\DomainException $e) {
+            return $this->backWithError($e);
+        }
+
+        return redirect()->route('accounting.journal')
+            ->with('success', __('app.journal_correction_cancelled'));
     }
 
     public function createJournalEntry(CurrentOrganization $currentOrg): Response

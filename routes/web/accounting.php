@@ -103,6 +103,12 @@ Route::post('/accounting/journal-entries/{journalEntry}/post', [AccountingContro
 Route::post('/accounting/journal-entries/{journalEntry}/reverse', [AccountingController::class, 'reverseJournalEntry'])->name('accounting.journal-entries.reverse');
 Route::delete('/accounting/journal-entries/{journalEntry}', [AccountingController::class, 'destroyJournalEntry'])->name('accounting.journal-entries.destroy');
 
+// Guided journal correction (specs/007-accountant-api, Etappe 2 Fokusdesign)
+Route::post('/accounting/journal-entries/{journalEntry}/corrections', [AccountingController::class, 'prepareCorrection'])->name('accounting.journal-entries.corrections.prepare');
+Route::put('/accounting/journal-corrections/{journalCorrection}/replacement', [AccountingController::class, 'updateCorrectionReplacement'])->name('accounting.journal-corrections.replacement.update');
+Route::post('/accounting/journal-corrections/{journalCorrection}/post', [AccountingController::class, 'postCorrection'])->name('accounting.journal-corrections.post');
+Route::delete('/accounting/journal-corrections/{journalCorrection}', [AccountingController::class, 'cancelCorrection'])->name('accounting.journal-corrections.cancel');
+
 // Opening balances (PR #30)
 Route::get('/accounting/opening-balances', [OpeningBalancesController::class, 'index'])->name('accounting.opening-balances.index');
 Route::post('/accounting/opening-balances', [OpeningBalancesController::class, 'store'])->name('accounting.opening-balances.store');
