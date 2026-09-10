@@ -2,21 +2,28 @@
 
 namespace App\Domains\Migration\Importers;
 
+use App\Domains\Accounting\DTOs\JournalEntryData;
+use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Models\Account;
-use App\Domains\Accounting\Models\JournalEntry;
-use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Accounting\Support\VatCodeResolver;
 use App\Domains\Migration\Contracts\DataTypeImporterInterface;
 use App\Domains\Migration\DTOs\ImportResult;
 use App\Domains\Migration\DTOs\JournalEntryImportRow;
 use App\Domains\Migration\DTOs\ValidationResult;
 use App\Domains\Migration\Enums\DataType;
 use App\Domains\Organizations\Models\Organization;
+use App\Support\Exceptions\DomainException;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class JournalEntryImporter implements DataTypeImporterInterface
 {
+    public function __construct(
+        private readonly VatCodeResolver $vatCodeResolver,
+        private readonly LedgerService $ledgerService,
+    ) {}
+
     public function dataType(): DataType
     {
         return DataType::JournalEntries;
@@ -45,10 +52,18 @@ class JournalEntryImporter implements DataTypeImporterInterface
                 continue;
             }
 
-            $totalDebit = 0;
-            $totalCredit = 0;
+            try {
+                $lines = $this->explicitLines($row, $organization);
+            } catch (DomainException $exception) {
+                $errors[$row->sourceRow()][] = $exception->getMessage();
 
-            foreach ($row->lines as $line) {
+                continue;
+            }
+
+            $totalDebit = 0.0;
+            $totalCredit = 0.0;
+
+            foreach ($lines as $line) {
                 if (! $accountCodes->has($line['account_code'])) {
                     $errors[$row->sourceRow()][] = "Account {$line['account_code']} not found";
                 }
@@ -85,50 +100,59 @@ class JournalEntryImporter implements DataTypeImporterInterface
                 continue;
             }
 
-            // Check all account codes exist
-            $allCodesExist = true;
-            foreach ($row->lines as $line) {
-                if (! $accounts->has($line['account_code'])) {
-                    $allCodesExist = false;
+            $rowNumber = $row->sourceRow();
 
-                    break;
-                }
+            try {
+                $lines = $this->explicitLines($row, $organization);
+            } catch (DomainException $exception) {
+                $failed++;
+                $errors[] = "Row {$rowNumber}: {$exception->getMessage()}";
+
+                continue;
             }
 
-            if (! $allCodesExist) {
+            $missing = array_values(array_filter(
+                array_map(static fn (array $line): string => (string) $line['account_code'], $lines),
+                static fn (string $code): bool => ! $accounts->has($code),
+            ));
+
+            if ($missing !== []) {
+                // Reported, never silently dropped: a missing account is a gap
+                // in the chart of accounts and the operator has to see it.
                 $skipped++;
+                $errors[] = "Row {$rowNumber}: account(s) ".implode(', ', array_unique($missing)).' not found';
 
                 continue;
             }
 
             try {
-                DB::transaction(function () use ($row, $organization, $accounts, &$imported): void {
-                    $journalEntry = JournalEntry::create([
-                        'organization_id' => $organization->id,
-                        'date' => $row->date,
-                        'reference' => $row->reference,
-                        'description' => $row->description,
-                    ]);
+                $this->ledgerService->postEntry($organization->id, new JournalEntryData(
+                    date: $row->date,
+                    reference: $row->reference,
+                    description: $row->description,
+                    lines: array_map(
+                        fn (array $line): JournalLineData => new JournalLineData(
+                            accountId: (string) $accounts->get($line['account_code']),
+                            debit: (string) ($line['debit'] ?? '0'),
+                            credit: (string) ($line['credit'] ?? '0'),
+                            description: $line['description'] ?? null,
+                            vatRateId: $line['vat_rate_id'] ?? null,
+                            vatAmount: isset($line['vat_amount']) ? (string) $line['vat_amount'] : null,
+                            vatType: $line['vat_type'] ?? null,
+                            vatFigure: $line['vat_figure'] ?? null,
+                        ),
+                        $lines,
+                    ),
+                    type: 'migration',
+                ));
 
-                    foreach ($row->lines as $line) {
-                        TransactionLine::create([
-                            'journal_entry_id' => $journalEntry->id,
-                            'account_id' => $accounts->get($line['account_code']),
-                            'debit' => (float) ($line['debit'] ?? 0),
-                            'credit' => (float) ($line['credit'] ?? 0),
-                            'description' => $line['description'] ?? null,
-                        ]);
-                    }
-
-                    $imported++;
-                });
-            } catch (\Throwable $e) {
+                $imported++;
+            } catch (\Throwable $exception) {
                 $failed++;
-                $rowNum = $row->sourceRow();
-                $errors[] = "Row {$rowNum}: {$e->getMessage()}";
+                $errors[] = "Row {$rowNumber}: {$exception->getMessage()}";
                 Log::warning('Migration import: journal entry row failed', [
-                    'row' => $rowNum,
-                    'error' => $e->getMessage(),
+                    'row' => $rowNumber,
+                    'error' => $exception->getMessage(),
                     'organization_id' => $organization->id,
                 ]);
             }
@@ -139,5 +163,33 @@ class JournalEntryImporter implements DataTypeImporterInterface
         }
 
         return ImportResult::success($this->dataType(), $imported, $skipped, warnings: $errors, failed: $failed);
+    }
+
+    /**
+     * A line carrying a `vat_code` is shorthand and gets expanded against the
+     * chart of accounts; every other line is already explicit and passes
+     * through untouched, so parsers without VAT support are unaffected.
+     *
+     * @return array<int, array<string, mixed>>
+     *
+     * @throws DomainException
+     */
+    private function explicitLines(JournalEntryImportRow $row, Organization $organization): array
+    {
+        $lines = [];
+
+        foreach ($row->lines as $line) {
+            if (! isset($line['vat_code'])) {
+                $lines[] = $line;
+
+                continue;
+            }
+
+            foreach ($this->vatCodeResolver->expand($organization->id, $line) as $expanded) {
+                $lines[] = $expanded;
+            }
+        }
+
+        return $lines;
     }
 }

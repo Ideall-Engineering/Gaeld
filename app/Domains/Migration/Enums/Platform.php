@@ -19,7 +19,7 @@ enum Platform: string
     public function isWip(): bool
     {
         return match ($this) {
-            self::Banana, self::Abacus => true,
+            self::Abacus => true,
             default => false,
         };
     }
