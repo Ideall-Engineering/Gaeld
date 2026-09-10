@@ -7,6 +7,8 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Api\Enums\TokenType;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Expenses\Models\Expense;
+use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Illuminate\Http\UploadedFile;
 use Tests\Security\SecurityTestCase;
@@ -78,5 +80,61 @@ class BusinessApiSecurityTest extends SecurityTestCase
             ]);
 
         $response->assertForbidden();
+    }
+
+    /**
+     * Only contacts and journal entries had cross-organization isolation
+     * coverage; invoices and expenses did not, despite being core resources
+     * exercised by the quickstart. Both use `BelongsToOrganization`, but
+     * that only scopes queries built from the current organization — it is
+     * still the route model binding + policy that must independently deny
+     * org A's token reading org B's record by UUID.
+     */
+    public function test_a_token_cannot_read_an_invoice_from_another_organization(): void
+    {
+        app(CurrentOrganization::class)->set($this->orgB);
+        $invoice = Invoice::factory()->for($this->orgB, 'organization')->create();
+        app(CurrentOrganization::class)->set($this->orgA);
+
+        $response = $this->withToken($this->tokenA)
+            ->getJson("/api/v1/invoices/{$invoice->id}");
+
+        $this->assertDenied($response);
+    }
+
+    public function test_a_token_cannot_finalize_an_invoice_from_another_organization(): void
+    {
+        app(CurrentOrganization::class)->set($this->orgB);
+        $invoice = Invoice::factory()->for($this->orgB, 'organization')->create();
+        app(CurrentOrganization::class)->set($this->orgA);
+
+        $response = $this->withToken($this->tokenA)
+            ->postJson("/api/v1/invoices/{$invoice->id}/finalize");
+
+        $this->assertDenied($response);
+    }
+
+    public function test_a_token_cannot_read_an_expense_from_another_organization(): void
+    {
+        app(CurrentOrganization::class)->set($this->orgB);
+        $expense = Expense::factory()->for($this->orgB, 'organization')->create();
+        app(CurrentOrganization::class)->set($this->orgA);
+
+        $response = $this->withToken($this->tokenA)
+            ->getJson("/api/v1/expenses/{$expense->id}");
+
+        $this->assertDenied($response);
+    }
+
+    public function test_a_token_cannot_approve_an_expense_from_another_organization(): void
+    {
+        app(CurrentOrganization::class)->set($this->orgB);
+        $expense = Expense::factory()->for($this->orgB, 'organization')->create();
+        app(CurrentOrganization::class)->set($this->orgA);
+
+        $response = $this->withToken($this->tokenA)
+            ->postJson("/api/v1/expenses/{$expense->id}/approve");
+
+        $this->assertDenied($response);
     }
 }

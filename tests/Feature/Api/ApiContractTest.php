@@ -113,4 +113,29 @@ class ApiContractTest extends SecurityTestCase
         $response->assertHeader('X-RateLimit-Limit')
             ->assertHeader('X-RateLimit-Remaining');
     }
+
+    /**
+     * The test above only proves the *headers* are present on a normal
+     * response; it never actually exceeds the limit, so it can't catch a
+     * broken `rate_limit_exceeded` response shape or a missing `Retry-After`
+     * header. Lower the limit for this test and genuinely exhaust it.
+     */
+    public function test_exceeding_the_rate_limit_returns_the_documented_429_contract(): void
+    {
+        config(['sanctum.rate_limit' => 3]);
+
+        for ($i = 0; $i < 3; $i++) {
+            $this->withToken($this->tokenA)
+                ->getJson('/api/v1/journal-entries')
+                ->assertOk();
+        }
+
+        $response = $this->withToken($this->tokenA)->getJson('/api/v1/journal-entries');
+
+        $response->assertStatus(429)
+            ->assertJsonPath('code', 'rate_limit_exceeded')
+            ->assertHeader('Retry-After')
+            ->assertHeader('X-RateLimit-Limit', '3')
+            ->assertHeader('X-RateLimit-Remaining', '0');
+    }
 }

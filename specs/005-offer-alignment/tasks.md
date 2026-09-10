@@ -13,7 +13,7 @@
 - [X] T006 Update `plugins/gaeld-ee/src/Domains/Billing/Models/Plan.php` casts, PHPDoc, public/legacy helpers, and entitlement accessors for the new fields.
 - [X] T007 [P] Add canonical Cloud Free/Solo/Team records and mark legacy Starter/Business unavailable for new selection without deleting their rows in `plugins/gaeld-ee/migrations/2026_09_02_182246_add_offer_alignment_to_ee_plans.php`.
 - [X] T008 Implement an idempotent legacy subscription migration/backfill for existing Free, Starter, and Business assignments in `plugins/gaeld-ee/src/Domains/Billing/Actions/MigrateLegacyOfferSubscriptionsAction.php`.
-- [ ] T009 Add migration tests for legacy Free quota conversion, legacy paid price/Stripe preservation, admin-granted subscriptions, reruns, and interrupted/repeated execution in `plugins/gaeld-ee/tests/Feature/Billing/OfferMigrationTest.php`.
+- [ ] T009 Add migration tests for legacy Free quota conversion, legacy paid price/Stripe preservation, admin-granted subscriptions, reruns, and interrupted/repeated execution in `plugins/gaeld-ee/tests/Feature/Billing/OfferMigrationTest.php`. **Blocked (2026-09-10)**: the private `plugins/gaeld-ee` checkout is not present in this environment — cannot write or run EE tests here. User confirmed skipping EE tasks for this session; needs the EE checkout or a session with it available.
 - [X] T010 Add a safe operational command or job for the migration with dry-run and summary output in `plugins/gaeld-ee/src/Domains/Billing/Commands/MigrateOfferPlansCommand.php`.
 
 ## Phase 3: Quota and entitlement foundation
@@ -69,7 +69,7 @@
 - [X] T044 Run Pint and PHPStan on changed PHP paths through Sail using `pint.json` and `phpstan.neon`.
 - [X] T045 Run the API frontend build, website tests/build, and documentation build with the repository-supported commands in `package.json`, `../web/package.json`, and `../docs/package.json`.
 - [X] T046 Perform staging acceptance for Cloud Free signup, Solo/Team cardless trials, explicit payment conversion, expiry fallback, quotas, API denial, legacy plan display, export, and all four locales using `scripts/qa/staging-runner.mjs`. Exhaustive Team acceptance passed 44/44 in `storage/app/qa/staging-qa-commercial-20260903-151020.md`; the Cloud Free/Solo matrix passed 42/42 in `storage/app/qa/staging-qa-offer-matrix-20260903-152927.md`.
-- [ ] T047 Record Cloud Free incremental cost, storage, OCR, abuse, conversion, support, and migration metrics for the first observation period in `../wiki/api/OFFER_READINESS_CHECKLIST.md`.
+- [ ] T047 Record Cloud Free incremental cost, storage, OCR, abuse, conversion, support, and migration metrics for the first observation period in `../wiki/api/OFFER_READINESS_CHECKLIST.md`. **Blocked (2026-09-10)**: this requires real production monitoring/billing data accumulated over an elapsed observation period after launch — it cannot be produced in a dev session. Needs the actual metrics/billing dashboard and the observation period to have elapsed.
 - [X] T048 [P] Update the offer readiness checklist and release notes with the actual plan records, Stripe price IDs, operational evidence, rollout date, and rollback reference in `../wiki/api/OFFER_READINESS_CHECKLIST.md` and the applicable changelogs.
 
 ## Dependencies and Execution Order

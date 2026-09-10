@@ -83,9 +83,9 @@ keeping proprietary code out of CE.
 - [x] T030 [P] [US4] Add corrective CE release notes and staging/rollback references in `CHANGELOG.md`, `RELEASE.md`, and `docs/qa/two-year-e2e-20260822.md`.
 - [x] T031 [P] [US4] Update the private EE manifest and changelog to approved v2.8.0 in `plugins/gaeld-ee/plugin.json` and the private EE release documentation.
 - [x] T032 [US4] Run the CE checks, public boundary check, API contract parse, and clean CE build from Sail.
-- [ ] T033 [US4] Run private EE tests, static analysis, and frontend build from `plugins/gaeld-ee`.
+- [ ] T033 [US4] Run private EE tests, static analysis, and frontend build from `plugins/gaeld-ee`. **Blocked (2026-09-10)**: the private `plugins/gaeld-ee` checkout is not present in this environment (no submodule entry, not in the running deployment's image either) — cannot execute. User confirmed skipping EE tasks for this session rather than provide access; needs the EE checkout or a session with it available.
 - [x] T034 [US4] Redeploy the corrected CE/EE pair to staging with immutable refs and repeat the focused API, finance, onboarding, and responsive smoke tests.
-- [ ] T035 [US4] Complete the remaining multi-user, archive, long-year close, second-year, and reopen scenarios only after P1 financial/API gates pass, recording results in `docs/qa/two-year-e2e-20260823.md`.
+- [ ] T035 [US4] Complete the remaining multi-user, archive, long-year close, second-year, and reopen scenarios only after P1 financial/API gates pass, recording results in `docs/qa/two-year-e2e-20260823.md`. **Deferred (2026-09-10)**: this is a live browser-driven SaaS walkthrough (`.github/skills/two-year-e2e-test`); user chose to run staging/live work themselves rather than have it executed here.
 - [x] T036 [US4] Run full CE PHPUnit, Pint, PHPStan, and frontend build checks and verify no production branch or tag changed.
 
 ## Dependencies and Execution Order
