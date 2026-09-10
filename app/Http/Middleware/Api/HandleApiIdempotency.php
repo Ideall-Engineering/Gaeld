@@ -84,6 +84,7 @@ class HandleApiIdempotency
         $routeName = (string) ($request->route()?->getName() ?? '');
 
         return str_starts_with($routeName, 'api.journal-entries.')
+            || str_starts_with($routeName, 'api.accountant-api.')
             || $routeName === 'api.journal-entries.store'
             || $routeName === 'api.bank-accounts.import-camt053'
             || in_array($routeName, [
