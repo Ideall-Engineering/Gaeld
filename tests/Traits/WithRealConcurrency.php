@@ -37,6 +37,38 @@ trait WithRealConcurrency
     }
 
     /**
+     * Put a child's wait() status into words.
+     *
+     * "exited with status -1" says nothing on a failure that may not recur for
+     * another fifty runs; the signal name usually says everything.
+     */
+    private function describeChildExit(int $status): string
+    {
+        if (pcntl_wifsignaled($status)) {
+            $signal = pcntl_wtermsig($status);
+
+            // pcntl_strsignal() is not present in every PHP build, and only a
+            // handful of signals can plausibly end one of these children.
+            $names = [
+                SIGKILL => 'SIGKILL, the expected ending',
+                SIGSEGV => 'SIGSEGV, a segmentation fault',
+                SIGBUS => 'SIGBUS',
+                SIGABRT => 'SIGABRT, an assertion or fatal error',
+                SIGTERM => 'SIGTERM, terminated from outside',
+                SIGINT => 'SIGINT, interrupted',
+            ];
+
+            return sprintf('was killed by signal %d (%s)', $signal, $names[$signal] ?? 'unknown');
+        }
+
+        if (pcntl_wifexited($status)) {
+            return sprintf('exited normally with code %d', pcntl_wexitstatus($status));
+        }
+
+        return sprintf('ended in an unrecognised state (raw status %d)', $status);
+    }
+
+    /**
      * @param  callable(int $index): mixed  $work  Runs inside a forked child; the return value is JSON-encoded, so keep it to scalars/arrays.
      * @return array<int, array{start: float, end: float, result: mixed, error: ?string}>
      */
@@ -95,29 +127,59 @@ trait WithRealConcurrency
                 $pids[] = $pid;
             }
 
-            $exitCodes = [];
-            foreach ($pids as $pid) {
+            // These tests fail rarely and are not reproducible on demand, so a
+            // single failure has to carry everything needed to understand it —
+            // how each child died, and whether it got far enough to report.
+            $fates = [];
+            foreach ($pids as $index => $pid) {
                 pcntl_waitpid($pid, $status);
-                // Children terminate via SIGKILL (see above), not a normal
-                // exit, so success is "killed", not "exited 0".
-                $exitCodes[$pid] = pcntl_wifsignaled($status) && pcntl_wtermsig($status) === SIGKILL
-                    ? 0
-                    : -1;
+                $fates[$index] = [
+                    'pid' => $pid,
+                    // Children terminate via SIGKILL (see above), not a normal
+                    // exit, so success is "killed", not "exited 0".
+                    'ok' => pcntl_wifsignaled($status) && pcntl_wtermsig($status) === SIGKILL,
+                    'description' => $this->describeChildExit($status),
+                ];
+            }
+
+            foreach ($fates as $index => $fate) {
+                $this->assertTrue(
+                    $fate['ok'],
+                    "Child process #{$index} (pid {$fate['pid']}) {$fate['description']}; "
+                    .'expected it to be killed by SIGKILL after writing its result.',
+                );
             }
 
             $results = [];
             for ($i = 0; $i < $processes; $i++) {
                 $file = "{$resultDir}/{$i}.json";
-                $this->assertFileExists($file, "Child process #{$i} did not report a result.");
-                $results[] = json_decode(file_get_contents($file), true);
-            }
+                $this->assertFileExists(
+                    $file,
+                    "Child process #{$i} (pid {$fates[$i]['pid']}) did not report a result; "
+                    ."it {$fates[$i]['description']}.",
+                );
 
-            foreach ($exitCodes as $pid => $code) {
-                $this->assertSame(0, $code, "Child process {$pid} exited with status {$code}.");
+                $decoded = json_decode((string) file_get_contents($file), true);
+                $this->assertIsArray(
+                    $decoded,
+                    "Child process #{$i} (pid {$fates[$i]['pid']}) wrote an unreadable result: "
+                    .var_export(file_get_contents($file), true),
+                );
+
+                $results[] = $decoded;
             }
 
             foreach ($results as $index => $result) {
-                $this->assertNull($result['error'], "Child process #{$index} threw: {$result['error']}");
+                $this->assertNull(
+                    $result['error'],
+                    sprintf(
+                        'Child process #%d (pid %d) threw after %.3fs: %s',
+                        $index,
+                        $fates[$index]['pid'],
+                        $result['end'] - $result['start'],
+                        $result['error'] ?? '',
+                    ),
+                );
             }
 
             return $results;
