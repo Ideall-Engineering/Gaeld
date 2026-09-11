@@ -1,9 +1,31 @@
 # Gäld private Tailscale deployment
 
 This runbook describes the private single-instance stack in
-`compose.production.yml`. It is based on upstream release `v3.8.6` and
-currently runs the project-specific images `gaeld/app:v3.8.6-ideall.5` and
-`gaeld/web:v3.8.6-ideall.5`.
+`compose.production.yml`. It is based on upstream release `v3.8.14` and
+currently runs the project-specific images `gaeld/app:v3.8.6-ideall.14` and
+`gaeld/web:v3.8.6-ideall.14`.
+
+## Image tags
+
+Read `v3.8.6-ideall.14` as two independent numbers. `v3.8.6` was the upstream
+release this deployment forked from, and `.14` is a local build counter that
+increments once per image build. They are unrelated: `…-ideall.13` has nothing
+to do with upstream release `v3.8.13`, and both existed at the same time.
+
+The base is now stale — the branch merged upstream up to `v3.8.14` on
+11 September 2026, so the `v3.8.6` in the tag no longer describes the code.
+Rename the next build to `v3.8.14-ideall.1` and carry the counter on from
+there, or the same confusion returns.
+
+Keep `GAELD_IMAGE_TAG` in `.env.production` in step with what is actually
+running. It read `v3.8.6-ideall.11` while the containers ran `.13`, and since
+`.11` was still present locally, a plain `up -d` would have rolled production
+back two builds without a word. Check before starting the stack:
+
+```bash
+docker compose --env-file .env.production -f compose.production.yml images
+grep GAELD_IMAGE_TAG .env.production
+```
 
 The deployment source is `/home/gmk/Gaeld`; there is no second checkout.
 The compose project is named `gaeld` in the compose file itself, so never
