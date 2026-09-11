@@ -5,6 +5,54 @@ All notable changes to Gäld are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **VAT on the journal line:** record VAT per transaction line instead of per
+  entry, through the web form, the accounting API, and the Banana journal
+  import alike.
+- **VAT settlement:** produce a complete settlement for a period and close it,
+  locking the settled period against later postings.
+- **Guided journal correction:** correct a posted entry by preparing a locked
+  reversal and an editable replacement, then posting both atomically — with
+  eligibility rules that refuse entries owned by another source (invoices,
+  expenses, bank transactions, depreciation, salary slips), its own policy, and
+  a guided dialog on the entry detail page.
+- **Accountant API module:** `plugins/accountant-api` exposes five
+  journal-correction endpoints, each requiring an `Idempotency-Key`, and emits
+  `journal_entry.corrected` webhooks after the transaction commits.
+- **Plugin catalogs:** generic contract-version, ability, and webhook-event
+  catalogs that modules register against.
+- **Payroll deduction rates:** configure salary accounts per organization and
+  record deduction rates with their own account, a fixed amount, and a person
+  scope.
+- **Bank posting rules:** rule-driven account assignment, including acquisition
+  tax (Bezugsteuer) treatment.
+- **Automations:** event-driven runs with an approval step before they post.
+- **Dashboard:** revenue, expenses, and profit now come from the ledger rather
+  than from documents, and a cash runway forecast shows how long the current
+  balance lasts, separating commitments from estimates.
+- **Journal entries:** one row per entry with search and saved views.
+- **Self-hosting:** a Community switch for self-registration, and explicit
+  volume names in the production compose file.
+
+### Changed
+- **Audit trail:** Auditable activity-log entries carry request context.
+- **Draft editing:** the web controller and the correction replacement share a
+  single `UpdateJournalDraftAction`, so balance, account, and VAT validation
+  cannot drift between them.
+
+### Fixed
+- **Expense VAT:** enter VAT treatment from both the expense form and the API.
+- **VAT 2026:** align the import and the report for the 2026 rates.
+- **Banana import:** accept the `Z0-A` code and skip journal references that
+  already exist.
+- **Accounting API:** deliver journal entry lines in a defined order.
+- **Account labels:** align the Ideall chart of accounts labels.
+- **Translations:** supply the English strings missing from the VAT work.
+- **Git hooks:** run Pint and PHPStan inside the container when the host has no
+  PHP, instead of reporting the missing interpreter as a style violation.
+
 ## [3.8.14] - 2026-09-10
 
 ### Changed
