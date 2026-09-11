@@ -4,6 +4,8 @@
 # on staged PHP files to catch issues before CI.
 #
 
+. "$(dirname "$0")/php-runner.sh"
+
 # Get list of staged PHP files (excluding deleted files)
 STAGED_PHP=$(git diff --cached --name-only --diff-filter=d -- '*.php')
 
@@ -12,8 +14,12 @@ if [ -z "$STAGED_PHP" ]; then
 fi
 
 echo "🔍 Running Pint on staged PHP files..."
-./vendor/bin/pint --test $STAGED_PHP
+run_php_tool ./vendor/bin/pint --test $STAGED_PHP
 PINT_EXIT=$?
+
+if [ $PINT_EXIT -eq $RUN_PHP_TOOL_UNAVAILABLE ]; then
+    exit 1
+fi
 
 if [ $PINT_EXIT -ne 0 ]; then
     echo ""
@@ -22,8 +28,12 @@ if [ $PINT_EXIT -ne 0 ]; then
 fi
 
 echo "🔍 Running PHPStan..."
-./vendor/bin/phpstan analyse --memory-limit=512M --no-progress
+run_php_tool ./vendor/bin/phpstan analyse --memory-limit=512M --no-progress
 PHPSTAN_EXIT=$?
+
+if [ $PHPSTAN_EXIT -eq $RUN_PHP_TOOL_UNAVAILABLE ]; then
+    exit 1
+fi
 
 if [ $PHPSTAN_EXIT -ne 0 ]; then
     echo ""
