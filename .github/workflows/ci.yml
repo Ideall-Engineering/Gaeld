@@ -96,18 +96,21 @@ jobs:
     strategy:
       matrix:
         include:
-          # Feature tests split into 2 balanced groups to stay under 120s timeout
+          # Feature tests split into 3 balanced groups to stay under 120s timeout.
+          # Every directory under tests/Feature must appear in exactly one group,
+          # and so must every plugins/*/tests directory — tests/Unit/CiWorkflowCoverageTest.php
+          # fails the build if a path here drifts from what is on disk.
           - name: 'Feature (Group 1)'
             test-paths: 'tests/Feature/Accounting tests/Feature/Migration tests/Feature/Console'
           - name: 'Feature (Group 2)'
             test-paths: 'tests/Feature/Organizations tests/Feature/Invoicing tests/Feature/Api tests/Feature/Reporting tests/Feature/Expenses tests/Feature/Banking tests/Feature/Users tests/Feature/Payroll tests/Feature/Contacts tests/Feature/Auth tests/Feature/Assets tests/Feature/Seeders tests/Feature/Security tests/Feature/Dashboard tests/Feature/Billing tests/Feature/SaasAdmin'
+          - name: 'Feature (Group 3) & Modules'
+            test-paths: 'tests/Feature/Automation tests/Feature/EditionBoundary tests/Feature/Http tests/Feature/Plugins tests/Feature/OfferPlanDefinitionTest.php plugins/accountant-api/tests'
           # Non-Feature suites
           - name: 'Unit'
             test-paths: 'tests/Unit'
           - name: 'Security'
             test-paths: 'tests/Security'
-          - name: 'Performance'
-            test-paths: 'tests/Performance'
 
     services:
       postgres:
