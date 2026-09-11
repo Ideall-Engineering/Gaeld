@@ -117,6 +117,18 @@ USER www-data
 ENTRYPOINT ["/usr/local/bin/gaeld-entrypoint"]
 CMD ["php-fpm", "--nodaemonize"]
 
+# Provenance last: these change on every commit, and anything below an ARG is
+# rebuilt when it changes. Kept here, the expensive layers above stay cached.
+# Without them an image cannot be traced back to the source it was built from —
+# answering "what is in this image?" otherwise means hashing its source tree.
+ARG GIT_REVISION=unknown
+ARG IMAGE_VERSION=unknown
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.title="Gäld application" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
+
 FROM ${NGINX_IMAGE} AS web
 
 COPY docker/production/nginx.conf /etc/nginx/nginx.conf
@@ -125,3 +137,11 @@ COPY --from=app /var/www/html/public /var/www/html/public
 RUN nginx -t
 
 EXPOSE 8080
+
+ARG GIT_REVISION=unknown
+ARG IMAGE_VERSION=unknown
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.title="Gäld web server" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}"

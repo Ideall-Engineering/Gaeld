@@ -12,20 +12,48 @@ release this deployment forked from, and `.14` is a local build counter that
 increments once per image build. They are unrelated: `…-ideall.13` has nothing
 to do with upstream release `v3.8.13`, and both existed at the same time.
 
-The base is now stale — the branch merged upstream up to `v3.8.14` on
-11 September 2026, so the `v3.8.6` in the tag no longer describes the code.
-Rename the next build to `v3.8.14-ideall.1` and carry the counter on from
-there, or the same confusion returns.
-
-Keep `GAELD_IMAGE_TAG` in `.env.production` in step with what is actually
-running. It read `v3.8.6-ideall.11` while the containers ran `.13`, and since
-`.11` was still present locally, a plain `up -d` would have rolled production
-back two builds without a word. Check before starting the stack:
+Neither number is typed any more. `scripts/build-production.sh` derives both
+from git — the base from the nearest tag, the counter from the commits since it
+— writes `GAELD_IMAGE_TAG` into `.env.production` itself, and builds:
 
 ```bash
-docker compose --env-file .env.production -f compose.production.yml images
-grep GAELD_IMAGE_TAG .env.production
+scripts/build-production.sh --print   # show the tag, build nothing
+scripts/build-production.sh           # derive, record, build
 ```
+
+So the base follows the next upstream merge on its own, and the counter follows
+every commit. Expect the counter to jump once: the last hand-typed tag was
+`v3.8.6-ideall.14`, and the first derived one is `v3.8.14-ideall.51`, because
+51 commits separate HEAD from `v3.8.14`. A number nobody has to remember beats
+a tidy one.
+
+The script refuses to build from a dirty working tree — a tag names a commit,
+and an uncommitted change is in no commit. Use `--allow-dirty` for a throwaway
+build; it marks the tag `.dirty` so it cannot be mistaken for a releasable one.
+
+Each image also carries where it came from, which a tag alone cannot prove:
+
+```bash
+docker image inspect gaeld/app:<tag> \
+    --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+```
+
+Images built before 11 September 2026 report `unknown`; identifying those means
+hashing their source tree against git.
+
+## Before starting the stack
+
+`GAELD_IMAGE_TAG` once read `v3.8.6-ideall.11` while the containers ran `.13`,
+and since `.11` was still present locally, `up -d` would have rolled production
+back two builds without a word. Compose has no opinion about which direction a
+tag moves; this does:
+
+```bash
+scripts/check-production-tag.sh
+```
+
+It fails when the configured image is missing, and when it is older than the
+one currently running. Run it before every `up -d`.
 
 The deployment source is `/home/gmk/Gaeld`; there is no second checkout.
 The compose project is named `gaeld` in the compose file itself, so never

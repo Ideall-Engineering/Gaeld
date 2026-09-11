@@ -12,6 +12,10 @@ x-app-service: &app-service
         context: .
         dockerfile: docker/production/Dockerfile
         target: app
+        args:
+            GIT_REVISION: ${GIT_REVISION:-unknown}
+            IMAGE_VERSION: ${GAELD_IMAGE_TAG:-unknown}
+            BUILD_DATE: ${BUILD_DATE:-unknown}
     env_file:
         - ${GAELD_ENV_FILE:-.env.production}
     init: true
@@ -47,6 +51,10 @@ services:
             context: .
             dockerfile: docker/production/Dockerfile
             target: web
+            args:
+                GIT_REVISION: ${GIT_REVISION:-unknown}
+                IMAGE_VERSION: ${GAELD_IMAGE_TAG:-unknown}
+                BUILD_DATE: ${BUILD_DATE:-unknown}
         restart: unless-stopped
         init: true
         entrypoint: ["nginx"]
