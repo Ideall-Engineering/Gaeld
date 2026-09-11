@@ -72,6 +72,7 @@ use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Payroll\Services\NullSourceTaxService;
 use App\Domains\Reporting\Jobs\GenerateReportsJob;
 use App\Domains\Users\Jobs\ExportUserDataJob;
+use App\Domains\Users\Models\User;
 use App\Http\Services\GlobalSearchService;
 use App\Listeners\SendHorizonTelegramAlert;
 use App\Support\Contracts\EditionCompatibility;
@@ -95,6 +96,7 @@ use Illuminate\Validation\Rules\Password;
 use Knuckles\Camel\Extraction\ExtractedEndpointData;
 use Knuckles\Scribe\Scribe;
 use Laravel\Horizon\Events\LongWaitDetected;
+use Laravel\Passkeys\Passkeys;
 use Laravel\Sanctum\Sanctum;
 
 /**
@@ -161,6 +163,7 @@ class AppServiceProvider extends ServiceProvider
         RedirectIfAuthenticated::redirectUsing(fn () => route('home'));
 
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+        Passkeys::useUserModel(User::class);
 
         // ── Queue Routing (Laravel 13) ──────────────────────────
         // Centralizes job→queue mapping so individual jobs don't

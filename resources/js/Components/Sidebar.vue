@@ -18,7 +18,6 @@ import {
   X,
   CreditCard,
   Repeat,
-  Package,
   Briefcase,
   Settings,
   Sun,
@@ -51,14 +50,30 @@ const routeCapabilities = computed(() => sharedProps.value.routeCapabilities)
 const accountingRoutes = computed(() => routeCapabilities.value.accounting ?? {})
 
 const showOrgMenu = ref(false)
+const organizationSearch = ref('')
+const switchingOrganization = ref(false)
 const currentOrg = computed(() => page.props.auth?.currentOrganization)
 const organizations = computed(() => page.props.auth?.organizations ?? [])
-const hasMultipleOrgs = computed(() => organizations.value.length > 1)
+const canCreateOrganization = computed(() => page.props.auth?.canCreateOrganization === true)
+const filteredOrganizations = computed(() => {
+  const query = organizationSearch.value.trim().toLowerCase()
+
+  if (!query) return organizations.value
+
+  return organizations.value.filter(org => org.name.toLowerCase().includes(query))
+})
 
 function switchOrg(orgId) {
-  showOrgMenu.value = false
+  switchingOrganization.value = true
   const form = useForm({})
-  form.post(`/organizations/${orgId}/switch`)
+  form.post(`/organizations/${orgId}/switch`, {
+    onFinish: () => { switchingOrganization.value = false },
+  })
+}
+
+function closeOrgMenu() {
+  showOrgMenu.value = false
+  organizationSearch.value = ''
 }
 
 // Collapsible sidebar sections with localStorage persistence
@@ -91,10 +106,8 @@ const navigation = computed(() => {
     return [
       { key: 'expenses', href: '/expenses', icon: Receipt },
       { key: 'salary_slips', href: '/payroll/salary-slips', icon: Briefcase },
-      { type: 'group', label: 'nav_workspace' },
+      { type: 'group', label: 'nav_administration' },
       { key: 'organizations', href: '/organizations', icon: Building2 },
-      { type: 'group', label: 'nav_account' },
-      { key: 'profile', href: '/profile', icon: Users },
     ]
   }
 
@@ -103,24 +116,28 @@ const navigation = computed(() => {
 
   return [
     { key: 'dashboard', href: '/', icon: LayoutDashboard },
-    // ── Activity ──
-    { type: 'group', label: 'nav_activity' },
+    // ── Sales and purchases ──
     ...(!isFidu ? [
+      { type: 'group', label: 'nav_sales' },
       { key: 'invoices', href: '/invoices', icon: FileText, children: [
         { key: 'invoices', href: '/invoices' },
         { key: 'recurring', href: '/invoices/recurring', icon: Repeat },
       ]},
+      { type: 'group', label: 'nav_purchases' },
       { key: 'expenses', href: '/expenses', icon: Receipt, children: [
         { key: 'expenses', href: '/expenses' },
         { key: 'recurring', href: '/expenses/recurring', icon: Repeat },
+        { key: 'receipt_scans', href: '/expenses/receipt-scans' },
       ]},
+      { type: 'group', label: 'nav_contacts' },
       { key: 'contacts', href: '/contacts', icon: Users },
     ] : []),
     ...(isFidu ? [
+      { type: 'group', label: 'nav_contacts' },
       { key: 'contacts', href: '/contacts', icon: Users },
     ] : []),
-    // ── Finances ──
-    { type: 'group', label: 'nav_finances' },
+    // ── Banking and accounting ──
+    { type: 'group', label: 'nav_banking' },
     { key: 'banking', href: '/banking', icon: Landmark, children: [
       { key: 'bank_accounts', href: '/banking' },
       { key: 'reconciliation', href: '/reconciliation' },
@@ -133,6 +150,7 @@ const navigation = computed(() => {
     ...(features.value.automation ? [
       { key: 'automation', href: '/automation', icon: Cog },
     ] : []),
+    { type: 'group', label: 'nav_accounting' },
     { key: 'accounting', href: '/accounting/journal-entries', icon: BookOpen, children: [
       { key: 'journal_entries', href: '/accounting/journal-entries' },
       ...(can('accounting.create') ? [
@@ -172,6 +190,9 @@ const navigation = computed(() => {
       ...(features.value.multi_currency && accountingRoutes.value.exchangeRates ? [
         { key: 'exchange_rates', href: '/accounting/exchange-rates' },
       ] : []),
+      ...(features.value.assets ? [
+        { key: 'assets', href: '/assets' },
+      ] : []),
     ]},
     { key: 'reports', href: '/reports/profit-and-loss', icon: BarChart3, children: [
       { key: 'profit_and_loss', href: '/reports/profit-and-loss' },
@@ -184,11 +205,8 @@ const navigation = computed(() => {
         { key: 'analytical_report', href: '/accounting/analytical-report' },
       ] : []),
     ]},
-    ...(features.value.assets ? [
-      { key: 'assets', href: '/assets', icon: Package },
-    ] : []),
-    // ── Management ──
-    { type: 'group', label: 'nav_management' },
+    // ── Payroll ──
+    { type: 'group', label: 'nav_payroll' },
     ...(features.value.payroll ? [
       { key: 'payroll', href: '/payroll/employees', icon: Briefcase, children: [
         { key: 'employees', href: '/payroll/employees' },
@@ -203,11 +221,14 @@ const navigation = computed(() => {
     ] : can('payroll.view') ? [
       { key: 'salary_slips', href: '/payroll/salary-slips', icon: Briefcase },
     ] : []),
-    // ── Workspace ──
-    { type: 'group', label: 'nav_workspace' },
+    // ── Organization administration ──
+    { type: 'group', label: 'nav_administration' },
     { key: 'organizations', href: '/organizations', icon: Building2 },
     ...(can('organization.edit') ? [{ key: 'organization_settings_nav', href: '/settings', icon: Settings, children: [
       { key: 'settings_general', href: '/settings' },
+      ...(currentOrg.value?.id ? [
+        { key: 'team_and_access', href: `/organizations/${currentOrg.value.id}#members` },
+      ] : []),
       ...(can('migration.import') ? [
         { key: 'data_migration', href: '/migration' },
       ] : []),
@@ -219,17 +240,11 @@ const navigation = computed(() => {
         { key: 'webhooks', href: '/settings/webhooks' },
       ] : []),
     ]}] : []),
-    // ── Account ──
-    { type: 'group', label: 'nav_account' },
-    { key: 'profile', href: '/profile', icon: Users },
+    ...(features.value.saas && currentRole.value !== 'employee' ? [
+      { key: 'billing', href: '/billing', icon: CreditCard },
+    ] : []),
   ]
 })
-
-const billingNav = computed(() =>
-  features.value.saas && currentRole.value !== 'employee'
-    ? [{ key: 'billing', href: '/billing', icon: CreditCard }]
-    : []
-)
 
 function isActive(href) {
   const currentPath = (page.url || '/').split('?')[0]
@@ -283,32 +298,65 @@ function isGroupActive(item) {
       <button
         class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-[hsl(var(--sidebar-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]"
         :class="collapsed ? 'justify-center' : ''"
-        :aria-expanded="hasMultipleOrgs ? showOrgMenu : undefined"
-        :aria-haspopup="hasMultipleOrgs ? 'listbox' : undefined"
-        @click="hasMultipleOrgs ? (showOrgMenu = !showOrgMenu) : undefined"
+        :aria-expanded="showOrgMenu"
+        aria-haspopup="menu"
+        :disabled="switchingOrganization"
+        @click="showOrgMenu = !showOrgMenu"
       >
         <Building2 class="h-4 w-4 shrink-0" />
         <span v-if="!collapsed" class="min-w-0 truncate">{{ currentOrg.name }}</span>
-        <ChevronDown v-if="!collapsed && hasMultipleOrgs" class="ml-auto h-3 w-3 shrink-0" />
+        <ChevronDown v-if="!collapsed" class="ml-auto h-3 w-3 shrink-0" />
       </button>
 
       <div
-        v-if="showOrgMenu && hasMultipleOrgs"
+        v-if="showOrgMenu"
+        role="menu"
         :class="[
-          'absolute z-50 w-56 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-1 shadow-lg',
+          'absolute z-50 w-72 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-1 shadow-lg',
           collapsed ? 'left-full top-0 ml-1' : 'left-3 right-3 top-full mt-1 w-auto',
         ]"
-        @mouseleave="showOrgMenu = false"
+        @keydown.esc="closeOrgMenu"
       >
-        <button
-          v-for="org in organizations"
-          :key="org.id"
-          class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))]"
-          @click="switchOrg(org.id)"
-        >
-          <span class="truncate">{{ org.name }}</span>
-          <Check v-if="org.id === currentOrg.id" class="ml-2 h-4 w-4 shrink-0 text-[hsl(var(--primary))]" />
-        </button>
+        <div class="border-b border-[hsl(var(--border))] px-3 py-2">
+          <p class="truncate text-sm font-semibold text-[hsl(var(--foreground))]">{{ currentOrg.name }}</p>
+          <p class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('current_organization') }}</p>
+        </div>
+        <div v-if="organizations.length > 1" class="border-b border-[hsl(var(--border))] p-2">
+          <input
+            v-model="organizationSearch"
+            type="search"
+            :placeholder="t('search_organizations')"
+            :aria-label="t('search_organizations')"
+            class="w-full rounded-md border border-[hsl(var(--input))] bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+          />
+        </div>
+        <div class="max-h-60 overflow-y-auto p-1">
+          <button
+            v-for="org in filteredOrganizations"
+            :key="org.id"
+            role="menuitem"
+            :disabled="switchingOrganization || org.id === currentOrg.id"
+            class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] disabled:cursor-default disabled:opacity-60"
+            @click="switchOrg(org.id)"
+          >
+            <span class="min-w-0 truncate">{{ org.name }}</span>
+            <span class="ml-2 flex shrink-0 items-center gap-2">
+              <span class="text-xs text-[hsl(var(--muted-foreground))]">{{ t(`role_${org.role}`) }}</span>
+              <Check v-if="org.id === currentOrg.id" class="h-4 w-4 text-[hsl(var(--primary))]" />
+            </span>
+          </button>
+          <p v-if="filteredOrganizations.length === 0" class="px-3 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+            {{ t('no_organizations') }}
+          </p>
+        </div>
+        <div class="border-t border-[hsl(var(--border))] p-1">
+          <Link href="/organizations" role="menuitem" class="block rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))]" @click="closeOrgMenu">
+            {{ t('all_organizations') }}
+          </Link>
+          <Link v-if="canCreateOrganization" href="/organizations/create" role="menuitem" class="block rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))]" @click="closeOrgMenu">
+            {{ t('create_organization_btn') }}
+          </Link>
+        </div>
       </div>
     </div>
 
@@ -396,31 +444,6 @@ function isGroupActive(item) {
         </Tooltip>
       </template>
 
-      <!-- Billing (SaaS only) -->
-      <template v-if="billingNav.length">
-        <div class="my-1 border-t border-[hsl(var(--sidebar-border))]" />
-        <Tooltip
-          v-for="item in billingNav"
-          :key="item.key"
-          :content="collapsed ? t(item.key) : ''"
-          side="right"
-        >
-          <Link
-            :href="item.href"
-            :aria-label="collapsed ? t(item.key) : undefined"
-            :aria-current="isActive(item.href) ? 'page' : undefined"
-            :class="[
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              isActive(item.href)
-                ? 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]'
-                : 'text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]',
-            ]"
-          >
-            <component :is="item.icon" class="h-4 w-4 shrink-0" />
-            <span v-if="!collapsed">{{ t(item.key) }}</span>
-          </Link>
-        </Tooltip>
-      </template>
     </nav>
 
     <!-- Mobile utility actions: theme, help, docs (desktop uses topbar) -->

@@ -5,6 +5,76 @@ All notable changes to Gäld are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.14] - 2026-09-10
+
+### Changed
+- **Organization context:** introduce a Stripe-style organization switcher
+  with search, roles, active context, organization list, and creation access.
+- **Organization settings:** add a secondary settings navigation and make team
+  and access discoverable from organization administration.
+- **Personal account:** give profile, security, preferences, and sessions
+  canonical destinations instead of anchor-only links.
+
+## [3.8.13] - 2026-09-09
+
+### Fixed
+- **Passkey migration:** use the installed CBOR encoder namespace when
+  converting legacy encrypted P-256 credentials to Laravel Passkeys records.
+
+## [3.8.12] - 2026-09-09
+
+### Changed
+- **Passkeys:** replace the abandoned `laragear/webauthn` integration with
+  the official `laravel/passkeys` package.
+- **Legacy credentials:** convert encrypted Laragear P-256 credentials to
+  Laravel Passkeys CredentialRecord data during migration, failing explicitly
+  when a credential cannot be converted.
+
+## [3.8.11] - 2026-09-09
+
+### Fixed
+- **CI validation environment:** explicitly enable debug mode and the isolated
+  array session backend for PHPUnit so Inertia validation errors are preserved
+  in GitHub Actions without using file-backed sessions.
+
+## [3.8.10] - 2026-09-09
+
+### Fixed
+- **CI session isolation:** force PHPUnit's array session driver even when the
+  environment provides another session backend, keeping validation errors
+  available without relying on file sessions.
+- **Composer audit reporting:** report abandoned packages without hiding
+  security advisories or failing the CI job solely because a package is marked
+  abandoned.
+
+## [3.8.9] - 2026-09-09
+
+### Fixed
+- **CI test database:** use the same `testing` PostgreSQL database for service
+  initialization, migrations, and PHPUnit so feature validation runs against a
+  migrated schema.
+
+## [3.8.8] - 2026-09-09
+
+### Changed
+- **Application navigation:** organize the sidebar around sales, purchases,
+  banking, accounting, reports, payroll, and organization administration.
+- **User menu:** move profile, security, preferences, and sessions into the
+  topbar account menu.
+- **Organization creation:** distinguish the single free organization from
+  additional paid organizations for SaaS owners.
+
+### Fixed
+- **SaaS organization limits:** allow paid plans to create additional
+  organizations while preserving the one-free-organization rule.
+
+## [3.8.7] - 2026-09-08
+
+### Fixed
+- **Sentry source maps:** load Sentry organization, project, and authentication
+  settings from the Vite environment so production builds can upload source
+  maps when the credentials are defined in `.env.production`.
+
 ## [3.8.6] - 2026-09-07
 
 ### Fixed

@@ -19,6 +19,7 @@ import { startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/brow
 
 const props = defineProps({
   user: Object,
+  activeSection: { type: String, default: 'profile' },
 })
 
 const page = usePage()
@@ -223,6 +224,10 @@ async function loadPasskeys() {
 }
 
 onMounted(() => {
+  if (props.activeSection !== 'profile') {
+    requestAnimationFrame(() => document.getElementById(props.activeSection)?.scrollIntoView({ block: 'start' }))
+  }
+
   if (supportsPasskeys) {
     loadPasskeys()
   }
@@ -261,7 +266,7 @@ async function registerPasskey() {
         'Accept': 'application/json',
       },
       credentials: 'same-origin',
-      body: JSON.stringify(attestation),
+      body: JSON.stringify({ name: 'Passkey', credential: attestation }),
     })
 
     if (!registerRes.ok) throw new Error(t('passkey_register_failed'))
@@ -360,7 +365,7 @@ function confirmRevokeOtherSessions() {
 <template>
   <AppLayout :title="t('profile')">
     <div class="max-w-2xl space-y-6">
-      <Card>
+      <Card id="profile">
         <CardHeader><CardTitle>{{ t('profile_information') }}</CardTitle></CardHeader>
         <CardContent>
           <form class="space-y-6" @submit.prevent="submitProfile">
@@ -428,7 +433,7 @@ function confirmRevokeOtherSessions() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="preferences">
         <CardHeader>
           <CardTitle>{{ t('help_preferences') }}</CardTitle>
           <CardDescription>{{ t('help_preferences_desc') }}</CardDescription>
@@ -468,7 +473,7 @@ function confirmRevokeOtherSessions() {
       </Card>
 
       <!-- Two-Factor Authentication -->
-      <Card>
+      <Card id="security">
         <CardHeader>
           <div class="flex items-center justify-between">
             <div>
@@ -620,7 +625,7 @@ function confirmRevokeOtherSessions() {
       </Card>
 
       <!-- Active Sessions -->
-      <Card>
+      <Card id="sessions">
         <CardHeader>
           <CardTitle>{{ t('active_sessions') }}</CardTitle>
           <CardDescription>{{ t('active_sessions_desc') }}</CardDescription>

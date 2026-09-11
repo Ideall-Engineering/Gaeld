@@ -5,6 +5,56 @@ GitLab CE mirror, and the private Enterprise Edition (EE) plugin. It prepares
 release commits and commands locally; it does not push or create tags by
 itself.
 
+## v3.8.14 Staging Navigation Release
+
+This staging release introduces the organization context switcher, the
+organization settings navigation, explicit team and access entry points, and
+canonical personal profile destinations. It contains no EE source and keeps
+the private deployment recipe only on `gitlab/production`.
+
+## v3.8.13 Passkeys Migration Patch
+
+This patch corrects the CBOR encoder namespace used by the legacy credential
+conversion. It must be promoted before production so the existing active
+credential can be converted safely.
+
+## v3.8.12 Passkeys Release
+
+This release replaces the abandoned Laragear WebAuthn package with the
+official Laravel Passkeys package. Production currently contains one active
+legacy passkey; the migration converts its encrypted P-256 public key into a
+COSE CredentialRecord and aborts explicitly on incompatible data.
+
+## v3.8.11 CI Patch
+
+This patch makes the GitHub Actions PHPUnit environment explicit: debug mode
+and the array session backend are set in the test job. It does not change the
+runtime production session backend or the CE/EE boundary.
+
+## v3.8.10 CI Patch
+
+This patch forces the isolated PHPUnit array session backend and changes the
+Composer audit command to report abandoned packages without treating them as
+security advisories. It also realigns the public GitHub `develop` branch with
+the release currently on `main`.
+
+## v3.8.9 Staging Patch
+
+This patch corrects the GitHub Actions test service configuration so the
+PostgreSQL database migrated by CI is the same `testing` database used by
+PHPUnit. The application and CE/EE boundaries are unchanged from v3.8.8.
+
+## v3.8.8 Staging Release
+
+This release updates the authenticated application navigation and clarifies
+the separation between organization context, user profile, and SaaS billing.
+It also distinguishes the single free organization from additional paid
+organizations for SaaS owners.
+
+The release candidate is CE `v3.8.8`, built from the validated navigation and
+organization-limit changes on `develop`. The staging promotion must preserve
+the private GitLab deployment recipe and use the matching immutable CE tag.
+
 ## Release Matrix
 
 Every production release records both immutable refs before deployment:
@@ -63,6 +113,12 @@ staging workflow passed **41/41** checks with zero console errors, zero request
 failures, and cleanup of all generated accounts and organizations. GitHub's
 replacement CI runner stalled during dependency installation, while the same
 release passed the local exact suites, lint, PHPStan, and staging validation.
+
+The release was promoted to production as release `281` with private
+promotion merge `fc75d7ab` after fresh PostgreSQL and file backups completed.
+The deployed pair is CE `v3.8.6` and EE `v2.9.27`, with web `v2.14.5` and
+docs `v2.12.3`. Production `/up`, `/login`, and `/signup` returned HTTP 200;
+Horizon was active after deployment.
 
 ## v3.8.3 Staging Candidate
 
