@@ -23,9 +23,17 @@ const props = defineProps({
   payrollWritable: { type: Boolean, default: true },
   salarySlips: { type: Array, default: () => [] },
   certificateYears: { type: Array, default: () => [] },
+  // Which Form 11 header fields are still empty. Computed server-side because
+  // ahv_number is hidden from serialization and cannot be checked here.
+  missingCertificateFields: { type: Array, default: () => [] },
 })
 
 
+
+const postalAddress = computed(() => [
+  props.employee.address,
+  [props.employee.postal_code, props.employee.city].filter(Boolean).join(' '),
+].filter(Boolean).join(', '))
 
 const salaryColumns = computed(() => [
   { key: 'period', label: t('period'), minWidth: 140 },
@@ -78,11 +86,39 @@ const salaryColumns = computed(() => [
               <p class="text-[hsl(var(--muted-foreground))]">{{ t('gross_salary') }}</p>
               <p class="font-medium font-mono">{{ formatCurrency(employee.gross_salary) }}</p>
             </div>
+            <div v-if="employee.date_of_birth">
+              <p class="text-[hsl(var(--muted-foreground))]">{{ t('date_of_birth') }}</p>
+              <p class="font-medium">{{ formatDate(employee.date_of_birth) }}</p>
+            </div>
+            <div v-if="employee.job_title">
+              <p class="text-[hsl(var(--muted-foreground))]">{{ t('job_title') }}</p>
+              <p class="font-medium">{{ employee.job_title }}</p>
+            </div>
+            <div v-if="employee.employment_rate">
+              <p class="text-[hsl(var(--muted-foreground))]">{{ t('employment_rate') }}</p>
+              <p class="font-medium">{{ Math.round(Number(employee.employment_rate)) }}%</p>
+            </div>
+            <div v-if="employee.expense_allowance">
+              <p class="text-[hsl(var(--muted-foreground))]">{{ t('expense_allowance') }}</p>
+              <p class="font-medium font-mono">{{ formatCurrency(employee.expense_allowance) }}</p>
+            </div>
+            <div v-if="employee.place_of_origin">
+              <p class="text-[hsl(var(--muted-foreground))]">{{ t('place_of_origin') }}</p>
+              <p class="font-medium">{{ employee.place_of_origin }}</p>
+            </div>
+            <div v-if="postalAddress" class="col-span-2">
+              <p class="text-[hsl(var(--muted-foreground))]">{{ t('address') }}</p>
+              <p class="font-medium">{{ postalAddress }}</p>
+            </div>
             <div v-if="employee.iban" class="col-span-2">
               <p class="text-[hsl(var(--muted-foreground))]">{{ t('iban') }}</p>
               <p class="font-medium font-mono">{{ employee.iban }}</p>
             </div>
           </div>
+
+          <p v-if="missingCertificateFields.length" class="mt-4 text-xs text-[hsl(var(--muted-foreground))]">
+            {{ t('salary_certificate_incomplete', { fields: missingCertificateFields.join(', ') }) }}
+          </p>
         </CardContent>
       </Card>
 

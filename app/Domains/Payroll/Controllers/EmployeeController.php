@@ -78,6 +78,9 @@ class EmployeeController extends Controller
                 ->sortDesc()
                 ->values(),
             'payrollWritable' => FeatureFlag::enabledForOrg('payroll', $employee->organization),
+            // Computed here, not in the page: ahv_number is hidden from
+            // serialization, so the frontend cannot tell whether it is set.
+            'missingCertificateFields' => $employee->missingCertificateFieldLabels(),
         ]);
     }
 

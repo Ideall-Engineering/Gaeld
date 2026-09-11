@@ -31,10 +31,18 @@ const sourceTaxTariffs = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 const form = useForm({
   first_name: '',
   last_name: '',
+  date_of_birth: '',
   ahv_number: '',
   email: '',
+  address: '',
+  postal_code: '',
+  city: '',
+  place_of_origin: '',
+  job_title: '',
+  employment_rate: '',
   entry_date: new Date().toISOString().slice(0, 10),
   gross_salary: '',
+  expense_allowance: '',
   status: 'active',
   iban: '',
   is_source_tax_subject: false,
@@ -48,11 +56,19 @@ function submit() {
   form.transform((data) => ({
     first_name: data.first_name,
     last_name: data.last_name,
+    date_of_birth: data.date_of_birth || null,
     email: data.email || null,
+    address: data.address || null,
+    postal_code: data.postal_code || null,
+    city: data.city || null,
+    place_of_origin: data.place_of_origin || null,
+    job_title: data.job_title || null,
+    employment_rate: data.employment_rate || null,
     iban: data.iban || null,
     ahv_number: data.ahv_number || null,
     entry_date: data.entry_date,
     gross_salary: data.gross_salary,
+    expense_allowance: data.expense_allowance || null,
     is_active: data.status === 'active',
     is_source_tax_subject: data.is_source_tax_subject,
     source_tax_canton: data.source_tax_canton || null,
@@ -100,6 +116,40 @@ function submit() {
               :label="t('email')"
               :error="form.errors.email"
             />
+            <FormInput
+              id="date_of_birth"
+              v-model="form.date_of_birth"
+              type="date"
+              :label="t('date_of_birth')"
+              :hint="t('certificate_details_hint')"
+              :error="form.errors.date_of_birth"
+            />
+            <FormInput
+              id="address"
+              v-model="form.address"
+              :label="t('address')"
+              :hint="t('certificate_details_hint')"
+              :error="form.errors.address"
+              class="sm:col-span-2"
+            />
+            <FormInput
+              id="postal_code"
+              v-model="form.postal_code"
+              :label="t('postal_code')"
+              :error="form.errors.postal_code"
+            />
+            <FormInput
+              id="city"
+              v-model="form.city"
+              :label="t('city')"
+              :error="form.errors.city"
+            />
+            <FormInput
+              id="place_of_origin"
+              v-model="form.place_of_origin"
+              :label="t('place_of_origin')"
+              :error="form.errors.place_of_origin"
+            />
           </div>
 
           <!-- AHV Number (masked: 756.XXXX.XXXX.XX) -->
@@ -144,6 +194,33 @@ function submit() {
               :label="t('gross_salary') + ' (CHF' + t('per_month') + ')'"
               :error="form.errors.gross_salary"
               required
+            />
+            <FormInput
+              id="job_title"
+              v-model="form.job_title"
+              :label="t('job_title')"
+              :error="form.errors.job_title"
+            />
+            <FormInput
+              id="employment_rate"
+              v-model="form.employment_rate"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              :label="t('employment_rate')"
+              :error="form.errors.employment_rate"
+            />
+            <FormInput
+              id="expense_allowance"
+              v-model="form.expense_allowance"
+              type="number"
+              step="0.01"
+              min="0"
+              :label="t('expense_allowance') + ' (CHF' + t('per_month') + ')'"
+              :hint="t('expense_allowance_hint')"
+              :error="form.errors.expense_allowance"
+              class="sm:col-span-2"
             />
             <FormSelect
               id="status"

@@ -35,11 +35,19 @@ function dateInputValue(value) {
 const form = useForm({
   first_name: props.employee.first_name ?? '',
   last_name: props.employee.last_name ?? '',
+  date_of_birth: dateInputValue(props.employee.date_of_birth),
   ahv_number: props.employee.ahv_number ?? '',
   email: props.employee.email ?? '',
+  address: props.employee.address ?? '',
+  postal_code: props.employee.postal_code ?? '',
+  city: props.employee.city ?? '',
+  place_of_origin: props.employee.place_of_origin ?? '',
+  job_title: props.employee.job_title ?? '',
+  employment_rate: props.employee.employment_rate ?? '',
   entry_date: dateInputValue(props.employee.entry_date),
   exit_date: dateInputValue(props.employee.exit_date),
   gross_salary: props.employee.gross_salary ?? '',
+  expense_allowance: props.employee.expense_allowance ?? '',
   is_active: props.employee.is_active ?? true,
   is_source_tax_subject: props.employee.is_source_tax_subject ?? false,
   source_tax_canton: props.employee.source_tax_canton ?? '',
@@ -90,6 +98,40 @@ function submit() {
               type="email"
               :label="t('email')"
               :error="form.errors.email"
+            />
+            <FormInput
+              id="date_of_birth"
+              v-model="form.date_of_birth"
+              type="date"
+              :label="t('date_of_birth')"
+              :hint="t('certificate_details_hint')"
+              :error="form.errors.date_of_birth"
+            />
+            <FormInput
+              id="address"
+              v-model="form.address"
+              :label="t('address')"
+              :hint="t('certificate_details_hint')"
+              :error="form.errors.address"
+              class="sm:col-span-2"
+            />
+            <FormInput
+              id="postal_code"
+              v-model="form.postal_code"
+              :label="t('postal_code')"
+              :error="form.errors.postal_code"
+            />
+            <FormInput
+              id="city"
+              v-model="form.city"
+              :label="t('city')"
+              :error="form.errors.city"
+            />
+            <FormInput
+              id="place_of_origin"
+              v-model="form.place_of_origin"
+              :label="t('place_of_origin')"
+              :error="form.errors.place_of_origin"
             />
           </div>
 
@@ -142,6 +184,33 @@ function submit() {
               :label="t('gross_salary') + ' (CHF' + t('per_month') + ')'"
               :error="form.errors.gross_salary"
               required
+            />
+            <FormInput
+              id="job_title"
+              v-model="form.job_title"
+              :label="t('job_title')"
+              :error="form.errors.job_title"
+            />
+            <FormInput
+              id="employment_rate"
+              v-model="form.employment_rate"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              :label="t('employment_rate')"
+              :error="form.errors.employment_rate"
+            />
+            <FormInput
+              id="expense_allowance"
+              v-model="form.expense_allowance"
+              type="number"
+              step="0.01"
+              min="0"
+              :label="t('expense_allowance') + ' (CHF' + t('per_month') + ')'"
+              :hint="t('expense_allowance_hint')"
+              :error="form.errors.expense_allowance"
+              class="sm:col-span-2"
             />
             <FormSelect
               id="status"
