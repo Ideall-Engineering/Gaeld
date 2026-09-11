@@ -73,6 +73,7 @@ use App\Domains\Payroll\Services\NullSourceTaxService;
 use App\Domains\Reporting\Jobs\GenerateReportsJob;
 use App\Domains\Users\Jobs\ExportUserDataJob;
 use App\Domains\Users\Models\User;
+use App\Exceptions\ConfigCacheRefusedException;
 use App\Http\Services\GlobalSearchService;
 use App\Listeners\SendHorizonTelegramAlert;
 use App\Support\Contracts\EditionCompatibility;
@@ -84,6 +85,7 @@ use App\Support\Observers\LocksArchivedRecord;
 use App\Support\Services\DefaultOrganizationQuotaResolver;
 use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -198,6 +200,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(MemberRemoved::class, RevokeOrganizationTokens::class);
         Event::listen(BankStatementImported::class, QueueBankRuleSuggestions::class);
         Event::listen(LongWaitDetected::class, SendHorizonTelegramAlert::class);
+        Event::listen(CommandStarting::class, $this->refuseConfigCacheInDevelopment(...));
 
         Gate::policy(BankRule::class, BankRulePolicy::class);
         Gate::policy(BankRuleApplication::class, BankRuleApplicationPolicy::class);
@@ -252,6 +255,48 @@ class AppServiceProvider extends ServiceProvider
             Invoice::$event($dashboardFlush);
             Expense::$event($dashboardFlush);
         }
+    }
+
+    /**
+     * Refuse to write a config cache in a development tree.
+     *
+     * Once bootstrap/cache/config.php exists, Laravel stops loading .env at
+     * all. A test run then never sees .env.testing: DB_DATABASE stays on the
+     * development database and RefreshDatabase drops its tables. The same
+     * cache makes runningUnitTests() false, so CSRF applies and POST tests
+     * fail with 419 instead of the expected status.
+     *
+     * Production caches config as usual — see GaeldReleaseCommand and
+     * docker/production/entrypoint.sh. Set GAELD_ALLOW_CONFIG_CACHE=1 to
+     * override this locally.
+     */
+    private function refuseConfigCacheInDevelopment(CommandStarting $event): void
+    {
+        $blocked = ['config:cache', 'route:cache', 'optimize'];
+
+        if (! in_array($event->command, $blocked, true)) {
+            return;
+        }
+
+        if (! $this->app->environment('local', 'testing')) {
+            return;
+        }
+
+        // Read the process environment, not config(): the guard has to behave
+        // the same whether or not a config cache is already in place, which is
+        // exactly the situation it exists for.
+        if (getenv('GAELD_ALLOW_CONFIG_CACHE') === '1') {
+            return;
+        }
+
+        $exception = ConfigCacheRefusedException::forCommand(
+            (string) $event->command,
+            $this->app->environment(),
+        );
+
+        $exception->explainTo($event->output);
+
+        throw $exception;
     }
 
     /**

@@ -41,6 +41,7 @@ class GaeldDoctorCommand extends Command
         $this->checkSessionConfig();
         $this->checkDatabase();
         $this->checkCache();
+        $this->checkConfigCacheInDevelopment();
         $this->checkStorage();
         $this->checkPendingMigrations();
 
@@ -169,6 +170,27 @@ class GaeldDoctorCommand extends Command
         } catch (\Throwable $e) {
             $this->warnings[] = 'Could not reach the cache store: '.$e->getMessage();
         }
+    }
+
+    /**
+     * A config cache in a development tree points the test suite at the
+     * development database, because Laravel then skips .env.testing entirely.
+     */
+    private function checkConfigCacheInDevelopment(): void
+    {
+        if (! $this->getLaravel()->environment('local', 'testing')) {
+            return;
+        }
+
+        if ($this->getLaravel()->configurationIsCached()) {
+            $this->warnings[] = 'A cached configuration exists in a development environment (bootstrap/cache/config.php). '
+                .'It overrides .env.testing, so a test run would target the development database instead of the test one. '
+                .'Run `php artisan config:clear`.';
+
+            return;
+        }
+
+        $this->components->task('No config cache in the development tree', fn () => true);
     }
 
     private function checkStorage(): void

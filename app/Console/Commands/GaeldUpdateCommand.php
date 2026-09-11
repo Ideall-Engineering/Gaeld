@@ -41,12 +41,22 @@ class GaeldUpdateCommand extends Command
                 $this->callSilently('event:clear');
             });
 
-            $this->components->task('Rebuilding caches', function () {
-                $this->callSilently('config:cache');
-                $this->callSilently('route:cache');
-                $this->callSilently('view:cache');
-                $this->callSilently('event:cache');
-            });
+            // Rebuilding is production-only: a cached config in a development
+            // tree makes Laravel skip .env, so .env.testing is ignored and the
+            // test run targets the development database. See GaeldInstallCommand.
+            if ($this->getLaravel()->environment('local', 'testing')) {
+                $this->components->twoColumnDetail(
+                    'Rebuilding caches',
+                    '<fg=yellow>skipped (development environment)</>',
+                );
+            } else {
+                $this->components->task('Rebuilding caches', function () {
+                    $this->callSilently('config:cache');
+                    $this->callSilently('route:cache');
+                    $this->callSilently('view:cache');
+                    $this->callSilently('event:cache');
+                });
+            }
         } else {
             $this->components->twoColumnDetail('Cache management', '<fg=yellow>skipped</>');
         }

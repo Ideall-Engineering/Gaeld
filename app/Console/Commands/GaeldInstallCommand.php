@@ -127,11 +127,23 @@ class GaeldInstallCommand extends Command
         }
 
         // Step 7: Cache config
-        $this->components->task('Caching configuration', function () {
-            $this->callSilently('config:cache');
-            $this->callSilently('route:cache');
-            $this->callSilently('view:cache');
-        });
+        //
+        // Never in a development tree. A cached config makes Laravel skip
+        // loading .env entirely, so .env.testing is ignored and DB_DATABASE
+        // stays on the development database — RefreshDatabase then wipes it.
+        // Caching buys nothing locally anyway.
+        if ($this->getLaravel()->environment('local', 'testing')) {
+            $this->components->twoColumnDetail(
+                'Caching configuration',
+                '<fg=yellow>skipped (development environment)</>',
+            );
+        } else {
+            $this->components->task('Caching configuration', function () {
+                $this->callSilently('config:cache');
+                $this->callSilently('route:cache');
+                $this->callSilently('view:cache');
+            });
+        }
 
         $this->newLine();
         $this->components->info('Gäld installed successfully!');
