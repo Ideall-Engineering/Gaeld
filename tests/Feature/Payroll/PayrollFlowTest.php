@@ -59,6 +59,12 @@ class PayrollFlowTest extends TestCase
             'entry_date' => '2025-01-01',
             'gross_salary' => '6000.00',
             'is_active' => true,
+            // The salary certificate is Form 11 and refuses to render without
+            // its header fields; see SalaryCertificateForm11Test.
+            'date_of_birth' => '1985-04-12',
+            'address' => 'Musterweg 1',
+            'postal_code' => '3000',
+            'city' => 'Bern',
         ]);
     }
 
