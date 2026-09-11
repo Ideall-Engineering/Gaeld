@@ -33,7 +33,17 @@ class PdfExportServiceTest extends TestCase
 
     public function test_it_still_raises_the_memory_limit(): void
     {
-        ini_set('memory_limit', '128M');
+        // Lower the limit to something the service will raise, but stay above
+        // what this process has already allocated: ini_set() refuses to set a
+        // limit below current usage, and by the time the whole Unit suite
+        // reaches this test that usage is well past a token 128M.
+        $startingPoint = 256 * 1024 * 1024;
+
+        if (memory_get_usage(true) >= $startingPoint) {
+            $this->markTestSkipped('The process already uses more than the starting point this test needs.');
+        }
+
+        ini_set('memory_limit', '256M');
 
         $this->renderCertificate();
 
