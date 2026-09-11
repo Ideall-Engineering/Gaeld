@@ -12,6 +12,12 @@ services:
             LARAVEL_SAIL: 1
         volumes:
             - '.:/var/www/html'
+            # Keep the container's node_modules out of the bind mount. The host
+            # is glibc and the image is Alpine/musl, so one platform's native
+            # bindings (rolldown, lightningcss, esbuild) are useless to the
+            # other — sharing the directory breaks whichever side installed
+            # second. Run `./gaeld pnpm install` once to populate this volume.
+            - 'gaeld-node-modules:/var/www/html/node_modules'
         entrypoint: ["/var/www/html/docker/php/entrypoint.sh"]
         networks:
             - sail
@@ -102,6 +108,10 @@ services:
             LARAVEL_SAIL: 1
         volumes:
             - '.:/var/www/html'
+            # Same named volume as laravel.test. The worker never builds, but
+            # it runs the same entrypoint as root and would otherwise install
+            # into the host's node_modules through the bind mount.
+            - 'gaeld-node-modules:/var/www/html/node_modules'
         entrypoint: ["/var/www/html/docker/php/entrypoint.sh"]
         networks:
             - sail
@@ -117,6 +127,8 @@ networks:
     sail:
         driver: bridge
 volumes:
+    gaeld-node-modules:
+        driver: local
     sail-pgsql:
         driver: local
     sail-redis:

@@ -45,10 +45,24 @@ After pulling a newer release, update an existing installation with:
 
 `./gaeld setup` creates `.env` when needed, builds the image, starts the
 dependencies, waits for PostgreSQL, Redis, and the application health endpoint,
-then runs the installer. Docker must already be running: setup checks the
+installs the frontend dependencies, then runs the installer. Docker must
+already be running: setup checks the
 selected Docker context immediately and exits with an actionable error when the
 engine is unavailable. It does not install or launch Docker Desktop
 automatically.
+
+### Frontend dependencies: two installations, on purpose
+
+The container keeps its own `node_modules` in the named volume
+`gaeld-node-modules`, separate from the one in your working copy. The two
+cannot be shared: the host is glibc and the image is Alpine/musl, so the native
+bindings (rolldown, lightningcss, esbuild) of one are useless to the other, and
+whichever side installs second finds a directory pnpm wants to purge.
+
+Either side can build. `./gaeld pnpm run build` builds in the container and
+hands `public/build` back to UID 1000 afterwards, because that directory *is*
+shared and the container runs as root. Building directly in your working copy
+needs Node 22+ and pnpm on the host.
 
 On Linux, if `docker info` reports `permission denied`, grant the current user
 access to the Docker socket and start a new session:

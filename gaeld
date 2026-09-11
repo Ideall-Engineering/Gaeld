@@ -178,7 +178,19 @@ cmd_setup() {
     wait_for "Waiting for application to be ready" 60 \
         docker compose exec -T laravel.test curl -sf http://localhost:80/up
 
-    # 4. Install
+    # 4. Frontend dependencies
+    #
+    # The container keeps its own node_modules in a named volume: the host is
+    # glibc and the image is Alpine/musl, so the two cannot share one install.
+    step "Frontend dependencies"
+    if docker compose exec -T laravel.test test -d node_modules/.pnpm > /dev/null 2>&1; then
+        ok "node_modules already installed in the container"
+    else
+        run_step "Installing frontend dependencies (container)" \
+            docker compose exec -T laravel.test pnpm install --frozen-lockfile
+    fi
+
+    # 5. Install
     step "Installing Gäld"
     if [ -n "$demo_flag" ]; then
         docker compose exec -T laravel.test php artisan gaeld:install --demo --no-interaction
@@ -186,7 +198,7 @@ cmd_setup() {
         docker compose exec laravel.test php artisan gaeld:install
     fi
 
-    # 5. Summary
+    # 6. Summary
     local duration
     duration=$(elapsed "$start_time")
 
@@ -227,7 +239,18 @@ cmd_restart() {
 }
 
 cmd_pnpm() {
+    # The container runs as root (it binds port 80) and node_modules is its own
+    # named volume, so pnpm itself is happy. public/build, however, is a bind
+    # mount shared with the host: root-owned output there is something the
+    # developer cannot delete, and Vite's own output-dir cleanup then fails
+    # with EACCES on the next build outside the container. Hand it back.
     docker compose exec laravel.test pnpm "$@"
+    local rc=$?
+
+    docker compose exec -T laravel.test \
+        chown -R 1000:1000 /var/www/html/public/build > /dev/null 2>&1 || true
+
+    return $rc
 }
 
 cmd_composer() {
