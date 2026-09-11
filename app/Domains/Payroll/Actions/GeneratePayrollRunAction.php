@@ -47,7 +47,7 @@ class GeneratePayrollRunAction
                     $month,
                     $year,
                     (int) ($adjustment['unpaid_leave_days'] ?? 0),
-                    (string) ($adjustment['reimbursement_amount'] ?? '0.00'),
+                    self::reimbursementFor($employee, $adjustment),
                 );
                 $slip->save();
 
@@ -84,10 +84,29 @@ class GeneratePayrollRunAction
                     $month,
                     $year,
                     (int) ($adjustment['unpaid_leave_days'] ?? 0),
-                    (string) ($adjustment['reimbursement_amount'] ?? '0.00'),
+                    self::reimbursementFor($employee, $adjustment),
                 );
             })
             ->values();
+    }
+
+    /**
+     * What to reimburse this employee for this period.
+     *
+     * The employee's agreed monthly flat expense sum is the default. An amount
+     * entered for the run replaces it rather than adding to it — the run sheet
+     * states what the month's expenses actually were, and a flat sum is an
+     * estimate the sheet supersedes.
+     *
+     * @param  array<string, mixed>  $adjustment
+     */
+    private static function reimbursementFor(Employee $employee, array $adjustment): string
+    {
+        if (array_key_exists('reimbursement_amount', $adjustment) && $adjustment['reimbursement_amount'] !== null) {
+            return (string) $adjustment['reimbursement_amount'];
+        }
+
+        return (string) ($employee->expense_allowance ?? '0.00');
     }
 
     /**

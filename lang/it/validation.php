@@ -158,6 +158,7 @@ return [
     'uuid' => ':Attribute deve essere un UUID valido.',
     'attributes' => [
         'address' => 'indirizzo',
+        'ahv_number' => 'numero AVS',
         'affiliate_url' => 'URL di affiliazione',
         'age' => 'età',
         'amount' => 'Quantità',

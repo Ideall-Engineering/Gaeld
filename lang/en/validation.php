@@ -158,6 +158,7 @@ return [
     'uuid' => 'The :attribute field must be a valid UUID.',
     'attributes' => [
         'address' => 'address',
+        'ahv_number' => 'AHV number',
         'affiliate_url' => 'affiliate URL',
         'age' => 'age',
         'amount' => 'amount',

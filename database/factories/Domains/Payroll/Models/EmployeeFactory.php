@@ -26,4 +26,23 @@ class EmployeeFactory extends Factory
             'is_active' => true,
         ];
     }
+
+    /**
+     * Everything the official salary certificate (Form 11) needs.
+     *
+     * The base factory leaves these empty on purpose, so tests that do not care
+     * about the certificate still exercise the nullable columns.
+     */
+    public function withCertificateDetails(): self
+    {
+        return $this->state(fn (): array => [
+            'date_of_birth' => '1985-04-12',
+            'address' => fake()->streetAddress(),
+            'postal_code' => (string) fake()->numberBetween(1000, 9999),
+            'city' => fake()->city(),
+            'place_of_origin' => fake()->city(),
+            'job_title' => 'Sachbearbeiterin',
+            'employment_rate' => '80.00',
+        ]);
+    }
 }

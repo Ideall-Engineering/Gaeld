@@ -16,12 +16,23 @@ trait EmployeeRules
         $rules = [
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
+            // Salary-certificate fields. Optional here — an employee record is
+            // useful before the details are known — but the certificate itself
+            // refuses to render until the ones it needs are filled in.
+            'date_of_birth' => ['nullable', 'date', 'before:today'],
             'email' => ['nullable', 'email', 'max:255'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'postal_code' => ['nullable', 'string', 'max:10'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'place_of_origin' => ['nullable', 'string', 'max:255'],
+            'job_title' => ['nullable', 'string', 'max:255'],
+            'employment_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'iban' => ['nullable', 'string', 'max:34', new Iban],
             'ahv_number' => ['nullable', 'string', 'max:16'],
             'entry_date' => ['required', 'date'],
             'exit_date' => ['nullable', 'date', 'after_or_equal:entry_date'],
             'gross_salary' => ['required', 'numeric', 'min:0'],
+            'expense_allowance' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['boolean'],
             'is_source_tax_subject' => ['boolean'],
             'has_thirteenth_salary' => ['boolean'],

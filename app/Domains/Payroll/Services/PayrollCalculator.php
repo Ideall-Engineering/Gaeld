@@ -96,6 +96,9 @@ class PayrollCalculator
                 'first_name' => (string) $employee->first_name,
                 'last_name' => (string) $employee->last_name,
                 'email' => $employee->email,
+                // Kept so a later change to the employee's agreed flat expense
+                // sum cannot silently reinterpret slips already posted.
+                'expense_allowance' => $employee->expense_allowance,
                 'ahv_number' => $employee->ahv_number
                     ? Crypt::encryptString($employee->ahv_number)
                     : null,
