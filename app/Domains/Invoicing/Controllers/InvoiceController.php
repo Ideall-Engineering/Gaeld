@@ -186,6 +186,7 @@ class InvoiceController extends Controller
         return Inertia::render('Invoices/Show', [
             'invoice' => $invoice->load(['customer', 'lines.vatRate', 'journalEntry.lines.account', 'payments.journalEntry']),
             'canForceDelete' => $request->user()->can('forceDelete', $invoice),
+            'canDelete' => $request->user()->can('delete', $invoice),
             'canRecordPayment' => $request->user()->can('recordPayment', $invoice),
             'canSend' => $request->user()->can('send', $invoice),
             'justificatifUrl' => $invoice->justificatif_path

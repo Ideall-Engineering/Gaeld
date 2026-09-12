@@ -48,9 +48,24 @@ class InvoicePolicy extends BasePolicy
             return false;
         }
 
-        return $this->belongsToOrganization($user, $invoice)
-            && $user->hasPermissionTo(Permission::InvoicingDelete)
-            && $invoice->status->isDeletable();
+        if (! $this->belongsToOrganization($user, $invoice)
+            || ! $user->hasPermissionTo(Permission::InvoicingDelete)
+            || ! $invoice->status->isDeletable()) {
+            return false;
+        }
+
+        // Two very different documents are deletable. A draft is a working
+        // paper: no number, no journal entry, nothing of record is lost. A
+        // cancelled invoice once existed under a number and was booked, so
+        // removing it from the visible trail is an administrative act rather
+        // than a bookkeeping one, and stays with the roles that run the
+        // organization — which is also who held this permission before the
+        // accountant was given it.
+        if ($invoice->status === InvoiceStatus::Cancelled) {
+            return $user->hasAnyRole(['owner', 'admin']);
+        }
+
+        return true;
     }
 
     public function finalize(User $user, Invoice $invoice): bool

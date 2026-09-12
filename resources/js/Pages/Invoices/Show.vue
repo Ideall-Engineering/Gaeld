@@ -24,6 +24,7 @@ import HelpText from '@/Components/HelpText.vue'
 const props = defineProps({
   invoice: Object,
   canForceDelete: { type: Boolean, default: false },
+  canDelete: { type: Boolean, default: false },
   canRecordPayment: { type: Boolean, default: false },
   canSend: { type: Boolean, default: false },
   canRevertToDraft: { type: Boolean, default: false },
@@ -349,7 +350,7 @@ const bankAccountOptions = computed(() =>
                 {{ t('cancel_invoice') }}
               </button>
               <button
-                v-if="(invoice?.status === 'draft' || invoice?.status === 'cancelled') && !invoice?.archived_at"
+                v-if="canDelete"
                 class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive))]/10"
                 @click="showDeleteDialog = true; close()"
               >

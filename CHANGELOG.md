@@ -56,6 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   volume names in the production compose file.
 
 ### Changed
+- **Accountants may discard a draft invoice.** The role could prepare, edit,
+  finalise and collect an invoice but not throw a draft away, and the delete
+  button was shown anyway and then refused with a 403. A draft carries no
+  number and no journal entry, so discarding one destroys nothing of record. A
+  cancelled invoice, which did once exist under a number, stays with the owner
+  and admin roles, and an issued invoice stays with nobody. The button now
+  follows the policy instead of the status alone.
 - **Audit trail:** Auditable activity-log entries carry request context.
 - **Draft editing:** the web controller and the correction replacement share a
   single `UpdateJournalDraftAction`, so balance, account, and VAT validation

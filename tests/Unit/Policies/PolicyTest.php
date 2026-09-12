@@ -49,6 +49,81 @@ class PolicyTest extends TestCase
     }
 
     // ──────────────────────────────────────────────────────────────
+    //  InvoicePolicy — who may discard what
+    // ──────────────────────────────────────────────────────────────
+
+    public function test_an_accountant_may_discard_a_draft_invoice(): void
+    {
+        $accountant = $this->memberWithRole('accountant');
+
+        $this->assertTrue(
+            (new InvoicePolicy)->delete($accountant, $this->invoice(InvoiceStatus::Draft)),
+            'A draft carries no number and no journal entry; preparing invoices includes throwing one away.',
+        );
+    }
+
+    public function test_an_accountant_may_not_discard_a_cancelled_invoice(): void
+    {
+        $accountant = $this->memberWithRole('accountant');
+
+        $this->assertFalse(
+            (new InvoicePolicy)->delete($accountant, $this->invoice(InvoiceStatus::Cancelled)),
+            'A cancelled invoice once existed under a number — removing it is administrative.',
+        );
+    }
+
+    public function test_an_administrative_role_may_discard_a_cancelled_invoice(): void
+    {
+        $policy = new InvoicePolicy;
+
+        $this->assertTrue($policy->delete($this->memberUser, $this->invoice(InvoiceStatus::Cancelled)), 'owner');
+        $this->assertTrue($policy->delete($this->memberWithRole('admin'), $this->invoice(InvoiceStatus::Cancelled)), 'admin');
+    }
+
+    public function test_nobody_may_discard_an_issued_invoice(): void
+    {
+        $policy = new InvoicePolicy;
+
+        foreach ([InvoiceStatus::Sent, InvoiceStatus::Paid, InvoiceStatus::Overdue] as $status) {
+            $this->assertFalse(
+                $policy->delete($this->memberUser, $this->invoice($status)),
+                "An issued invoice ({$status->value}) stays, even for an owner.",
+            );
+        }
+    }
+
+    public function test_a_member_still_may_not_discard_anything(): void
+    {
+        $member = $this->memberWithRole('member');
+
+        $this->assertFalse((new InvoicePolicy)->delete($member, $this->invoice(InvoiceStatus::Draft)));
+    }
+
+    private function memberWithRole(string $role): User
+    {
+        $user = User::factory()->create();
+        $this->organization->users()->attach($user->id, ['role' => $role]);
+        $this->assignOrganizationRole($user, $this->organization, $role);
+
+        return $user;
+    }
+
+    private function invoice(InvoiceStatus $status): Invoice
+    {
+        return Invoice::create([
+            'organization_id' => $this->organization->id,
+            'number' => $status === InvoiceStatus::Draft ? null : 'INV-'.$status->value.'-'.uniqid(),
+            'status' => $status,
+            'issue_date' => '2026-09-12',
+            'due_date' => '2026-10-12',
+            'currency' => 'CHF',
+            'subtotal' => '100.00',
+            'vat_amount' => '8.10',
+            'total' => '108.10',
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────
     //  AccountPolicy
     // ──────────────────────────────────────────────────────────────
 

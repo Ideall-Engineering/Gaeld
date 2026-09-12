@@ -159,10 +159,15 @@ enum Role: string
             Permission::ExpensesEdit,
             Permission::ExpensesApprove,
 
-            // Invoicing (view/create/edit/finalize/record-payment, no delete)
+            // Invoicing (view/create/edit/finalize/record-payment, and delete
+            // for drafts — a draft carries no number and no journal entry, so
+            // discarding one destroys nothing of record. InvoicePolicy keeps a
+            // cancelled invoice, which did once exist under a number, with the
+            // administrative roles.)
             Permission::InvoicingView,
             Permission::InvoicingCreate,
             Permission::InvoicingEdit,
+            Permission::InvoicingDelete,
             Permission::InvoicingFinalize,
             Permission::InvoicingRecordPayment,
 
