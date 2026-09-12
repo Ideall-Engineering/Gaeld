@@ -2468,6 +2468,7 @@ return [
     'liquidity_estimate_hint' => 'Estimated items are averaged over the last :months months. Recording employees and subscriptions as master data makes the forecast more accurate.',
     'dashboard_other_accounts' => ':count further accounts',
     'monthly_accounts_title' => 'Accounts this month',
+    'back_to_month_view' => 'Month view',
     'monthly_accounts_desc' => 'What was booked to which account in the selected month. Follow an account to its statement.',
     'monthly_accounts_expenses' => 'Expenses',
     'monthly_accounts_revenue' => 'Revenue',

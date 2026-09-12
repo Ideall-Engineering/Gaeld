@@ -20,8 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   year and no request per step — the year arrives with the page. Following an
   account opens its statement for that month: what it brought in, every posted
   movement with its counter account and a running balance, and what it leaves
-  with. Gäld had no per-account view before; the same figures were only
-  reachable as chart tooltips.
+  with, and a way back to the month it was opened from rather than to the
+  dashboard's default month. Gäld had no per-account view before; the same
+  figures were only reachable as chart tooltips.
 - **Two UI switches:** `FEATURE_COOKIE_CONSENT` and `FEATURE_QUICK_RECEIPT` hide
   the cookie consent banner with its re-open button, and the floating
   quick-receipt camera button, for installations that do not want them. Both

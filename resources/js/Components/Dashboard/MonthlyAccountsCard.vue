@@ -19,7 +19,26 @@ const props = defineProps({
 const { t } = useTranslations()
 const { formatCurrency, intlMonthName } = useFormatters()
 
-const month = ref(Math.min(Math.max(props.initialMonth, 1), 12))
+/**
+ * Coming back from a statement, the card opens on the month that was being
+ * read rather than on the default. Only for this card's year: the page ships
+ * one year at a time, so a month from another one would look empty instead of
+ * saying so.
+ */
+function monthFromUrl() {
+  if (typeof window === 'undefined') return null
+
+  const raw = new URLSearchParams(window.location.search).get('month')
+  const match = /^(\d{4})-(\d{2})$/.exec(raw ?? '')
+
+  if (!match || Number(match[1]) !== props.year) return null
+
+  const value = Number(match[2])
+
+  return value >= 1 && value <= 12 ? value : null
+}
+
+const month = ref(monthFromUrl() ?? Math.min(Math.max(props.initialMonth, 1), 12))
 
 function asNumber(value) {
   const parsed = Number(value)
@@ -52,7 +71,7 @@ function statementHref(row) {
 </script>
 
 <template>
-  <Card>
+  <Card id="monthly-accounts">
     <CardHeader>
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>

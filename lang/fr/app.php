@@ -2394,6 +2394,7 @@ return [
     'liquidity_estimate_hint' => 'Les postes estimés sont la moyenne des :months derniers mois. Saisir les employés et les abonnements comme données de base améliore la prévision.',
     'dashboard_other_accounts' => ':count autres comptes',
     'monthly_accounts_title' => 'Comptes du mois',
+    'back_to_month_view' => 'Vue mensuelle',
     'monthly_accounts_desc' => 'Ce qui a été comptabilisé sur quel compte durant le mois choisi. Un clic mène au relevé.',
     'monthly_accounts_expenses' => 'Charges',
     'monthly_accounts_revenue' => 'Produits',

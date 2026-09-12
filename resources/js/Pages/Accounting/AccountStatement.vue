@@ -7,9 +7,10 @@ import CardHeader from '@/Components/UI/CardHeader.vue'
 import CardTitle from '@/Components/UI/CardTitle.vue'
 import CardDescription from '@/Components/UI/CardDescription.vue'
 import CardContent from '@/Components/UI/CardContent.vue'
+import Button from '@/Components/UI/Button.vue'
 import DataTable from '@/Components/UI/DataTable.vue'
 import EmptyState from '@/Components/UI/EmptyState.vue'
-import { ChevronLeft, ChevronRight, BookOpen } from 'lucide-vue-next'
+import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen } from 'lucide-vue-next'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 
@@ -48,12 +49,20 @@ const columns = computed(() => [
 <template>
   <AppLayout :title="`${account.code} ${account.name}`" help-page="accounting-basics">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-semibold">
-          <span class="text-gray-400 tabular-nums dark:text-gray-500">{{ account.code }}</span>
-          <span class="ml-2">{{ account.name }}</span>
-        </h1>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ account.typeLabel }}</p>
+      <div class="flex items-start gap-3">
+        <!-- Back to the month this account was opened from, not merely to the
+             dashboard's default month. -->
+        <Button as="a" :href="`/dashboard?month=${month}#monthly-accounts`" variant="outline" size="sm">
+          <ArrowLeft class="h-4 w-4 sm:mr-2" />
+          <span class="hidden sm:inline">{{ t('back_to_month_view') }}</span>
+        </Button>
+        <div>
+          <h1 class="text-xl font-semibold">
+            <span class="text-gray-400 tabular-nums dark:text-gray-500">{{ account.code }}</span>
+            <span class="ml-2">{{ account.name }}</span>
+          </h1>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ account.typeLabel }}</p>
+        </div>
       </div>
 
       <div class="flex items-center gap-1">

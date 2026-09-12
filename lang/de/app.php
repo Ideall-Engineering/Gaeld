@@ -2387,6 +2387,7 @@ return [
     'liquidity_estimate_hint' => 'Geschätzte Positionen stammen aus dem Durchschnitt der letzten :months Monate. Mitarbeiter und Abos als Stammdaten erfassen macht die Prognose genauer.',
     'dashboard_other_accounts' => ':count weitere Konten',
     'monthly_accounts_title' => 'Konten im Monat',
+    'back_to_month_view' => 'Monatsansicht',
     'monthly_accounts_desc' => 'Was im gewählten Monat auf welchem Konto gebucht wurde. Ein Klick führt zum Kontoblatt.',
     'monthly_accounts_expenses' => 'Aufwand',
     'monthly_accounts_revenue' => 'Ertrag',

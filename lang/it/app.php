@@ -2336,6 +2336,7 @@ return [
     'liquidity_estimate_hint' => 'Le voci stimate sono la media degli ultimi :months mesi. Registrare dipendenti e abbonamenti come dati di base rende la previsione più accurata.',
     'dashboard_other_accounts' => ':count altri conti',
     'monthly_accounts_title' => 'Conti del mese',
+    'back_to_month_view' => 'Vista mensile',
     'monthly_accounts_desc' => 'Che cosa è stato registrato su quale conto nel mese scelto. Un clic porta all\'estratto.',
     'monthly_accounts_expenses' => 'Costi',
     'monthly_accounts_revenue' => 'Ricavi',
