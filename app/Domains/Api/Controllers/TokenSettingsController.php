@@ -56,6 +56,8 @@ class TokenSettingsController extends Controller
             'orgTokens' => $orgTokens,
             'canManageOrgTokens' => $canManageOrgTokens,
             'abilities' => TokenPermissionMap::abilities(),
+            'apiBaseUrl' => url('/api/v1'),
+            'docsUrl' => ApiInfoController::DOCUMENTATION_URL,
         ]);
     }
 

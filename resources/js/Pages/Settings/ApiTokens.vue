@@ -15,19 +15,45 @@ import ConfirmDialog from '@/Components/UI/ConfirmDialog.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 import { ref, computed } from 'vue'
-import { ArrowLeft, Key, Plus, Trash2, Copy, Check, Building2 } from 'lucide-vue-next'
+import { ArrowLeft, Key, Plus, Trash2, Copy, Check, Building2, BookOpen, ChevronDown, ChevronUp } from 'lucide-vue-next'
 
 const props = defineProps({
   personalTokens: { type: Array, default: () => [] },
   orgTokens: { type: Array, default: () => [] },
   canManageOrgTokens: { type: Boolean, default: false },
   abilities: { type: Array, default: () => [] },
+  apiBaseUrl: { type: String, default: '' },
+  docsUrl: { type: String, default: '' },
 })
 
 const { t } = useTranslations()
 const { formatDate } = useFormatters()
 const page = usePage()
 const flash = computed(() => page.props.flash || {})
+
+// Quick start guide. Open automatically right after a token was created,
+// which is exactly when someone needs it.
+const showQuickstart = ref(Boolean(usePage().props.flash?.newToken))
+
+const curlHeaders = computed(() => `  -H "Authorization: Bearer IHR_TOKEN" \\
+  -H "Accept: application/json"`)
+
+const exampleRead = computed(
+  () => `curl -sS "${props.apiBaseUrl}/invoices?per_page=5" \\
+${curlHeaders.value}`,
+)
+
+const exampleWrite = computed(
+  () => `curl -sS -X POST "${props.apiBaseUrl}/contacts" \\
+${curlHeaders.value} \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Muster AG","type":"organization"}'`,
+)
+
+const exampleAbilities = computed(
+  () => `curl -sS "${props.apiBaseUrl}/meta/abilities" \\
+${curlHeaders.value}`,
+)
 
 // Token creation modal
 const showCreateModal = ref(false)
@@ -230,6 +256,63 @@ const expirationOptions = [
                 <Trash2 class="h-4 w-4" />
               </Button>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Quick start guide -->
+      <Card>
+        <CardHeader>
+          <div class="flex items-center justify-between">
+            <div>
+              <CardTitle>
+                <BookOpen class="inline mr-2 h-4 w-4" />
+                {{ t('api_quickstart') }}
+              </CardTitle>
+              <CardDescription>
+                {{ t('api_quickstart_description') }}
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" @click="showQuickstart = !showQuickstart">
+              <ChevronUp v-if="showQuickstart" class="mr-2 h-4 w-4" />
+              <ChevronDown v-else class="mr-2 h-4 w-4" />
+              {{ showQuickstart ? t('api_quickstart_hide') : t('api_quickstart_show') }}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent v-if="showQuickstart">
+          <div class="space-y-4 text-sm">
+            <div>
+              <p class="font-medium">{{ t('api_base_url') }}</p>
+              <code class="mt-1 block rounded bg-muted px-3 py-2 text-xs font-mono break-all">{{ apiBaseUrl }}</code>
+            </div>
+
+            <p class="text-muted-foreground">{{ t('api_auth_intro') }}</p>
+
+            <div>
+              <p class="font-medium">{{ t('api_example_read') }}</p>
+              <pre class="mt-1 overflow-x-auto rounded bg-muted px-3 py-2 text-xs font-mono"><code>{{ exampleRead }}</code></pre>
+            </div>
+
+            <div>
+              <p class="font-medium">{{ t('api_example_write') }}</p>
+              <pre class="mt-1 overflow-x-auto rounded bg-muted px-3 py-2 text-xs font-mono"><code>{{ exampleWrite }}</code></pre>
+            </div>
+
+            <div>
+              <p class="font-medium">{{ t('api_example_abilities') }}</p>
+              <pre class="mt-1 overflow-x-auto rounded bg-muted px-3 py-2 text-xs font-mono"><code>{{ exampleAbilities }}</code></pre>
+            </div>
+
+            <p class="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-xs text-yellow-900 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
+              {{ t('api_token_security_note') }}
+            </p>
+
+            <p>
+              <a :href="docsUrl" target="_blank" rel="noopener noreferrer" class="underline underline-offset-4">
+                {{ t('api_full_documentation') }}
+              </a>
+            </p>
           </div>
         </CardContent>
       </Card>

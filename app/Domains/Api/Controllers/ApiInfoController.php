@@ -7,6 +7,9 @@ use Illuminate\Routing\Controller;
 
 class ApiInfoController extends Controller
 {
+    /** Public API reference shown here and on the token settings page. */
+    public const DOCUMENTATION_URL = 'https://docs.gaeld.ch/docs/api/gald-api-documentation';
+
     /**
      * API Information
      *
@@ -24,7 +27,7 @@ class ApiInfoController extends Controller
         return response()->json([
             'name' => config('app.name').' API',
             'version' => 'v1',
-            'documentation' => 'https://docs.gaeld.ch/docs/api/gald-api-documentation',
+            'documentation' => self::DOCUMENTATION_URL,
             'status' => 'ok',
         ]);
     }
