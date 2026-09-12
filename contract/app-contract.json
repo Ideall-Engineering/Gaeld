@@ -99,7 +99,7 @@
     "authenticated": {
       "_middleware": ["auth", "verified", "org", "org-2fa", "subscription"],
       "dashboard": [
-        {"method": "GET", "path": "/", "controller": "DashboardController@index", "page": "Dashboard", "name": "dashboard", "props": ["revenue", "expenses", "balance", "cashBalance", "unpaidInvoices", "pendingExpenses", "previousRevenue", "previousExpenses", "previousBalance", "budgetSummary", "vatSummary", "receivablesAging", "recentTransactions", "hasActivity", "monthlyBreakdown", "liquidityForecast", "pendingOcrScans", "displayYear"]}
+        {"method": "GET", "path": "/", "controller": "DashboardController@index", "page": "Dashboard", "name": "dashboard", "props": ["revenue", "expenses", "balance", "cashBalance", "unpaidInvoices", "pendingExpenses", "previousRevenue", "previousExpenses", "previousBalance", "budgetSummary", "vatSummary", "receivablesAging", "recentTransactions", "hasActivity", "monthlyBreakdown", "monthlyAccounts", "displayMonth", "liquidityForecast", "pendingOcrScans", "displayYear"]}
       ],
       "search": [
         {"method": "GET", "path": "/search", "controller": "GlobalSearchController", "page": "Search/Index", "name": "search", "props": ["query", "results"]}
@@ -201,6 +201,7 @@
         {"method": "POST", "path": "/accounting/accounts/import", "controller": "AccountController@import", "name": "accounting.accounts.import"},
         {"method": "GET", "path": "/accounting/accounts/export", "controller": "AccountController@export", "name": "accounting.accounts.export"},
         {"method": "GET", "path": "/accounting/accounts/export/download", "controller": "AccountController@downloadExport", "name": "accounting.accounts.export.download"},
+        {"method": "GET", "path": "/accounting/accounts/{account:uuid}/statement", "controller": "AccountStatementController@__invoke", "page": "Accounting/AccountStatement", "name": "accounting.accounts.statement", "props": ["account", "month", "previousMonth", "nextMonth", "statement"]},
         {"method": "GET", "path": "/accounting/journal-entries", "controller": "AccountingController@journalEntries", "page": "Accounting/JournalEntries", "name": "accounting.journal", "props": ["entries"]},
         {"method": "GET", "path": "/accounting/trial-balance", "controller": "AccountingController@trialBalance", "page": "Accounting/TrialBalance", "name": "accounting.trial-balance", "props": ["balances", "asOfDate"]},
         {"method": "GET", "path": "/accounting/trial-balance/export/{format}", "controller": "AccountingController@exportTrialBalance", "name": "accounting.trial-balance.export"},

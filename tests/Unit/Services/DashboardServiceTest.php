@@ -74,6 +74,10 @@ class DashboardServiceTest extends TestCase
             'revenue' => $this->monthSeries([1 => [['label' => '3000 Sales', 'amount' => '100.00']]], []),
             'expenses' => $this->monthSeries([1 => [['label' => '6500 Hosting', 'amount' => '50.00']]], []),
         ]);
+        $ledgerService->shouldReceive('monthlyAccountTotals')->once()->with($this->orgId, 2026)->andReturn([
+            'revenue' => $this->monthSeries([1 => [['uuid' => 'acc-3000', 'code' => '3000', 'name' => 'Sales', 'amount' => '100.00']]], []),
+            'expenses' => $this->monthSeries([3 => [['uuid' => 'acc-6500', 'code' => '6500', 'name' => 'Hosting', 'amount' => '70.00']]], []),
+        ]);
         $invoiceService->shouldReceive('sentOrOverdueDueInYear')->once()->with($this->orgId, 2026)->andReturn(collect([
             (object) ['number' => 'INV-3', 'total' => '300.00', 'due_date' => '2026-03-25'],
         ]));
@@ -118,6 +122,9 @@ class DashboardServiceTest extends TestCase
         $this->assertSame(['3000 Sales: 100.00'], $metrics['monthlyBreakdown']['revenueItems'][0]);
         $this->assertSame(['6500 Hosting: 50.00'], $metrics['monthlyBreakdown']['expenseItems'][0]);
         $this->assertSame(2026, $metrics['displayYear']);
+        // The month view opens on the last month that holds bookings.
+        $this->assertSame(3, $metrics['displayMonth']);
+        $this->assertSame('6500', $metrics['monthlyAccounts']['expenses'][3][0]['code']);
         $this->assertTrue($metrics['hasActivity']);
     }
 
@@ -141,6 +148,10 @@ class DashboardServiceTest extends TestCase
             'expenses' => $this->monthSeries([]),
         ]);
         $ledgerService->shouldReceive('monthlyTotalsByAccount')->once()->andReturn([
+            'revenue' => $this->monthSeries([], []),
+            'expenses' => $this->monthSeries([], []),
+        ]);
+        $ledgerService->shouldReceive('monthlyAccountTotals')->once()->andReturn([
             'revenue' => $this->monthSeries([], []),
             'expenses' => $this->monthSeries([], []),
         ]);

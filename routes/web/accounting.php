@@ -2,6 +2,7 @@
 
 use App\Domains\Accounting\Controllers\AccountController;
 use App\Domains\Accounting\Controllers\AccountingController;
+use App\Domains\Accounting\Controllers\AccountStatementController;
 use App\Domains\Accounting\Controllers\BudgetController;
 use App\Domains\Accounting\Controllers\ConsolidationController;
 use App\Domains\Accounting\Controllers\CostCenterController;
@@ -24,6 +25,7 @@ Route::delete('/accounting/accounts/{account}', [AccountController::class, 'dest
 Route::post('/accounting/accounts/import', [AccountController::class, 'import'])->name('accounting.accounts.import');
 Route::get('/accounting/accounts/export', [AccountController::class, 'export'])->name('accounting.accounts.export');
 Route::get('/accounting/accounts/export/download', [AccountController::class, 'downloadExport'])->name('accounting.accounts.export.download')->middleware('signed');
+Route::get('/accounting/accounts/{account}/statement', AccountStatementController::class)->name('accounting.accounts.statement');
 Route::get('/accounting/journal-entries', [AccountingController::class, 'journalEntries'])->name('accounting.journal');
 Route::get('/accounting/trial-balance', [AccountingController::class, 'trialBalance'])->name('accounting.trial-balance');
 Route::get('/accounting/trial-balance/export/{format}', [AccountingController::class, 'exportTrialBalance'])->name('accounting.trial-balance.export');

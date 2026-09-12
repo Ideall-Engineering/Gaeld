@@ -16,6 +16,7 @@ import { TrendingUp, TrendingDown, ArrowRightLeft, Wallet, X, AlertTriangle, Rec
 import HelpText from '@/Components/HelpText.vue'
 import QuickReceiptButton from '@/Components/QuickReceiptButton.vue'
 import LiquidityRunwayCard from '@/Components/Dashboard/LiquidityRunwayCard.vue'
+import MonthlyAccountsCard from '@/Components/Dashboard/MonthlyAccountsCard.vue'
 import { normalizeDashboardContract } from '@/lib/inertiaContracts'
 import { Bar } from 'vue-chartjs'
 import {
@@ -57,6 +58,8 @@ const props = defineProps({
   liquidityForecast: { type: Object, default: null },
   pendingOcrScans: { type: Number, default: 0 },
   displayYear: { type: Number, default: () => new Date().getFullYear() },
+  monthlyAccounts: { type: Object, default: () => ({ revenue: {}, expenses: {} }) },
+  displayMonth: { type: Number, default: () => new Date().getMonth() + 1 },
   isEmptyState: { type: Boolean, default: false },
   hasExportModule: { type: Boolean, default: false },
   expiredFiscalYear: { type: Object, default: null },
@@ -471,6 +474,16 @@ const transactionColumns = computed(() => [
         </div>
       </CardContent>
     </Card>
+
+    <!-- Month by account — the figures the chart aggregates, each one a link
+         into the bookings behind it -->
+    <div class="mt-6">
+      <MonthlyAccountsCard
+        :monthly-accounts="contract.monthlyAccounts"
+        :year="contract.displayYear"
+        :initial-month="contract.displayMonth"
+      />
+    </div>
 
     <!-- Chart -->
     <Card class="mt-6">

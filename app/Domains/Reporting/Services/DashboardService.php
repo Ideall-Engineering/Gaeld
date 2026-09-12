@@ -86,6 +86,8 @@ class DashboardService
 
         $recentTransactions = $this->recentTransactions($organizationId);
 
+        $monthlyAccounts = $this->ledgerService->monthlyAccountTotals($organizationId, $year);
+
         // Year-over-year comparison
         $previousTotals = $this->ledgerService->periodTotals($organizationId, ...$this->yearBounds($year - 1));
         $previousRevenue = $previousTotals['revenue'];
@@ -112,6 +114,8 @@ class DashboardService
             'recentTransactions' => $recentTransactions,
             'hasActivity' => $recentTransactions->isNotEmpty() || $this->hasCapturedDocuments($organizationId),
             'monthlyBreakdown' => $this->monthlyBreakdown($organizationId, $year),
+            'monthlyAccounts' => $monthlyAccounts,
+            'displayMonth' => $this->resolveDisplayMonth($monthlyAccounts, $year),
             'budgetSummary' => $this->budgetSummary($organizationId, $year, $totalRevenue, $totalExpenses),
             'vatSummary' => $this->currentQuarterVat($organizationId),
             'receivablesAging' => $this->agingSummary($organizationId),
@@ -481,6 +485,27 @@ class DashboardService
     private function yearBounds(int $year): array
     {
         return ["{$year}-01-01", "{$year}-12-31"];
+    }
+
+    /**
+     * The month the dashboard opens on: the last one in the displayed year that
+     * actually holds bookings, so the card is never blank merely because a new
+     * month has only just started.
+     *
+     * @param  array{revenue: array<int, list<array<string, string>>>, expenses: array<int, list<array<string, string>>>}  $monthlyAccounts
+     */
+    private function resolveDisplayMonth(array $monthlyAccounts, int $year): int
+    {
+        $latest = collect(range(1, 12))
+            ->filter(fn (int $month): bool => $monthlyAccounts['revenue'][$month] !== []
+                || $monthlyAccounts['expenses'][$month] !== [])
+            ->max();
+
+        if ($latest !== null) {
+            return (int) $latest;
+        }
+
+        return $year === now()->year ? now()->month : 1;
     }
 
     private function pendingOcrScans(string $organizationId): int

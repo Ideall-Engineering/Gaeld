@@ -4,10 +4,12 @@ namespace App\Domains\Accounting\Services;
 
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -171,28 +173,29 @@ class LedgerQueryService
     }
 
     /**
-     * Per-month revenue and expense breakdown by account, for chart tooltips.
+     * Every revenue and expense account that moved, month by month, with its
+     * natural-signed total and the id needed to link to it.
      *
      * Aggregating by account rather than by journal entry keeps a month with
-     * dozens of bookings readable ("Loehne: 18'790.97" instead of twelve
-     * separate wage lines). Each month lists at most
-     * {@see self::TOOLTIP_ITEM_LIMIT} accounts and folds the rest into a
-     * single overflow row.
+     * dozens of bookings readable: one "Loehne: 18'790.97" instead of twelve
+     * separate wage lines. Nothing is capped here — the dashboard's month view
+     * shows the whole month, and {@see monthlyTotalsByAccount()} folds these
+     * same rows into its shorter tooltip shape, so one query serves both.
      *
-     * @return array{revenue: array<int, list<array{label: string, amount: string, overflow?: int}>>, expenses: array<int, list<array{label: string, amount: string, overflow?: int}>>}
+     * @return array{revenue: array<int, list<array{uuid: string, code: string, name: string, amount: string}>>, expenses: array<int, list<array{uuid: string, code: string, name: string, amount: string}>>}
      */
-    public function monthlyTotalsByAccount(string $organizationId, int $year): array
+    public function monthlyAccountTotals(string $organizationId, int $year): array
     {
-        $cacheKey = "monthly_totals_by_account:{$organizationId}:{$year}";
+        $cacheKey = "monthly_account_totals:{$organizationId}:{$year}";
 
         return Cache::tags(["org:{$organizationId}:ledger"])->remember(
             $cacheKey,
             now()->addMinutes(30),
             function () use ($organizationId, $year) {
                 $rows = $this->operationalLines($organizationId, "{$year}-01-01", "{$year}-12-31")
-                    ->groupBy('accounts.type', 'accounts.code', 'accounts.name')
+                    ->groupBy('accounts.uuid', 'accounts.type', 'accounts.code', 'accounts.name')
                     ->groupByRaw('EXTRACT(MONTH FROM journal_entries.date)')
-                    ->selectRaw('accounts.type AS account_type, accounts.code, accounts.name, EXTRACT(MONTH FROM journal_entries.date) AS month, COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')
+                    ->selectRaw('accounts.uuid AS account_uuid, accounts.type AS account_type, accounts.code, accounts.name, EXTRACT(MONTH FROM journal_entries.date) AS month, COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')
                     ->get()
                     ->groupBy(fn ($row) => (int) $row->month);
 
@@ -201,13 +204,208 @@ class LedgerQueryService
 
                 foreach (range(1, 12) as $month) {
                     $monthRows = $rows->get($month, collect());
-                    $revenue[$month] = $this->accountItems($monthRows, AccountType::Revenue);
-                    $expenses[$month] = $this->accountItems($monthRows, AccountType::Expense);
+                    $revenue[$month] = $this->accountMovements($monthRows, AccountType::Revenue);
+                    $expenses[$month] = $this->accountMovements($monthRows, AccountType::Expense);
                 }
 
                 return ['revenue' => $revenue, 'expenses' => $expenses];
             }
         );
+    }
+
+    /**
+     * Per-month revenue and expense breakdown by account, for chart tooltips.
+     *
+     * Each month lists at most {@see self::TOOLTIP_ITEM_LIMIT} accounts and
+     * folds the rest into a single overflow row.
+     *
+     * @return array{revenue: array<int, list<array{label: string, amount: string, overflow?: int}>>, expenses: array<int, list<array{label: string, amount: string, overflow?: int}>>}
+     */
+    public function monthlyTotalsByAccount(string $organizationId, int $year): array
+    {
+        $totals = $this->monthlyAccountTotals($organizationId, $year);
+
+        return [
+            'revenue' => array_map([$this, 'cappedAccountItems'], $totals['revenue']),
+            'expenses' => array_map([$this, 'cappedAccountItems'], $totals['expenses']),
+        ];
+    }
+
+    /**
+     * One account's movements inside a month, on the same basis as the
+     * dashboard's month view: posted entries, structural ones left out — so the
+     * total here is the figure the dashboard showed, not a near miss.
+     *
+     * The opening balance is what the account carried into the month. For a
+     * revenue or expense account that means since the start of its fiscal year,
+     * because the year-end closing empties it; for a balance sheet account it
+     * means everything booked before the month.
+     *
+     * @return array{from: string, to: string, openingBalance: numeric-string, total: numeric-string, closingBalance: numeric-string, lines: list<array{entry_id: string, date: string, reference: string|null, description: string|null, debit: numeric-string, credit: numeric-string, amount: numeric-string, balance: numeric-string, counterAccounts: list<string>}>}
+     */
+    public function accountStatementForMonth(Account $account, int $year, int $month): array
+    {
+        $from = Carbon::create($year, $month, 1)->startOfMonth();
+        $to = $from->copy()->endOfMonth();
+
+        $carriesOverYearEnd = ! in_array($account->type, [AccountType::Revenue, AccountType::Expense], true);
+
+        $openingFrom = $carriesOverYearEnd
+            ? null
+            : $this->fiscalYearStart($account->organization_id, $from)->toDateString();
+
+        $opening = $this->accountLines($account, $openingFrom, $from->copy()->subDay()->toDateString())
+            ->selectRaw('COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')
+            ->first();
+
+        /** @var numeric-string $openingDebit */
+        $openingDebit = (string) $opening->total_debit;
+        /** @var numeric-string $openingCredit */
+        $openingCredit = (string) $opening->total_credit;
+
+        $openingBalance = $this->signedAmount($account->type, $openingDebit, $openingCredit);
+
+        $rows = $this->accountLines($account, $from->toDateString(), $to->toDateString())
+            ->orderBy('journal_entries.date')
+            ->orderBy('journal_entries.reference')
+            ->orderBy('transaction_lines.id')
+            ->get([
+                'transaction_lines.id',
+                'transaction_lines.journal_entry_id',
+                'transaction_lines.debit',
+                'transaction_lines.credit',
+                'transaction_lines.description AS line_description',
+                'journal_entries.date',
+                'journal_entries.reference',
+                'journal_entries.description AS entry_description',
+            ]);
+
+        $counterAccounts = $this->counterAccounts($account, array_values(array_unique(
+            $rows->pluck('journal_entry_id')->map(fn ($id): string => (string) $id)->all(),
+        )));
+
+        $balance = $openingBalance;
+        $total = '0.00';
+        $lines = [];
+
+        foreach ($rows as $row) {
+            /** @var numeric-string $debit */
+            $debit = (string) $row->debit;
+            /** @var numeric-string $credit */
+            $credit = (string) $row->credit;
+
+            $amount = $this->signedAmount($account->type, $debit, $credit);
+            $balance = bcadd($balance, $amount, 2);
+            $total = bcadd($total, $amount, 2);
+
+            $lines[] = [
+                'entry_id' => (string) $row->journal_entry_id,
+                'date' => Carbon::parse($row->date)->toDateString(),
+                'reference' => $row->reference,
+                // The line's own text when it has one: on a salary run every
+                // line names its employee, while the entry above says "Payroll".
+                'description' => $row->line_description ?: $row->entry_description,
+                'debit' => $debit,
+                'credit' => $credit,
+                'amount' => $amount,
+                'balance' => $balance,
+                'counterAccounts' => $counterAccounts[(string) $row->journal_entry_id] ?? [],
+            ];
+        }
+
+        return [
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'openingBalance' => $openingBalance,
+            'total' => $total,
+            'closingBalance' => $balance,
+            'lines' => $lines,
+        ];
+    }
+
+    /**
+     * Posted, non-structural lines of one account, optionally bounded by date.
+     */
+    private function accountLines(Account $account, ?string $fromDate, ?string $toDate): QueryBuilder
+    {
+        return DB::table('transaction_lines')
+            ->join('journal_entries', 'journal_entries.id', '=', 'transaction_lines.journal_entry_id')
+            ->where('transaction_lines.account_id', $account->id)
+            ->where('journal_entries.organization_id', $account->organization_id)
+            ->where('journal_entries.is_posted', true)
+            ->where(fn ($query) => $query
+                ->whereNull('journal_entries.type')
+                ->orWhereNotIn('journal_entries.type', self::STRUCTURAL_ENTRY_TYPES))
+            ->when($fromDate, fn ($query, $date) => $query->where('journal_entries.date', '>=', $date))
+            ->when($toDate, fn ($query, $date) => $query->where('journal_entries.date', '<=', $date));
+    }
+
+    /**
+     * The other side of each entry: what a booking on this account was against.
+     *
+     * @param  list<string>  $entryIds
+     * @return array<string, list<string>>
+     */
+    private function counterAccounts(Account $account, array $entryIds): array
+    {
+        if ($entryIds === []) {
+            return [];
+        }
+
+        $rows = DB::table('transaction_lines')
+            ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
+            ->whereIn('transaction_lines.journal_entry_id', $entryIds)
+            ->where('transaction_lines.account_id', '!=', $account->id)
+            ->orderBy('accounts.code')
+            ->get(['transaction_lines.journal_entry_id', 'accounts.code', 'accounts.name']);
+
+        $byEntry = [];
+
+        foreach ($rows as $row) {
+            $entryId = (string) $row->journal_entry_id;
+            $label = $row->code.' '.$row->name;
+
+            if (! in_array($label, $byEntry[$entryId] ?? [], true)) {
+                $byEntry[$entryId][] = $label;
+            }
+        }
+
+        return $byEntry;
+    }
+
+    /**
+     * The start of the fiscal year a date falls into.
+     */
+    private function fiscalYearStart(string $organizationId, Carbon $date): Carbon
+    {
+        $fiscalYear = FiscalYear::query()
+            ->where('organization_id', $organizationId)
+            ->forDate($date->toDateString())
+            ->first();
+
+        if ($fiscalYear) {
+            return Carbon::parse($fiscalYear->start_date)->startOfDay();
+        }
+
+        // Nothing on record, so derive the boundary from the configured start
+        // day — an organization running July to June still gets a balance that
+        // begins where its year does.
+        [$month, $day] = array_pad(explode('-', (string) config('accounting.fiscal_year_start', '01-01')), 2, '01');
+        $start = Carbon::create($date->year, (int) $month, (int) $day)->startOfDay();
+
+        return $start->greaterThan($date) ? $start->subYear() : $start;
+    }
+
+    /**
+     * @param  numeric-string  $debit
+     * @param  numeric-string  $credit
+     * @return numeric-string
+     */
+    private function signedAmount(AccountType $type, string $debit, string $credit): string
+    {
+        return $type->isDebitNormal()
+            ? bcsub($debit, $credit, 2)
+            : bcsub($credit, $debit, 2);
     }
 
     /**
@@ -400,7 +598,7 @@ class LedgerQueryService
      * Constrain a query to accounts whose code starts with one of the given
      * prefixes, or - with $negate - to those that start with none of them.
      *
-     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  QueryBuilder  $query
      * @param  list<string>  $codePrefixes
      */
     private function applyCodePrefixes($query, array $codePrefixes, bool $negate = false): void
@@ -418,7 +616,7 @@ class LedgerQueryService
      * Base query over posted revenue/expense lines of an organization,
      * excluding structural entries. Callers add their own grouping.
      *
-     * @return \Illuminate\Database\Query\Builder
+     * @return QueryBuilder
      */
     private function operationalLines(string $organizationId, string $fromDate, string $toDate)
     {
@@ -461,17 +659,17 @@ class LedgerQueryService
     }
 
     /**
-     * Turn aggregate rows into per-account tooltip items, largest first.
+     * Turn aggregate rows into one entry per account, largest first.
      *
      * Accounts whose net movement is zero are dropped: a booking and its
      * reversal in the same month carry no information for the reader.
      *
      * @param  Collection<int, \stdClass>  $rows
-     * @return list<array{label: string, amount: string, overflow?: int}>
+     * @return list<array{uuid: string, code: string, name: string, amount: string}>
      */
-    private function accountItems(Collection $rows, AccountType $type): array
+    private function accountMovements(Collection $rows, AccountType $type): array
     {
-        $items = $rows->where('account_type', $type->value)
+        return array_values($rows->where('account_type', $type->value)
             ->map(function ($row) use ($type) {
                 /** @var numeric-string $debit */
                 $debit = (string) $row->total_debit;
@@ -479,7 +677,10 @@ class LedgerQueryService
                 $credit = (string) $row->total_credit;
 
                 return [
-                    'label' => $row->code.' '.$row->name,
+                    // The public uuid, because that is what route binding accepts.
+                    'uuid' => (string) $row->account_uuid,
+                    'code' => (string) $row->code,
+                    'name' => (string) $row->name,
                     'amount' => $type->isDebitNormal()
                         ? bcsub($debit, $credit, 2)
                         : bcsub($credit, $debit, 2),
@@ -492,7 +693,23 @@ class LedgerQueryService
                 return bccomp($amount, '0', 2) === 0;
             })
             ->sortByDesc(fn (array $item) => (float) $item['amount'])
-            ->values();
+            ->values()
+            ->all());
+    }
+
+    /**
+     * Fold a month's accounts into the tooltip shape: a label per account, and
+     * one row standing in for whatever did not fit.
+     *
+     * @param  list<array{uuid: string, code: string, name: string, amount: string}>  $movements
+     * @return list<array{label: string, amount: string, overflow?: int}>
+     */
+    private function cappedAccountItems(array $movements): array
+    {
+        $items = collect($movements)->map(fn (array $movement): array => [
+            'label' => $movement['code'].' '.$movement['name'],
+            'amount' => $movement['amount'],
+        ]);
 
         if ($items->count() <= self::TOOLTIP_ITEM_LIMIT) {
             return array_values($items->all());

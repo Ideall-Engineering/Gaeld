@@ -2,6 +2,13 @@ import { z } from 'zod'
 
 const moneyValue = z.union([z.number(), z.string()])
 
+const accountMovement = z.object({
+  uuid: z.string(),
+  code: z.string(),
+  name: z.string(),
+  amount: moneyValue,
+}).passthrough()
+
 const dashboardSchema = z.object({
   revenue: moneyValue.optional(),
   expenses: moneyValue.optional(),
@@ -33,6 +40,12 @@ const dashboardSchema = z.object({
     forecastItems: z.array(z.array(z.string())).optional(),
   }).passthrough().optional(),
   hasActivity: z.boolean().optional(),
+  // PHP keys these arrays by month number, so they arrive as objects "1".."12".
+  monthlyAccounts: z.object({
+    revenue: z.record(z.string(), z.array(accountMovement)).optional(),
+    expenses: z.record(z.string(), z.array(accountMovement)).optional(),
+  }).passthrough().optional(),
+  displayMonth: z.coerce.number().optional(),
   liquidityForecast: z.object({
     availableFunds: moneyValue.optional(),
     liquidAssets: moneyValue.optional(),
@@ -146,6 +159,8 @@ const DASHBOARD_FALLBACK = {
     forecastItems: [],
   },
   hasActivity: false,
+  monthlyAccounts: { revenue: {}, expenses: {} },
+  displayMonth: new Date().getMonth() + 1,
   liquidityForecast: null,
   pendingOcrScans: 0,
   displayYear: new Date().getFullYear(),
