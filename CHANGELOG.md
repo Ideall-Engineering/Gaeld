@@ -43,6 +43,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot drift between them.
 
 ### Fixed
+- **Rejected forms:** with debug off — the way production runs — the catch-all
+  exception renderer swallowed validation errors and answered every rejected
+  form with a 500 page instead of the field errors, from a wrong password on
+  the login screen to a too-short one on the invitation sign-up.
+- **Invitations:** accepting one is now a single transaction, so a join that
+  fails no longer leaves an account behind that belongs to no organization
+  while the invitation counts as spent.
+- **Employee role:** a payroll record that disappeared, changed address, or
+  gained a twin between the invitation and the click on its link cost the
+  invited person their membership — a missing record produced a 404 page, two
+  matching ones a 500. The link is now left unset and logged, and the
+  membership stands; an admin can still assign the record on the members
+  screen.
 - **Invitations:** an invited person without an account landed on the login
   screen with no way forward. The invitation link now leads to a password form
   that creates the account for the invited address and joins the organization,

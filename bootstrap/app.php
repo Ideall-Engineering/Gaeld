@@ -21,6 +21,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -213,7 +214,16 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->renderable(function (Throwable $e) {
+            // This callback runs before Laravel turns the handful of
+            // exceptions that carry their own response into one: a failed
+            // validation belongs back on the form with its field errors, and
+            // an exception wrapping a ready-made response belongs nowhere
+            // near a 500 page. Swallowing them here turned every rejected
+            // form in production — a wrong password on the login screen, a
+            // too-short one on the invitation sign-up — into a server error.
             if ($e instanceof AuthenticationException
+                || $e instanceof ValidationException
+                || $e instanceof HttpResponseException
                 || $e instanceof HttpExceptionInterface
                 || request()->is('api/*')
                 || request()->expectsJson()

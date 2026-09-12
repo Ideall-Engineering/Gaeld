@@ -16,6 +16,7 @@ use App\Domains\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 use Tests\Traits\WithAuthenticatedOrganization;
 
@@ -88,6 +89,87 @@ class EmployeeSelfServiceAccessTest extends TestCase
 
         $this->assertSame($invitedUser->id, $payrollRecord->refresh()->user_id);
         $this->assertSame(Role::Employee->value, $this->organization->users()->find($invitedUser->id)?->pivot->role);
+    }
+
+    public function test_membership_survives_a_payroll_record_that_vanished_after_the_invitation(): void
+    {
+        Notification::fake();
+        $invitedUser = User::factory()->create(['email' => 'gone@example.test']);
+        $payrollRecord = Employee::factory()->create([
+            'organization_id' => $this->organization->id,
+            'email' => $invitedUser->email,
+        ]);
+
+        $invitation = app(InvitationService::class)->invite(
+            $this->organization,
+            $invitedUser->email,
+            Role::Employee,
+            $this->user,
+        );
+
+        // invite() insists on the record; the window it cannot cover is the one
+        // between then and the click on the link in the mail.
+        $payrollRecord->delete();
+
+        $this->actingAs($invitedUser);
+        app(InvitationService::class)->accept($invitation->plain_token);
+
+        $this->assertSame(
+            Role::Employee->value,
+            $this->organization->users()->find($invitedUser->id)?->pivot->role,
+            'The link is a convenience; losing it must not cost the membership.',
+        );
+    }
+
+    public function test_membership_survives_two_payroll_records_for_the_same_address(): void
+    {
+        Notification::fake();
+        $invitedUser = User::factory()->create(['email' => 'twin@example.test']);
+        Employee::factory()->create([
+            'organization_id' => $this->organization->id,
+            'email' => $invitedUser->email,
+        ]);
+
+        $invitation = app(InvitationService::class)->invite(
+            $this->organization,
+            $invitedUser->email,
+            Role::Employee,
+            $this->user,
+        );
+
+        Employee::factory()->create([
+            'organization_id' => $this->organization->id,
+            'email' => $invitedUser->email,
+        ]);
+
+        $this->actingAs($invitedUser);
+        app(InvitationService::class)->accept($invitation->plain_token);
+
+        $this->assertSame(
+            Role::Employee->value,
+            $this->organization->users()->find($invitedUser->id)?->pivot->role,
+        );
+        $this->assertSame(
+            0,
+            Employee::query()->where('user_id', $invitedUser->id)->count(),
+            'Guessing which twin to claim is worse than claiming neither.',
+        );
+    }
+
+    public function test_an_explicit_payroll_record_already_taken_is_refused(): void
+    {
+        $member = User::factory()->create(['email' => 'late@example.test']);
+        app(OrganizationService::class)->addMember($this->organization, $member, Role::Member->value);
+
+        // $this->employee already belongs to the employee set up in setUp().
+        $this->expectException(ValidationException::class);
+
+        app(OrganizationService::class)->changeMemberRole(
+            $this->organization,
+            $member,
+            Role::Employee,
+            $this->employee->refresh(),
+        );
     }
 
     public function test_existing_member_can_be_linked_to_an_explicit_payroll_record(): void

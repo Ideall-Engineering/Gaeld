@@ -13,6 +13,7 @@ use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Users\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -162,20 +163,47 @@ class OrganizationService
             return;
         }
 
-        $employee = $selectedEmployee ?? Employee::query()
+        // An admin who names a record on the members screen gets told when it
+        // is not theirs to hand out — 'employee_id' is a field they can see.
+        if ($selectedEmployee !== null) {
+            if ($selectedEmployee->organization_id !== $organization->id
+                || ($selectedEmployee->user_id !== null && $selectedEmployee->user_id !== $user->id)) {
+                throw ValidationException::withMessages([
+                    'employee_id' => [__('app.employee_already_linked')],
+                ]);
+            }
+
+            $selectedEmployee->update(['user_id' => $user->id]);
+
+            return;
+        }
+
+        // Nobody named one, so the address decides. Accepting an invitation
+        // comes through here, and the person doing it cannot create a payroll
+        // record or merge two of them — so a missing or ambiguous match costs
+        // them the link, never the membership. InvitationService::invite()
+        // already insists on exactly one unlinked record at invite time; this
+        // is the window after that, in which the record can be deleted,
+        // re-addressed, linked elsewhere, or gain a twin.
+        $candidates = Employee::query()
             ->where('organization_id', $organization->id)
             ->whereRaw('LOWER(email) = ?', [mb_strtolower($user->email)])
             ->where(function ($query) use ($user): void {
                 $query->whereNull('user_id')->orWhere('user_id', $user->id);
             })
-            ->sole();
+            ->limit(2)
+            ->get();
 
-        if ($employee->organization_id !== $organization->id || $employee->user_id !== null) {
-            throw ValidationException::withMessages([
-                'employee_id' => [__('app.employee_already_linked')],
+        if ($candidates->count() !== 1) {
+            Log::warning('Employee role left without an employee record', [
+                'organization_id' => $organization->id,
+                'user_id' => $user->id,
+                'candidates' => $candidates->count(),
             ]);
+
+            return;
         }
 
-        $employee->update(['user_id' => $user->id]);
+        $candidates->first()->update(['user_id' => $user->id]);
     }
 }

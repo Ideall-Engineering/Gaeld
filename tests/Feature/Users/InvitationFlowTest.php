@@ -5,11 +5,13 @@ namespace Tests\Feature\Users;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Models\OrganizationInvitation;
 use App\Domains\Organizations\Notifications\InvitationNotification;
+use App\Domains\Organizations\Services\OrganizationService;
 use App\Domains\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Tests\TestCase;
 use Tests\Traits\WithActiveSubscription;
 use Tests\Traits\WithOrganizationPermissions;
@@ -188,6 +190,10 @@ class InvitationFlowTest extends TestCase
 
     public function test_registration_rejects_a_weak_password(): void
     {
+        // Production runs with debug off, where a rejected form used to come
+        // back as a 500 page instead of as field errors.
+        config(['app.debug' => false]);
+
         $plainToken = $this->createInvitation('new@example.com');
 
         $this->post("/invitations/{$plainToken}/register", [
@@ -197,6 +203,53 @@ class InvitationFlowTest extends TestCase
         ])->assertSessionHasErrors('password');
 
         $this->assertDatabaseMissing('users', ['email' => 'new@example.com']);
+    }
+
+    public function test_an_invited_person_is_sent_to_set_up_an_enforced_second_factor(): void
+    {
+        Notification::fake();
+
+        $this->organization->update(['require_two_factor' => true]);
+
+        $plainToken = $this->createInvitation('new@example.com', 'accountant');
+
+        $this->post("/invitations/{$plainToken}/register", [
+            'name' => 'New Accountant',
+            'password' => 'Correct-Horse-9-Battery',
+            'password_confirmation' => 'Correct-Horse-9-Battery',
+        ])->assertRedirect('/dashboard');
+
+        // The account exists and is signed in, so the 2FA requirement is the
+        // profile page's business — not an error on the way there.
+        $this->get('/dashboard')->assertRedirect(route('profile'));
+    }
+
+    public function test_a_join_that_fails_leaves_no_half_made_account(): void
+    {
+        config(['app.debug' => false]);
+
+        $plainToken = $this->createInvitation('rollback@example.com');
+
+        $this->swap(OrganizationService::class, new class extends OrganizationService
+        {
+            public function addMember(Organization $organization, User $user, string $role = 'member'): void
+            {
+                throw new RuntimeException('joining failed');
+            }
+        });
+
+        $this->post("/invitations/{$plainToken}/register", [
+            'name' => 'Half Made',
+            'password' => 'Correct-Horse-9-Battery',
+            'password_confirmation' => 'Correct-Horse-9-Battery',
+        ])->assertStatus(500);
+
+        $this->assertDatabaseMissing('users', ['email' => 'rollback@example.com']);
+        $this->assertNull(
+            OrganizationInvitation::where('email', 'rollback@example.com')->firstOrFail()->accepted_at,
+            'A rolled-back join must leave the invitation usable.',
+        );
+        $this->assertGuest();
     }
 
     public function test_registration_ignores_an_email_supplied_by_the_visitor(): void

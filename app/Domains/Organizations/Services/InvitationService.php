@@ -9,6 +9,7 @@ use App\Domains\Organizations\Notifications\InvitationNotification;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Users\Models\User;
 use App\Support\Contracts\OrganizationQuotaResolver;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -131,13 +132,18 @@ class InvitationService
             return $invitation->organization;
         }
 
-        $this->organizationService->addMember(
-            $invitation->organization,
-            $user,
-            $invitation->role,
-        );
+        // Joining is several writes — the pivot row, the scoped role, the
+        // payroll link — and a half-joined member is worse than none: the
+        // invitation would already be spent.
+        DB::transaction(function () use ($invitation, $user): void {
+            $this->organizationService->addMember(
+                $invitation->organization,
+                $user,
+                $invitation->role,
+            );
 
-        $invitation->update(['accepted_at' => now()]);
+            $invitation->update(['accepted_at' => now()]);
+        });
 
         return $invitation->organization;
     }

@@ -15,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
@@ -180,18 +181,32 @@ class InvitationController extends Controller
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
-        $user = $userService->create(new CreateUserData(
-            name: $validated['name'],
-            email: $invitation->email,
-            password: $validated['password'],
-            locale: $invitation->organization->locale ?: app()->getLocale(),
-            emailVerifiedAt: now(),
-        ));
+        // The account and the membership stand or fall together. Creating the
+        // one without the other used to leave an account that belongs to no
+        // organization, holding a password its owner chose and an invitation
+        // already marked as spent.
+        [$user, $organization] = DB::transaction(function () use ($validated, $invitation, $token, $userService) {
+            $user = $userService->create(new CreateUserData(
+                name: $validated['name'],
+                email: $invitation->email,
+                password: $validated['password'],
+                locale: $invitation->organization->locale ?: app()->getLocale(),
+                emailVerifiedAt: now(),
+            ));
 
-        // They join an organization somebody else already set up, so the
-        // owner-facing setup wizard has nothing left to ask them.
-        $user->forceFill(['onboarding_completed_at' => now()])->save();
+            // They join an organization somebody else already set up, so the
+            // owner-facing setup wizard has nothing left to ask them.
+            $user->forceFill(['onboarding_completed_at' => now()])->save();
 
+            // accept() skips its own-account check while nobody is signed in,
+            // which is the case here — the address comes off the token and the
+            // account for it was just created two lines up.
+            return [$user, $this->invitationService->accept($token)];
+        });
+
+        // Outside the transaction: a listener must not see an account that a
+        // rollback is about to take away, and the session is not the
+        // database's business.
         event(new Registered($user));
 
         Auth::login($user);
@@ -200,8 +215,6 @@ class InvitationController extends Controller
         // From here on the account's own language applies, including the
         // welcome message flashed below.
         App::setLocale($user->locale);
-
-        $organization = $this->invitationService->accept($token);
 
         $user->switchOrganization($organization);
 
