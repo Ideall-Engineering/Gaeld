@@ -6,6 +6,7 @@ use App\Domains\Api\Enums\TokenType;
 use App\Domains\Api\Models\PersonalAccessToken;
 use App\Domains\Api\Requests\StoreOrganizationTokenSettingsRequest;
 use App\Domains\Api\Requests\StorePersonalTokenSettingsRequest;
+use App\Domains\Api\Support\GrantedTokenAbilities;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Api\TokenPermissionMap;
@@ -64,7 +65,7 @@ class TokenSettingsController extends Controller
             'personalTokens' => $personalTokens,
             'orgTokens' => $orgTokens,
             'canManageOrgTokens' => $canManageOrgTokens,
-            'abilities' => TokenPermissionMap::abilities(),
+            'abilities' => GrantedTokenAbilities::for($request->user()),
             'apiBaseUrl' => url('/api/v1'),
             'docsUrl' => ApiInfoController::DOCUMENTATION_URL,
         ]);

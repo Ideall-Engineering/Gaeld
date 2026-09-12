@@ -1153,7 +1153,7 @@ return [
     'token_name_placeholder' => 'es. Pipeline CI/CD',
     'expiration' => 'Scadenza',
     'permissions' => 'Permessi',
-    'no_selection_all_permissions' => 'Lasciare vuoto per accesso completo.',
+    'no_selection_all_permissions' => 'Lascia vuoto per tutto ciò che il tuo ruolo consente.',
     'no_personal_tokens' => 'Nessun token personale.',
     'no_org_tokens' => 'Nessun token organizzazione.',
     'token_created' => 'Token API creato con successo.',

@@ -62,6 +62,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot drift between them.
 
 ### Fixed
+- **API token abilities:** the form offered the whole ability catalogue to every
+  role, so an accountant could tick `organization.delete`. On a personal token
+  that granted nothing — the policy still decides — but it promised something
+  the first call would refuse. On an organization token the ability *is* the
+  gate, and an admin, who holds every permission except `organization.delete`,
+  could write exactly that one into a credential. Creation now accepts only
+  abilities the creator holds, on both screens and both API endpoints; the
+  wildcard still means "everything I may do".
 - **Invoice payment reference:** asking for a draft's PDF built a QR bill, which
   assigned and stored a payment reference derived from the invoice number a
   draft does not have — twenty zeros. Because `ensureQrReference()` keeps any

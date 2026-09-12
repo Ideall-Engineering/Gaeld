@@ -1184,7 +1184,7 @@ return [
     'token_name' => 'Nom du jeton',
     'expiration' => 'Expiration',
     'permissions' => 'Permissions',
-    'no_selection_all_permissions' => 'Laisser vide pour un accès complet.',
+    'no_selection_all_permissions' => 'Laisser vide pour tout ce que votre rôle permet.',
     'no_personal_tokens' => 'Aucun jeton personnel.',
     'no_org_tokens' => 'Aucun jeton d\'organisation.',
     'token_created' => 'Jeton API créé avec succès.',

@@ -1268,7 +1268,7 @@ return [
     'token_name_placeholder' => 'e.g. CI/CD Pipeline',
     'expiration' => 'Expiration',
     'permissions' => 'Permissions',
-    'no_selection_all_permissions' => 'Leave empty for full access.',
+    'no_selection_all_permissions' => 'Leave empty for everything your role allows.',
     'no_personal_tokens' => 'No personal tokens yet.',
     'no_org_tokens' => 'No organization tokens yet.',
     'token_created' => 'API token created successfully.',

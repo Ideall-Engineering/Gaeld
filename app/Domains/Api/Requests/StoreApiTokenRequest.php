@@ -2,7 +2,7 @@
 
 namespace App\Domains\Api\Requests;
 
-use App\Http\Middleware\Api\TokenPermissionMap;
+use App\Domains\Api\Support\GrantedTokenAbilities;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -24,7 +24,8 @@ class StoreApiTokenRequest extends FormRequest
         return [
             'name' => 'required|string|max:255',
             'abilities' => 'array',
-            'abilities.*' => ['string', Rule::in(TokenPermissionMap::acceptedAbilities())],
+            // Narrowed to what the creator holds — see GrantedTokenAbilities.
+            'abilities.*' => ['string', Rule::in(GrantedTokenAbilities::accepted($this->user()))],
             'expires_in_days' => 'nullable|integer|min:1|max:365',
         ];
     }

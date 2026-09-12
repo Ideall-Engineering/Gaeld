@@ -68,6 +68,7 @@
     ],
     "wildcard": "*",
     "empty_selection": "An omitted or empty abilities array creates a wildcard token.",
+    "restricted_to_creator": "Token creation accepts only abilities the creating user holds; GET /api/v1/meta/abilities still lists the whole vocabulary. On a personal token the ability narrows and the policy still decides, so a wildcard means \"everything this user may do\". On an organization token the ability is the whole gate, which is why a creator cannot write one they do not hold themselves — an admin holds every permission except organization.delete.",
     "legacy_aliases": {
       "customers:read": [
         "contacts.view"

@@ -1190,7 +1190,7 @@ return [
     'token_name_placeholder' => 'z. B. CI/CD-Pipeline',
     'expiration' => 'Ablauf',
     'permissions' => 'Berechtigungen',
-    'no_selection_all_permissions' => 'Leer lassen für vollen Zugriff.',
+    'no_selection_all_permissions' => 'Leer lassen für alles, was Ihre Rolle erlaubt.',
     'no_personal_tokens' => 'Noch keine persönlichen Tokens.',
     'no_org_tokens' => 'Noch keine Organisations-Tokens.',
     'token_created' => 'API-Token erfolgreich erstellt.',

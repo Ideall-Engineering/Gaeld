@@ -9,6 +9,7 @@ use App\Domains\Api\Models\Webhook;
 use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Tests\TestCase;
 use Tests\Traits\WithAuthenticatedOrganization;
 
@@ -70,7 +71,10 @@ class ApiTokenManagementTest extends TestCase
                 ->withSession(['current_organization_id' => $this->organization->id])
                 ->post('/settings/api-tokens/personal', [
                     'name' => "Token for {$role}",
-                    'abilities' => [Permission::ContactsView->value],
+                    // The wildcard, because the point here is reachability: the
+                    // abilities on offer differ per role, and an employee holds
+                    // no contacts permission at all.
+                    'abilities' => ['*'],
                 ])
                 ->assertRedirect();
 
@@ -109,6 +113,101 @@ class ApiTokenManagementTest extends TestCase
             ->assertForbidden();
 
         $this->assertDatabaseMissing('personal_access_tokens', ['name' => 'Sneaky org token']);
+    }
+
+    public function test_the_form_offers_only_the_abilities_the_role_holds(): void
+    {
+        $accountant = $this->memberWithRole('accountant');
+
+        $this->actingAs($accountant)
+            ->withSession(['current_organization_id' => $this->organization->id])
+            ->get('/settings/api-tokens')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('abilities', fn (Collection $abilities) => $abilities->contains(Permission::AccountingView->value)
+                    && ! $abilities->contains(Permission::OrganizationDelete->value)
+                    && ! $abilities->contains(Permission::OrganizationManageUsers->value))
+                ->etc());
+    }
+
+    public function test_an_ability_the_role_does_not_hold_is_refused(): void
+    {
+        $accountant = $this->memberWithRole('accountant');
+
+        $this->actingAs($accountant)
+            ->withSession(['current_organization_id' => $this->organization->id])
+            ->post('/settings/api-tokens/personal', [
+                'name' => 'Too much',
+                'abilities' => [Permission::OrganizationDelete->value],
+            ])
+            ->assertSessionHasErrors('abilities.0');
+
+        $this->assertDatabaseMissing('personal_access_tokens', ['name' => 'Too much']);
+    }
+
+    public function test_the_wildcard_stays_available(): void
+    {
+        $accountant = $this->memberWithRole('accountant');
+
+        $this->actingAs($accountant)
+            ->withSession(['current_organization_id' => $this->organization->id])
+            ->post('/settings/api-tokens/personal', [
+                'name' => 'Everything I may do',
+                'abilities' => ['*'],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('personal_access_tokens', ['name' => 'Everything I may do']);
+    }
+
+    public function test_an_admin_cannot_mint_an_organization_token_carrying_what_their_role_withholds(): void
+    {
+        // The admin role is every permission except organization.delete, and on
+        // an organization token the ability is the whole gate — the policy is
+        // bypassed by design. Without this restriction an admin could write the
+        // one permission their role withholds into a credential.
+        $admin = $this->memberWithRole('admin');
+
+        $this->actingAs($admin)
+            ->withSession(['current_organization_id' => $this->organization->id])
+            ->post('/settings/api-tokens/organization', [
+                'name' => 'Org token with delete',
+                'abilities' => [Permission::OrganizationDelete->value],
+            ])
+            ->assertSessionHasErrors('abilities.0');
+
+        $this->assertDatabaseMissing('personal_access_tokens', ['name' => 'Org token with delete']);
+
+        // What the admin does hold still goes through.
+        $this->actingAs($admin)
+            ->withSession(['current_organization_id' => $this->organization->id])
+            ->post('/settings/api-tokens/organization', [
+                'name' => 'Org token within the role',
+                'abilities' => [Permission::AccountingView->value],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('personal_access_tokens', ['name' => 'Org token within the role']);
+    }
+
+    public function test_the_api_applies_the_same_restriction(): void
+    {
+        $accountant = $this->memberWithRole('accountant');
+        $result = $accountant->createToken('api-restriction-test', ['*']);
+        $result->accessToken->update([
+            'organization_id' => $this->organization->id,
+            'type' => TokenType::Personal,
+        ]);
+
+        $this->withToken($result->plainTextToken)
+            ->postJson('/api/v1/tokens', [
+                'name' => 'Too much over the API',
+                'abilities' => [Permission::OrganizationDelete->value],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'validation_error');
+
+        $this->assertDatabaseMissing('personal_access_tokens', ['name' => 'Too much over the API']);
     }
 
     private function memberWithRole(string $role): User
