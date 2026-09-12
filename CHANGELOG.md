@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Two UI switches:** `FEATURE_COOKIE_CONSENT` and `FEATURE_QUICK_RECEIPT` hide
+  the cookie consent banner with its re-open button, and the floating
+  quick-receipt camera button, for installations that do not want them. Both
+  default to on, so nothing changes unless an installation says so.
 - **VAT on the journal line:** record VAT per transaction line instead of per
   entry, through the web form, the accounting API, and the Banana journal
   import alike.

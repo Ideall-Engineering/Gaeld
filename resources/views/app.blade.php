@@ -29,7 +29,9 @@
         </script>
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
-        @vite('resources/js/cookieConsent.js')
+        @if (config('features.cookie_consent'))
+            @vite('resources/js/cookieConsent.js')
+        @endif
         @include('partials.google-analytics')
         @inertiaHead
 

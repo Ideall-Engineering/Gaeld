@@ -60,6 +60,23 @@ class FeatureFlagTest extends TestCase
         $this->assertArrayHasKey('api_access', $flags);
     }
 
+    public function test_cookie_consent_bundle_is_left_out_when_the_flag_is_off(): void
+    {
+        config(['features.cookie_consent' => true]);
+        $this->get('/login')->assertSee('cookieConsent', escape: false);
+
+        config(['features.cookie_consent' => false]);
+        $this->get('/login')->assertDontSee('cookieConsent', escape: false);
+    }
+
+    public function test_quick_receipt_flag_reaches_the_frontend(): void
+    {
+        config(['features.quick_receipt' => false]);
+
+        $this->get('/login')->assertInertia(fn ($page) => $page
+            ->where('features.quick_receipt', false));
+    }
+
     public function test_bank_import_enabled_by_default(): void
     {
         $this->assertTrue(FeatureFlag::enabled('bank_import'));

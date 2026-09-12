@@ -18,10 +18,14 @@ const usesMonthlyLimit = computed(() => monthlyLimit.value !== -1)
 const displayedScans = computed(() => usesMonthlyLimit.value ? scansThisMonth.value : scansToday.value)
 const displayedLimit = computed(() => usesMonthlyLimit.value ? monthlyLimit.value : dailyLimit.value)
 const limitReached = computed(() => displayedLimit.value !== -1 && displayedScans.value >= displayedLimit.value)
+
+// Gated here rather than at each of the four call sites, so a screen that picks
+// the button up later inherits the switch.
+const enabled = computed(() => page.props.features?.quick_receipt ?? true)
 </script>
 
 <template>
-  <div>
+  <div v-if="enabled">
     <button
       :title="limitReached ? t(usesMonthlyLimit ? 'ocr_monthly_limit_reached' : 'ocr_daily_limit_reached', { limit: displayedLimit }) : t('quick_receipt')"
       :disabled="limitReached"

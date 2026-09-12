@@ -34,6 +34,16 @@ return [
     'assets' => env('FEATURE_ASSETS', true),
     'payroll' => env('FEATURE_PAYROLL', true),
 
+    // Cookie consent banner and the floating button that reopens its
+    // preferences. An installation that sets only technically necessary cookies
+    // — the session and the CSRF token — needs no consent for them, and then
+    // the banner asks a question it does not have to ask.
+    'cookie_consent' => env('FEATURE_COOKIE_CONSENT', true),
+
+    // The floating camera button that scans a receipt straight into an expense,
+    // shown on the dashboard and the expense screens.
+    'quick_receipt' => env('FEATURE_QUICK_RECEIPT', true),
+
     // Integration features available in Community and SaaS editions
     'api_access' => env('FEATURE_API_ACCESS', true),
 
