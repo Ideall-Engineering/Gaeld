@@ -3,6 +3,7 @@
 namespace App\Domains\Invoicing\Controllers;
 
 use App\Domains\Invoicing\Actions\GenerateQrInvoicePdfAction;
+use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\QrBillValidationException;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Support\QrBillValidationMessageFormatter;
@@ -63,6 +64,38 @@ class InvoiceDocumentController extends Controller
         );
     }
 
+    /**
+     * Show what a draft will look like before it is finalised and booked.
+     *
+     * Drafts only: the document is stamped as a draft and carries no payment
+     * part, which would be wrong on anything already issued. A finalised
+     * invoice has downloadQrPdf() instead.
+     *
+     * Needs no QR-IBAN, because there is no payment part to validate — so the
+     * preview also works before a bank account has been set up.
+     */
+    public function previewPdf(
+        Invoice $invoice,
+        GenerateQrInvoicePdfAction $action,
+        CurrentOrganization $currentOrg,
+    ): HttpResponse|RedirectResponse {
+        $this->authorize('view', $invoice);
+
+        if ($invoice->status !== InvoiceStatus::Draft) {
+            return $this->backWithError(__('app.invoice_preview_draft_only'));
+        }
+
+        $organization = $currentOrg->get();
+        $locale = $organization->locale ?? app()->getLocale();
+
+        $pdf = $action->execute($invoice, $organization, $locale, preview: true);
+
+        return new HttpResponse($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="invoice-draft-'.$invoice->id.'.pdf"',
+        ]);
+    }
+
     public function downloadQrPdf(
         Invoice $invoice,
         GenerateQrInvoicePdfAction $action,
@@ -70,6 +103,11 @@ class InvoiceDocumentController extends Controller
         QrBillValidationMessageFormatter $messageFormatter,
     ): HttpResponse|RedirectResponse {
         $this->authorize('view', $invoice);
+
+        // A draft has no number and no payment reference; previewPdf() serves it.
+        if ($invoice->status === InvoiceStatus::Draft) {
+            return $this->backWithError(__('app.invoice_pdf_needs_finalising'));
+        }
 
         $organization = $currentOrg->get();
 

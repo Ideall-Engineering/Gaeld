@@ -2281,9 +2281,38 @@
       },
       "response_422": {
         "message": "string",
-        "code": "qr_iban_required|qr_bill_invalid"
+        "code": "qr_iban_required|qr_bill_invalid|invoice_not_finalised"
       },
-      "notes": "Returns the invoice content and Swiss QR payment slip. The token-authenticated endpoint does not require a browser session."
+      "notes": "Returns the invoice content and Swiss QR payment slip. The token-authenticated endpoint does not require a browser session. A draft is refused with code invoice_not_finalised: it has no number and no payment reference. Use api.invoices.pdf.preview for drafts."
+    },
+    {
+      "name": "api.invoices.pdf.preview",
+      "method": "GET",
+      "path": "/api/v1/invoices/{invoice}/pdf/preview",
+      "controller": "InvoicePdfPreviewApiController@__invoke",
+      "auth_required": true,
+      "abilities_required": [
+        "invoicing.view"
+      ],
+      "policy": "view on Invoice",
+      "request": {
+        "params": {
+          "invoice": "uuid"
+        }
+      },
+      "response_200": {
+        "content_type": "application/pdf",
+        "body": "PDF bytes"
+      },
+      "response_404": {
+        "message": "Resource not found.",
+        "code": "not_found"
+      },
+      "response_422": {
+        "message": "string",
+        "code": "invoice_not_draft"
+      },
+      "notes": "Drafts only. The document is stamped as a draft and carries no QR payment part, because the payment reference is derived from the invoice number and therefore cannot exist yet. Writes nothing, needs no QR-IBAN, and is served inline."
     },
     {
       "name": "api.expenses.approve",

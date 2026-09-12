@@ -188,6 +188,19 @@ const statusFilters = computed(() => [
             <Eye class="h-4 w-4" />
           </Button>
           <Button
+            v-if="row.status === 'draft'"
+            as="a"
+            :href="`/invoices/${row.id}/pdf-preview`"
+            target="_blank"
+            variant="ghost"
+            size="icon"
+            :aria-label="t('preview_draft')"
+            :title="t('preview_draft')"
+            @click.stop
+          >
+            <FileText class="h-4 w-4" />
+          </Button>
+          <Button
             v-if="row.status !== 'draft' && row.status !== 'cancelled'"
             as="a"
             :href="`/invoices/${row.id}/qr-pdf`"

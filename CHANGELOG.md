@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Draft invoice preview:** see what an invoice will look like before it is
+  finalised and booked — on the invoice screen, in the list, and over the API at
+  `GET /api/v1/invoices/{invoice}/pdf/preview`. The document is stamped as a
+  draft and deliberately carries no Swiss QR payment part, so nobody can pay a
+  document whose payment reference does not exist yet; it needs no QR-IBAN and
+  writes nothing. `…/pdf` and the web download now refuse a draft outright and
+  name the preview instead.
 - **Month by account on the dashboard:** a card listing what each expense and
   revenue account carried in a chosen month, with arrows to page through the
   year and no request per step — the year arrives with the page. Following an
@@ -54,6 +61,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot drift between them.
 
 ### Fixed
+- **Invoice payment reference:** asking for a draft's PDF built a QR bill, which
+  assigned and stored a payment reference derived from the invoice number a
+  draft does not have — twenty zeros. Because `ensureQrReference()` keeps any
+  reference it finds, the finalised invoice then carried one that encodes no
+  number, and payments against it could not be matched automatically. No
+  reference is generated without a number, and the endpoint that used to do this
+  refuses drafts.
 - **Personal API tokens:** the token page demanded permission to edit the
   organization, so every role below admin — an accountant included — had no way
   to create a credential of its own, although deleting one never needed that

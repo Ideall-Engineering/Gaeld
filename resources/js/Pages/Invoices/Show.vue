@@ -17,7 +17,7 @@ import FormSelect from '@/Components/UI/FormSelect.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 import { ref, computed } from 'vue'
-import { Pencil, Trash2, Copy, Download, Paperclip, Ban, FileMinus, Bell, Mail, Eye, X, RotateCcw } from 'lucide-vue-next'
+import { Pencil, Trash2, Copy, Download, Paperclip, Ban, FileMinus, Bell, Mail, Eye, X, RotateCcw, FileText } from 'lucide-vue-next'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import HelpText from '@/Components/HelpText.vue'
 
@@ -270,6 +270,17 @@ const bankAccountOptions = computed(() =>
             @click="openPaymentModal"
           >
             {{ t('record_payment') }}
+          </Button>
+          <Button
+            v-if="invoice?.status === 'draft'"
+            as="a"
+            :href="`/invoices/${invoice.id}/pdf-preview`"
+            target="_blank"
+            variant="outline"
+            size="sm"
+          >
+            <FileText class="h-4 w-4 sm:mr-1" />
+            <span class="hidden sm:inline">{{ t('preview_draft') }}</span>
           </Button>
           <Button
             v-if="hasQrIban && invoice?.status !== 'draft' && invoice?.status !== 'cancelled'"

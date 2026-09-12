@@ -9,6 +9,7 @@ use App\Domains\Api\Controllers\ContactApiController;
 use App\Domains\Api\Controllers\ExpenseApiController;
 use App\Domains\Api\Controllers\InvoiceApiController;
 use App\Domains\Api\Controllers\InvoicePdfApiController;
+use App\Domains\Api\Controllers\InvoicePdfPreviewApiController;
 use App\Domains\Api\Controllers\JournalEntryApiController;
 use App\Domains\Api\Controllers\OrgTokenController;
 use App\Domains\Api\Controllers\WebhookApiController;
@@ -69,6 +70,7 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
     Route::post('/invoices/{invoice}/reminder', [InvoiceApiController::class, 'reminder'])->name('api.invoices.reminder');
     Route::post('/invoices/{invoice}/credit-note', [InvoiceApiController::class, 'creditNote'])->name('api.invoices.credit-note');
     Route::get('/invoices/{invoice}/pdf', InvoicePdfApiController::class)->name('api.invoices.pdf');
+    Route::get('/invoices/{invoice}/pdf/preview', InvoicePdfPreviewApiController::class)->name('api.invoices.pdf.preview');
 
     // Expenses
     Route::apiResource('expenses', ExpenseApiController::class)->names([

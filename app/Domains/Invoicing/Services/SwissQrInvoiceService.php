@@ -92,6 +92,14 @@ class SwissQrInvoiceService
             return;
         }
 
+        // The reference encodes the invoice number, so without one there is
+        // nothing to encode. Generating anyway produced a reference of twenty
+        // zeros that stuck — this method returns early once a reference exists,
+        // so the finalisation would never have corrected it.
+        if (blank($invoice->number)) {
+            return;
+        }
+
         $customerIdentification = str_pad(
             (string) ($invoice->customer_id ? crc32((string) $invoice->customer_id) % 100000 : 0),
             5,

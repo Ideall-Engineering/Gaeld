@@ -3,6 +3,7 @@
 namespace App\Domains\Api\Controllers;
 
 use App\Domains\Invoicing\Actions\GenerateQrInvoicePdfAction;
+use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\QrBillValidationException;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Support\QrBillValidationMessageFormatter;
@@ -24,6 +25,17 @@ class InvoicePdfApiController extends Controller
         QrBillValidationMessageFormatter $messageFormatter,
     ): HttpResponse|JsonResponse {
         $this->authorize('view', $invoice);
+
+        // This endpoint means "the document that may be sent and paid". A draft
+        // has neither a number nor a payment reference; asking for its PDF here
+        // used to build a QR bill and persist a reference of twenty zeros that
+        // the finalisation then kept. api.invoices.pdf.preview serves drafts.
+        if ($invoice->status === InvoiceStatus::Draft) {
+            return response()->json([
+                'message' => __('app.invoice_pdf_needs_finalising'),
+                'code' => 'invoice_not_finalised',
+            ], 422);
+        }
 
         $organization = $currentOrganization->get();
         $bankAccount = $organization->defaultInvoicingBankAccount();

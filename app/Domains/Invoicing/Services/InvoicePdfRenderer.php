@@ -165,7 +165,9 @@ class InvoicePdfRenderer
         $invoiceTypeLabel = $invoice->type === InvoiceType::CreditNote
             ? $this->t('pdf_credit_note')
             : $this->t('pdf_invoice');
-        $tcpdf->Cell(0, 8, $invoiceTypeLabel.' '.($invoice->number ?? ''), 0, 1);
+        // A draft carries no number yet — the finalisation assigns it. Saying so
+        // beats the trailing space an empty number used to leave behind.
+        $tcpdf->Cell(0, 8, trim($invoiceTypeLabel.' '.($invoice->number ?? $this->t('pdf_draft_no_number'))), 0, 1);
 
         // Invoice metadata block
         $tcpdf->SetFont('Helvetica', '', 9);
@@ -201,6 +203,49 @@ class InvoicePdfRenderer
         }
 
         $tcpdf->Ln(4);
+    }
+
+    /**
+     * Lay a draft mark diagonally across the page.
+     *
+     * Drawn before the content so the text stays legible on top of it. The
+     * point is that nobody can mistake a preview for the invoice itself: it
+     * carries no number, it is not booked, and it cannot be paid.
+     */
+    public function renderDraftWatermark(TCPDF $tcpdf): void
+    {
+        $tcpdf->StartTransform();
+        $tcpdf->Rotate(52, 105, 150);
+        $tcpdf->SetFont('Helvetica', 'B', 64);
+        $tcpdf->SetTextColor(228, 230, 228);
+        $tcpdf->SetXY(0, 135);
+        $tcpdf->Cell(210, 24, mb_strtoupper($this->t('pdf_draft')), 0, 0, 'C');
+        $tcpdf->StopTransform();
+        $tcpdf->SetTextColor(0, 0, 0);
+    }
+
+    /**
+     * Stand in for the Swiss QR payment part, which a draft deliberately does
+     * not carry: the payment reference is derived from the invoice number, so
+     * it cannot exist before the number does, and a slip bearing a provisional
+     * reference would invite a payment nobody can match.
+     */
+    public function renderDraftPaymentNote(TCPDF $tcpdf): void
+    {
+        $width = 210 - InvoicePdfStyle::MARGIN_LEFT - InvoicePdfStyle::MARGIN_RIGHT;
+
+        $tcpdf->SetXY(InvoicePdfStyle::MARGIN_LEFT, 248);
+        $tcpdf->SetDrawColor(190, 196, 190);
+        $tcpdf->SetFont('Helvetica', 'B', 9);
+        $tcpdf->SetTextColor(90, 96, 90);
+        $tcpdf->Cell($width, 7, $this->t('pdf_draft_payment_title'), 'LTR', 1, 'L');
+
+        $tcpdf->SetX(InvoicePdfStyle::MARGIN_LEFT);
+        $tcpdf->SetFont('Helvetica', '', 8);
+        $tcpdf->MultiCell($width, 11, $this->t('pdf_draft_payment_note'), 'LBR', 'L');
+
+        $tcpdf->SetTextColor(0, 0, 0);
+        $tcpdf->SetDrawColor(0, 0, 0);
     }
 
     public function renderLineItems(TCPDF $tcpdf, Invoice $invoice): void

@@ -119,6 +119,7 @@
         {"method": "POST", "path": "/invoices/{invoice}/credit-note", "controller": "InvoiceLifecycleController@creditNote", "name": "invoices.creditNote"},
         {"method": "POST", "path": "/invoices/{invoice}/send", "controller": "InvoiceCommunicationController@sendInvoice", "name": "invoices.send"},
         {"method": "POST", "path": "/invoices/{invoice}/reminder", "controller": "InvoiceCommunicationController@sendReminder", "name": "invoices.reminder"},
+        {"method": "GET", "path": "/invoices/{invoice}/pdf-preview", "controller": "InvoiceDocumentController@previewPdf", "name": "invoices.pdf-preview"},
         {"method": "GET", "path": "/invoices/{invoice}/qr-pdf", "controller": "InvoiceDocumentController@downloadQrPdf", "name": "invoices.qr-pdf", "throttle": "30,1"},
         {"method": "DELETE", "path": "/invoices/{invoice}/justificatif", "controller": "InvoiceDocumentController@removeJustificatif", "name": "invoices.justificatif.remove"},
         {"method": "GET", "path": "/invoices/{invoice}/justificatif", "controller": "InvoiceDocumentController@downloadJustificatif", "name": "invoices.justificatif.download", "throttle": "30,1"},
