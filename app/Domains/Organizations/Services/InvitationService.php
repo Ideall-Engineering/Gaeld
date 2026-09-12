@@ -84,6 +84,21 @@ class InvitationService
         return $invitation;
     }
 
+    /**
+     * Resolve an unaccepted invitation from its plain-text token.
+     *
+     * Returns null when the token matches nothing, so callers that serve
+     * guests can render a friendly page instead of a 404. Expiry is left to
+     * the caller — an expired invitation still needs to be told apart from a
+     * bogus one.
+     */
+    public function findByToken(string $token): ?OrganizationInvitation
+    {
+        return OrganizationInvitation::where('token', hash('sha256', $token))
+            ->whereNull('accepted_at')
+            ->first();
+    }
+
     public function accept(string $token): Organization
     {
         $invitation = OrganizationInvitation::where('token', hash('sha256', $token))
@@ -138,15 +153,18 @@ class InvitationService
 
     public function resend(OrganizationInvitation $invitation): void
     {
+        $plainToken = Str::random(64);
+
         $invitation->update([
-            'token' => Str::random(64),
+            'token' => hash('sha256', $plainToken),
             'expires_at' => now()->addDays(7),
         ]);
 
+        $invitation->plain_token = $plainToken;
         $invitation->load('organization');
 
         Notification::route('mail', $invitation->email)
-            ->notify((new InvitationNotification($invitation))->locale($invitation->organization->locale));
+            ->notify((new InvitationNotification($invitation, $plainToken))->locale($invitation->organization->locale));
     }
 
     // ──────────────────────────────────────────────────────────────

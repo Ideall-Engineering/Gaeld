@@ -43,6 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot drift between them.
 
 ### Fixed
+- **Invitations:** an invited person without an account landed on the login
+  screen with no way forward. The invitation link now leads to a password form
+  that creates the account for the invited address and joins the organization,
+  even on installations that have closed public self-registration.
+- **Invitations:** resending an invitation stored the token unhashed and mailed
+  the hash, so the link in the resent mail resolved to nothing.
+- **Email verification:** `email_verified_at` was dropped on user creation,
+  sending the installer's first admin and the setup wizard's owner to the
+  verification screen for an address they had just proven.
 - **Expense VAT:** enter VAT treatment from both the expense form and the API.
 - **VAT 2026:** align the import and the report for the 2026 rates.
 - **Banana import:** accept the `Z0-A` code and skip journal references that

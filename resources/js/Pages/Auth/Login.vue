@@ -15,6 +15,10 @@ const isSaas = computed(() => page.props.features?.saas ?? false)
 const selfRegistrationEnabled = computed(() => page.props.features?.self_registration ?? true)
 const canRegister = computed(() => isSaas.value || selfRegistrationEnabled.value)
 
+// Guest pages have no toast layer, so flashes (e.g. "sign in to accept the
+// invitation") are rendered inline on the form instead.
+const flash = computed(() => page.props.flash || {})
+
 const form = useForm({
   email: '',
   password: '',
@@ -45,6 +49,14 @@ function submit() {
           <form class="space-y-4" @submit.prevent="submit">
             <Alert v-if="form.errors.form" variant="error">
               {{ form.errors.form }}
+            </Alert>
+
+            <Alert v-else-if="flash.error" variant="error">
+              {{ flash.error }}
+            </Alert>
+
+            <Alert v-else-if="flash.info" variant="info">
+              {{ flash.info }}
             </Alert>
 
             <FormInput

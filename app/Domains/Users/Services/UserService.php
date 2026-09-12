@@ -22,15 +22,23 @@ class UserService
 
     public function create(CreateUserData $data): User
     {
-        return User::create([
+        $user = User::create([
             'name' => $data->name,
             'email' => $data->email,
             'password' => Hash::make($data->password),
             'locale' => $data->locale,
-            'email_verified_at' => $data->emailVerifiedAt,
             'accepted_privacy_at' => $data->acceptedPrivacyAt,
             'accepted_terms_at' => $data->acceptedTermsAt,
         ]);
+
+        // email_verified_at is deliberately kept out of $fillable so no request
+        // payload can ever set it. Callers that already vouch for the address
+        // (installer, setup wizard, invitation sign-up) say so through the DTO.
+        if ($data->emailVerifiedAt !== null) {
+            $user->forceFill(['email_verified_at' => $data->emailVerifiedAt])->save();
+        }
+
+        return $user;
     }
 
     public function updateProfile(User $user, UpdateUserProfileData $data): User
