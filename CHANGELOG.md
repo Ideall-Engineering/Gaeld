@@ -47,6 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot drift between them.
 
 ### Fixed
+- **Personal API tokens:** the token page demanded permission to edit the
+  organization, so every role below admin — an accountant included — had no way
+  to create a credential of its own, although deleting one never needed that
+  permission. Membership is now the whole requirement, and the menu entry sits
+  outside the settings submenu that only an editor can open.
+  Organization-wide tokens stay with the roles that manage members, and their
+  names and abilities are no longer sent to anybody else's page.
 - **Rejected forms:** with debug off — the way production runs — the catch-all
   exception renderer swallowed validation errors and answered every rejected
   form with a 500 page instead of the field errors, from a wrong password on

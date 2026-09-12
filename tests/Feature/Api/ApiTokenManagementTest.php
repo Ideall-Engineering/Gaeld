@@ -7,6 +7,7 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Api\Enums\TokenType;
 use App\Domains\Api\Models\Webhook;
 use App\Domains\Organizations\Enums\Permission;
+use App\Domains\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use Tests\Traits\WithAuthenticatedOrganization;
@@ -49,6 +50,74 @@ class ApiTokenManagementTest extends TestCase
             'tokenable_id' => $this->user->id,
             'name' => 'My Token',
         ]);
+    }
+
+    public function test_every_role_can_reach_its_own_personal_tokens(): void
+    {
+        // A personal token is the member's own credential and the API checks
+        // their own permissions on every request, so even the most restricted
+        // role gets to make one. The page used to demand organization.edit,
+        // which left an accountant without any way to one at all.
+        foreach (['accountant', 'member', 'employee', 'viewer'] as $role) {
+            $member = $this->memberWithRole($role);
+
+            $this->actingAs($member)
+                ->withSession(['current_organization_id' => $this->organization->id])
+                ->get('/settings/api-tokens')
+                ->assertStatus(200);
+
+            $this->actingAs($member)
+                ->withSession(['current_organization_id' => $this->organization->id])
+                ->post('/settings/api-tokens/personal', [
+                    'name' => "Token for {$role}",
+                    'abilities' => [Permission::ContactsView->value],
+                ])
+                ->assertRedirect();
+
+            $this->assertDatabaseHas('personal_access_tokens', [
+                'tokenable_id' => $member->id,
+                'name' => "Token for {$role}",
+            ]);
+        }
+    }
+
+    public function test_organization_tokens_stay_with_the_roles_that_manage_members(): void
+    {
+        $this->user->createToken('owner-made org token', ['*'])->accessToken->update([
+            'organization_id' => $this->organization->id,
+            'type' => TokenType::Organization,
+        ]);
+
+        $accountant = $this->memberWithRole('accountant');
+
+        // Not in the payload, not merely hidden in the template.
+        $this->actingAs($accountant)
+            ->withSession(['current_organization_id' => $this->organization->id])
+            ->get('/settings/api-tokens')
+            ->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->where('canManageOrgTokens', false)
+                ->where('orgTokens', [])
+                ->etc());
+
+        $this->actingAs($accountant)
+            ->withSession(['current_organization_id' => $this->organization->id])
+            ->post('/settings/api-tokens/organization', [
+                'name' => 'Sneaky org token',
+                'abilities' => [Permission::ContactsView->value],
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('personal_access_tokens', ['name' => 'Sneaky org token']);
+    }
+
+    private function memberWithRole(string $role): User
+    {
+        $member = User::factory()->create(['onboarding_completed_at' => now()]);
+        $this->organization->users()->attach($member->id, ['role' => $role]);
+        $this->assignOrganizationRole($member, $this->organization, $role);
+
+        return $member;
     }
 
     public function test_token_settings_accepts_all_supported_expiration_values(): void

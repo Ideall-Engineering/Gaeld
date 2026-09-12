@@ -22,9 +22,15 @@ class TokenSettingsController extends Controller
     public function index(Request $request, CurrentOrganization $currentOrg): Response
     {
         $organization = $currentOrg->get();
-        $this->authorize('update', $organization);
+
+        // Membership is the whole requirement. A personal token is the member's
+        // own credential, and every API endpoint authorises against the holder's
+        // own permissions — so the token can never reach further than they can.
+        // Organisation-wide tokens below stay behind manageUsers.
+        $this->authorize('view', $organization);
 
         $orgId = $currentOrg->id();
+        $canManageOrgTokens = $request->user()->can('manageUsers', $organization);
 
         $personalTokens = $request->user()
             ->tokens()
@@ -33,23 +39,26 @@ class TokenSettingsController extends Controller
             ->orderByDesc('created_at')
             ->get(['id', 'name', 'abilities', 'last_used_at', 'expires_at', 'created_at']);
 
-        $orgTokens = PersonalAccessToken::query()
-            ->organization()
-            ->where('organization_id', $orgId)
-            ->with('tokenable:id,name')
-            ->orderByDesc('created_at')
-            ->get()
-            ->map(fn ($token) => [
-                'id' => $token->id,
-                'name' => $token->name,
-                'abilities' => $token->abilities,
-                'last_used_at' => $token->last_used_at,
-                'expires_at' => $token->expires_at,
-                'created_at' => $token->created_at,
-                'created_by' => $token->tokenable->name,
-            ]);
-
-        $canManageOrgTokens = $request->user()->can('manageUsers', $organization);
+        // Withheld rather than merely hidden in the template: somebody who
+        // cannot manage these has no business receiving their names, abilities
+        // and usage in the page payload.
+        $orgTokens = $canManageOrgTokens
+            ? PersonalAccessToken::query()
+                ->organization()
+                ->where('organization_id', $orgId)
+                ->with('tokenable:id,name')
+                ->orderByDesc('created_at')
+                ->get()
+                ->map(fn ($token) => [
+                    'id' => $token->id,
+                    'name' => $token->name,
+                    'abilities' => $token->abilities,
+                    'last_used_at' => $token->last_used_at,
+                    'expires_at' => $token->expires_at,
+                    'created_at' => $token->created_at,
+                    'created_by' => $token->tokenable->name,
+                ])
+            : collect();
 
         return Inertia::render('Settings/ApiTokens', [
             'personalTokens' => $personalTokens,
@@ -64,7 +73,7 @@ class TokenSettingsController extends Controller
     public function storePersonal(StorePersonalTokenSettingsRequest $request, CurrentOrganization $currentOrg): RedirectResponse
     {
         $organization = $currentOrg->get();
-        $this->authorize('update', $organization);
+        $this->authorize('view', $organization);
 
         $validated = $request->validated();
 

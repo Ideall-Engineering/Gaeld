@@ -20,6 +20,7 @@ import {
   Repeat,
   Briefcase,
   Settings,
+  KeyRound,
   Sun,
   Moon,
   Cog,
@@ -236,10 +237,15 @@ const navigation = computed(() => {
         { key: 'activity_log', href: '/settings/activity-log' },
       ] : []),
       ...(features.value.api_access ? [
-        { key: 'api_tokens', href: '/settings/api-tokens' },
         { key: 'webhooks', href: '/settings/webhooks' },
       ] : []),
     ]}] : []),
+    // Outside the settings submenu on purpose: that one opens only for somebody
+    // who may edit the organization, while a personal API token is the member's
+    // own business whatever their role.
+    ...(features.value.api_access ? [
+      { key: 'api_tokens', href: '/settings/api-tokens', icon: KeyRound },
+    ] : []),
     ...(features.value.saas && currentRole.value !== 'employee' ? [
       { key: 'billing', href: '/billing', icon: CreditCard },
     ] : []),
