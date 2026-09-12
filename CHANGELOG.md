@@ -54,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outside the settings submenu that only an editor can open.
   Organization-wide tokens stay with the roles that manage members, and their
   names and abilities are no longer sent to anybody else's page.
+- **Deployment:** compiled Blade views moved out of the persistent `storage`
+  volume onto a per-container tmpfs. They outlived the image they were built
+  from, and with `opcache.validate_timestamps` off in production PHP kept
+  executing them, so a release could ship markup that never reached a page —
+  silently, and unaffected by `view:clear`.
 - **Rejected forms:** with debug off — the way production runs — the catch-all
   exception renderer swallowed validation errors and answered every rejected
   form with a 500 page instead of the field errors, from a wrong password on

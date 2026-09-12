@@ -25,6 +25,16 @@ x-app-service: &app-service
     logging: *default-logging
     volumes:
         - gaeld-storage:/var/www/html/storage
+    # Compiled Blade views belong to the build, not to the state. They used to
+    # live inside gaeld-storage, which outlives the image: a view compiled by an
+    # earlier release stayed on disk under the same hashed filename, and since
+    # opcache.validate_timestamps is off, PHP went on executing it. A deploy then
+    # shipped markup that never reached a page, with nothing anywhere to say so.
+    # An in-memory mount per container starts empty, and the entrypoint's
+    # view:cache fills it from the image that is actually running. Mode 1777
+    # because the container runs as www-data and cannot chown a tmpfs.
+    tmpfs:
+        - /var/www/html/storage/framework/views:mode=1777,size=32m
     networks:
         - frontend
         - backend

@@ -79,6 +79,27 @@ to the host network.
 The Redis queue reservation is set to 900 seconds so it remains longer than
 the application's longest queued-job timeout (600 seconds).
 
+### Compiled views are not state
+
+`storage` is a named volume that outlives the image, and `opcache.validate_timestamps`
+is off in production, so PHP never rechecks a file it has already compiled. Together
+those two turned Laravel's compiled Blade views into a trap: a view compiled by an
+earlier release survived the deploy under the same hashed filename, opcache loaded it
+on the first request, and the new release's markup never appeared — no error, no log
+line, and `view:clear` does not help, because the stale bytecode is in memory, not on
+disk. It cost an afternoon on 12 September 2026, over a Blade conditional that had
+deployed correctly all along.
+
+The three app services therefore mount `storage/framework/views` as a per-container
+tmpfs (32 MB, mode 1777 — the container runs as www-data and cannot chown a tmpfs).
+It starts empty, the entrypoint's `view:cache` fills it from the image that is
+actually running, and nothing survives into the next deploy. Uploads, the file cache
+and the logs stay in `gaeld-storage` where they belong.
+
+If the output of a deploy ever looks older than the code again, recreate the
+containers — `restart` keeps the mounts but a changed compose definition needs
+`up -d` — rather than clearing caches inside a running one.
+
 Meilisearch is disabled and search uses the database.
 Outbound mail is delivered over SMTP through mail.cyon.ch on port 587 with
 STARTTLS, sending as noreply@gaeld.ideall.ch (configured 8 September 2026).
