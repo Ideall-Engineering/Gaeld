@@ -1,9 +1,14 @@
-# Gäld private Tailscale deployment
+# Gäld single-instance deployment
 
-This runbook describes the private single-instance stack in
-`compose.production.yml`. It is based on upstream release `v3.8.14` and
-currently runs the project-specific images `gaeld/app:v3.8.6-ideall.14` and
-`gaeld/web:v3.8.6-ideall.14`.
+This runbook describes how to operate the single-instance stack in
+`compose.production.yml`: how images are tagged and built, how the stack is
+started and stopped, and how updates are applied.
+
+It deliberately names no host, address or version of any particular
+installation. Which release an instance runs, how it is reached and how its
+proxies are configured are properties of that installation, not of this
+package — they belong in the operator's own notes, kept outside this
+repository. This file went stale twice by recording them anyway.
 
 ## Image tags
 
@@ -22,10 +27,18 @@ scripts/build-production.sh           # derive, record, build
 ```
 
 So the base follows the next upstream merge on its own, and the counter follows
-every commit. Expect the counter to jump once: the last hand-typed tag was
-`v3.8.6-ideall.14`, and the first derived one is `v3.8.14-ideall.51`, because
-51 commits separate HEAD from `v3.8.14`. A number nobody has to remember beats
-a tidy one.
+every commit. Expect the counter to jump when an installation switches from
+hand-typed tags to derived ones — the derived counter counts every commit since
+the base tag, not the builds someone remembered to number. A number nobody has
+to remember beats a tidy one.
+
+To see what an installation actually runs, ask it, rather than trusting a
+number written down somewhere:
+
+```bash
+grep '^GAELD_IMAGE_TAG=' .env.production
+docker compose --env-file .env.production -f compose.production.yml images
+```
 
 The script refuses to build from a dirty working tree — a tag names a commit,
 and an uncommitted change is in no commit. Use `--allow-dirty` for a throwaway
@@ -38,8 +51,8 @@ docker image inspect gaeld/app:<tag> \
     --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
 ```
 
-Images built before 11 September 2026 report `unknown`; identifying those means
-hashing their source tree against git.
+Images built before these labels were introduced report `unknown`; identifying
+those means hashing their source tree against git.
 
 ## Before starting the stack
 
@@ -55,17 +68,15 @@ scripts/check-production-tag.sh
 It fails when the configured image is missing, and when it is older than the
 one currently running. Run it before every `up -d`.
 
-The deployment source is `/home/gmk/Gaeld`; there is no second checkout.
-The compose project is named `gaeld` in the compose file itself, so never
-pass `-p` — it would override that name and detach the stack from its
-explicitly named volumes.
+Deploy from a single checkout. A second one drifts, and the tag guard above
+can only compare what it is pointed at. The compose project is named `gaeld`
+in the compose file itself, so never pass `-p` — it would override that name
+and detach the stack from its explicitly named volumes.
 
-The host port remains intentionally bound to `127.0.0.1:8088`. Normal remote
-access is provided by Tailscale Serve at
-`https://gmk.tailc7653b.ts.net`, which is available only inside the tailnet.
-Nginx also joins the existing `proxy` network for the internal
-`gaeld.home.arpa` Traefik route. PostgreSQL, Redis and PHP-FPM are not exposed
-to the host network.
+The host port stays bound to `127.0.0.1:8088` deliberately. Nginx additionally
+joins an external `proxy` network so a reverse proxy can reach it without any
+port leaving the loopback interface. PostgreSQL, Redis and PHP-FPM are never
+exposed to the host network.
 
 ## Services
 
@@ -101,8 +112,9 @@ containers — `restart` keeps the mounts but a changed compose definition needs
 `up -d` — rather than clearing caches inside a running one.
 
 Meilisearch is disabled and search uses the database.
-Outbound mail is delivered over SMTP through mail.cyon.ch on port 587 with
-STARTTLS, sending as noreply@gaeld.ideall.ch (configured 8 September 2026).
+Outbound mail is delivered over SMTP; host, port, encryption and sender come
+from `MAIL_*` in `.env.production`. Queued mail leaves through Horizon, so a
+broken SMTP setting surfaces as failed jobs rather than as a request error.
 
 ## Configuration
 
@@ -172,33 +184,29 @@ application log without removing the SMTP credentials.
 
 ## Access
 
-From an authorized tailnet device, open:
+The stack itself publishes exactly one port: Nginx on `127.0.0.1:8088`. The
+database, Redis and PHP-FPM have no host port at all. Everything else — a
+tunnel, a reverse proxy, a VPN — sits in front of that one port and is the
+installation's business, not this package's.
 
-```text
-https://gmk.tailc7653b.ts.net
-```
-
-Tailscale Serve terminates HTTPS and proxies to `http://127.0.0.1:8088`.
-This is the intended remote access path and is not a public Internet release.
-
-On the server, open `http://localhost:8088`.
-
-An SSH tunnel remains available as a fallback:
+On the server, open `http://localhost:8088`. From a workstation, an SSH tunnel
+needs no other route to exist:
 
 ```bash
-ssh -L 8088:127.0.0.1:8088 gmk@SERVER_IP
+ssh -L 8088:127.0.0.1:8088 USER@SERVER
 ```
 
-Then open `http://localhost:8088` on that workstation.
+Then open `http://localhost:8088` there.
 
-The REST API under `/api/v1` is enabled and uses the same private access path.
-See `/home/gmk/Documents/gaeld-api-anleitung.md` for token handling and request
-examples.
+The REST API under `/api/v1` is enabled and reachable over every route the
+installation provides.
 
-`TRUSTED_PROXIES=*` is currently functional because the application port is
-not publicly exposed, but it is broader than necessary. Pin the relevant
-Docker networks or proxy addresses and then restrict this setting to the
-Tailscale/Docker gateway hop and, while the internal route is used, Traefik.
+Whatever terminates TLS in front of Nginx, set `TRUSTED_PROXIES` to that hop's
+address or network and no wider. `*` tells the application to believe any
+`X-Forwarded-For` it receives, which lets a caller dictate its own client
+address — rate limits, audit entries and session binding all follow that
+address. If the port is reachable from outside the host at all, a wildcard is
+a vulnerability, not a convenience.
 
 ## Migrations and updates
 
@@ -232,13 +240,13 @@ docker compose --env-file .env.production -f compose.production.yml stop
 Removing volumes with `down --volumes` deletes the database and stored files.
 That operation is intentionally not part of this runbook.
 
-## Remaining operational work
+## Backups
 
-No automated external backup is configured yet. Local pre-change backups with
-checksums exist, but they do not protect against loss of the server. Before
-relying on the instance for non-reproducible or business-critical records,
-configure encrypted off-server backups and complete a documented restore test.
+Local pre-change dumps protect against a bad migration. They do not protect
+against loss of the server, because they live on it. Before an installation
+carries records that cannot be reproduced, configure encrypted off-server
+backups and complete a documented restore test — a backup nobody has restored
+is a hypothesis.
 
-A public Internet domain is optional and intentionally deferred. If access
-without Tailscale is required later, treat public DNS, TLS, reverse-proxy
-hardening, monitoring and the go-live rollback path as a separate change.
+`scripts/backup-sync.sh` handles the off-server copy; per-installation state
+and open work belong in the operator's own notes, not here.
