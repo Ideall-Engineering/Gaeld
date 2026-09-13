@@ -1,15 +1,15 @@
 Datum	Beleg	Beschreibung	KontoSoll	KontoHaben	Betrag	MwSt-Code	Satz	BetragOhneMwSt	MwStBetrag
-05.01.26	1069	Google Cloud	6034	1020	0.76	M81	8.10	0.70	0.06
-07.01.26	1001	Gutschrift Rechnung 10047	1020	3100	259.44	V81	-8.10	240.00	-19.44
-07.01.26	1002	Gutschrift Einwohnergemeinde Zug	1020	3200	3'675.40	V81	-8.10	3'400.00	-275.40
-11.02.26	1018	Software Windows 11	6033	1020	86.90	I81	8.10	80.39	6.51
-30.03.26	1032	Gebuehr Visa Debit Card	6051	1020	40.00	M0		40.00	
-13.04.26	1084	Anthropic Ireland	6033	1020	43.40				
-30.04.26	1051	Gutschrift Gebaeudeversicherung	1020	3100	18'322.95	V0		18'322.95	
-18.05.26	1062	Lohn Mai Bruttolohn	5600	1091	1'107.69				
-18.05.26	1062	Lohn Mai AHV-Abzug	1091	2270	58.71				
-18.05.26	1062	Lohn Mai Auszahlung	1091	1020	1'048.98				
-26.05.26	1090	Lohn Mai Joel	5600	1020	100.00				
-26.06.26	1090	Lohn Juni Joel	5600	1020	100.00				
-15.06.26	1099	Wechselkurs-Korrektur	1020	3200	3.57	Z0		3.57	
+05.01.26	1069	Cloud-Hosting	6034	1020	1.08	M81	8.10	1.00	0.08
+07.01.26	1001	Gutschrift Rechnung 10001	1020	3100	540.50	V81	-8.10	500.00	-40.50
+07.01.26	1002	Gutschrift Gemeinde	1020	3200	1'297.20	V81	-8.10	1'200.00	-97.20
+11.02.26	1018	Software Lizenz	6033	1020	270.25	I81	8.10	250.00	20.25
+30.03.26	1032	Gebuehr Debitkarte	6051	1020	25.00	M0		25.00	
+13.04.26	1084	Dienstleister Ausland	6033	1020	60.00				
+30.04.26	1051	Gutschrift Versicherung	1020	3100	5'000.00	V0		5'000.00	
+18.05.26	1062	Lohn Mai Bruttolohn	5600	1091	3'000.00				
+18.05.26	1062	Lohn Mai AHV-Abzug	1091	2270	159.00				
+18.05.26	1062	Lohn Mai Auszahlung	1091	1020	2'841.00				
+26.05.26	1090	Lohn Mai Aushilfe	5600	1020	250.00				
+26.06.26	1090	Lohn Juni Aushilfe	5600	1020	250.00				
+15.06.26	1099	Wechselkurs-Korrektur	1020	3200	12.00	Z0		12.00	
 30.06.26	1111	Abschlussbetreffnis Q2	6050	1020		M0			

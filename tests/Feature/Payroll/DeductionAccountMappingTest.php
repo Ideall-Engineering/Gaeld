@@ -25,9 +25,9 @@ class DeductionAccountMappingTest extends TestCase
 
     private Organization $organization;
 
-    private Employee $joel;
+    private Employee $employeeA;
 
-    private Employee $nijo;
+    private Employee $employeeB;
 
     protected function setUp(): void
     {
@@ -54,11 +54,11 @@ class DeductionAccountMappingTest extends TestCase
             ]);
         }
 
-        $this->joel = Employee::factory()->create([
+        $this->employeeA = Employee::factory()->create([
             'organization_id' => $this->organization->id,
             'gross_salary' => '1107.69',
         ]);
-        $this->nijo = Employee::factory()->create([
+        $this->employeeB = Employee::factory()->create([
             'organization_id' => $this->organization->id,
             'gross_salary' => '3692.31',
         ]);
@@ -125,7 +125,7 @@ class DeductionAccountMappingTest extends TestCase
     {
         $this->seedFullSwissRates();
 
-        $slip = $this->postFor($this->joel);
+        $slip = $this->postFor($this->employeeA);
 
         $this->assertBalanced($slip);
     }
@@ -134,7 +134,7 @@ class DeductionAccountMappingTest extends TestCase
     {
         $this->seedFullSwissRates();
 
-        $slip = $this->postFor($this->joel);
+        $slip = $this->postFor($this->employeeA);
         $byCode = $slip->journalEntry->lines->load('account')
             ->groupBy(fn ($line) => $line->account->code);
 
@@ -148,7 +148,7 @@ class DeductionAccountMappingTest extends TestCase
     {
         $this->seedFullSwissRates();
 
-        $slip = $this->postFor($this->joel);
+        $slip = $this->postFor($this->employeeA);
         $lines = $slip->journalEntry->lines->load('account')->keyBy(fn ($l) => $l->account->code);
 
         // 2270 carries AHV and ALV from both sides plus administration and FAK.
@@ -164,7 +164,7 @@ class DeductionAccountMappingTest extends TestCase
             'type' => 'employee', 'account_code' => '2271',
         ]);
 
-        $slip = $this->postFor($this->joel);
+        $slip = $this->postFor($this->employeeA);
         $lines = $slip->journalEntry->lines->load('account')->keyBy(fn ($l) => $l->account->code);
 
         $this->assertSame('19.35', (string) $lines['2271']->credit);
@@ -176,22 +176,22 @@ class DeductionAccountMappingTest extends TestCase
         $this->seedFullSwissRates();
         $this->rate(['name' => 'BVG AN', 'code' => 'lpp_employee', 'amount' => '19.35', 'type' => 'employee', 'account_code' => '2271']);
         $this->rate([
-            'name' => 'BVG AN Nijo', 'code' => 'lpp_employee', 'amount' => '85.55',
-            'type' => 'employee', 'account_code' => '2271', 'employee_id' => $this->nijo->id,
+            'name' => 'BVG AN Mitarbeiter B', 'code' => 'lpp_employee', 'amount' => '85.55',
+            'type' => 'employee', 'account_code' => '2271', 'employee_id' => $this->employeeB->id,
         ]);
 
-        $joelLines = $this->postFor($this->joel)->journalEntry->lines->load('account')->keyBy(fn ($l) => $l->account->code);
-        $nijoLines = $this->postFor($this->nijo)->journalEntry->lines->load('account')->keyBy(fn ($l) => $l->account->code);
+        $linesA = $this->postFor($this->employeeA)->journalEntry->lines->load('account')->keyBy(fn ($l) => $l->account->code);
+        $linesB = $this->postFor($this->employeeB)->journalEntry->lines->load('account')->keyBy(fn ($l) => $l->account->code);
 
-        $this->assertSame('19.35', (string) $joelLines['2271']->credit);
-        $this->assertSame('85.55', (string) $nijoLines['2271']->credit);
+        $this->assertSame('19.35', (string) $linesA['2271']->credit);
+        $this->assertSame('85.55', (string) $linesB['2271']->credit);
     }
 
     public function test_without_configured_accounts_the_built_in_behaviour_is_unchanged(): void
     {
         // No DeductionRate rows at all — the service falls back to its defaults
         // and the action to the hardcoded account mapping.
-        $slip = $this->postFor($this->joel);
+        $slip = $this->postFor($this->employeeA);
         $lines = $slip->journalEntry->lines->load('account')->keyBy(fn ($l) => $l->account->code);
 
         $this->assertBalanced($slip);
@@ -210,7 +210,7 @@ class DeductionAccountMappingTest extends TestCase
         $this->organization->update(['payroll_salary_account_code' => '5600']);
         $this->seedFullSwissRates();
 
-        $slip = $this->postFor($this->joel);
+        $slip = $this->postFor($this->employeeA);
         $codes = $slip->journalEntry->lines->load('account')->pluck('account.code');
 
         $this->assertTrue($codes->contains('5600'));
@@ -227,7 +227,7 @@ class DeductionAccountMappingTest extends TestCase
         $this->organization->update(['payroll_reimbursement_account_code' => '5620']);
         $this->seedFullSwissRates();
 
-        $slip = app(PayrollCalculator::class)->calculate($this->joel, 5, 2026, reimbursementAmount: '50.00');
+        $slip = app(PayrollCalculator::class)->calculate($this->employeeA, 5, 2026, reimbursementAmount: '50.00');
         $slip->save();
         $posted = app(PostPayrollAction::class)->execute($slip);
 
@@ -248,6 +248,6 @@ class DeductionAccountMappingTest extends TestCase
 
         $this->expectException(UnmappedDeductionException::class);
 
-        $this->postFor($this->joel);
+        $this->postFor($this->employeeA);
     }
 }

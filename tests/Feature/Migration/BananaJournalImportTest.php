@@ -110,7 +110,7 @@ class BananaJournalImportTest extends TestCase
         $row = $this->parseFixture()->firstWhere('reference', 'BAN-20260107-1002');
 
         $this->assertSame('2026-01-07', $row->date);
-        $this->assertSame('3675.40', $row->lines[0]['gross']);
+        $this->assertSame('1297.20', $row->lines[0]['gross']);
     }
 
     public function test_a_row_without_an_amount_is_marked_invalid(): void
@@ -141,8 +141,8 @@ class BananaJournalImportTest extends TestCase
         $vatEntry = VatEntry::where('journal_entry_id', $entry->id)->sole();
 
         $this->assertSame(VatEntryType::Input, $vatEntry->type);
-        $this->assertSame('0.70', (string) $vatEntry->base_amount);
-        $this->assertSame('0.06', (string) $vatEntry->vat_amount);
+        $this->assertSame('1.00', (string) $vatEntry->base_amount);
+        $this->assertSame('0.08', (string) $vatEntry->vat_amount);
     }
 
     public function test_i81_becomes_the_investment_figure(): void
@@ -153,8 +153,8 @@ class BananaJournalImportTest extends TestCase
         $vatEntry = VatEntry::where('journal_entry_id', $entry->id)->sole();
 
         $this->assertSame(VatEntryType::InputInvestment, $vatEntry->type);
-        $this->assertSame('80.39', (string) $vatEntry->base_amount);
-        $this->assertSame('6.51', (string) $vatEntry->vat_amount);
+        $this->assertSame('250.00', (string) $vatEntry->base_amount);
+        $this->assertSame('20.25', (string) $vatEntry->vat_amount);
     }
 
     public function test_v81_splits_the_gross_turnover_on_the_credit_side(): void
@@ -164,9 +164,9 @@ class BananaJournalImportTest extends TestCase
         $entry = JournalEntry::where('reference', 'BAN-20260107-1001')->firstOrFail();
         $lines = $entry->lines()->with('account')->get()->keyBy(fn ($line) => $line->account->code);
 
-        $this->assertSame('259.44', (string) $lines['1020']->debit);
-        $this->assertSame('240.00', (string) $lines['3100']->credit);
-        $this->assertSame('19.44', (string) $lines['2200']->credit);
+        $this->assertSame('540.50', (string) $lines['1020']->debit);
+        $this->assertSame('500.00', (string) $lines['3100']->credit);
+        $this->assertSame('40.50', (string) $lines['2200']->credit);
     }
 
     public function test_v0_turnover_reaches_chiffre_200_and_defaults_to_chiffre_220(): void
@@ -177,7 +177,7 @@ class BananaJournalImportTest extends TestCase
         $vatEntry = VatEntry::where('journal_entry_id', $entry->id)->sole();
 
         $this->assertSame(VatEntryType::Output, $vatEntry->type);
-        $this->assertSame('18322.95', (string) $vatEntry->base_amount);
+        $this->assertSame('5000.00', (string) $vatEntry->base_amount);
         $this->assertSame('0.00', (string) $vatEntry->vat_amount);
         $this->assertSame('220', $vatEntry->figure);
     }
@@ -231,15 +231,15 @@ class BananaJournalImportTest extends TestCase
             '2026-12-31',
         );
 
-        // 240.00 + 3'400.00 turnover at 8.1 %, plus 18'322.95 zero-rated.
-        $this->assertSame('294.84', $report['total_output_vat']);
-        // M81 on 0.70 plus M0 (none): only the Google Cloud centimes.
-        $this->assertSame('0.06', $report['input_vat']);
-        // I81 on 80.39.
-        $this->assertSame('6.51', $report['input_investment_vat']);
-        $this->assertSame('21962.95', $report['total_revenue']);
-        $this->assertSame('18322.95', $report['deductions_by_figure']['220']);
-        $this->assertSame('3640.00', $report['total_taxable']);
-        $this->assertSame('288.27', $report['net_vat']);
+        // 500.00 + 1'200.00 turnover at 8.1 %, plus 5'000.00 zero-rated.
+        $this->assertSame('137.70', $report['total_output_vat']);
+        // M81 on 1.00 plus M0 (none): only the hosting centimes.
+        $this->assertSame('0.08', $report['input_vat']);
+        // I81 on 250.00.
+        $this->assertSame('20.25', $report['input_investment_vat']);
+        $this->assertSame('6700.00', $report['total_revenue']);
+        $this->assertSame('5000.00', $report['deductions_by_figure']['220']);
+        $this->assertSame('1700.00', $report['total_taxable']);
+        $this->assertSame('117.37', $report['net_vat']);
     }
 }
