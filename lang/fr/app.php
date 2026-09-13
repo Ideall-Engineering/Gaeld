@@ -2567,6 +2567,7 @@ return [
     'vat_code' => 'Code TVA',
     'journal_views' => 'Vues',
     'journal_view_basic' => 'Base',
+    'journal_view_accounts' => 'Comptes',
     'journal_view_complete' => 'Complet',
     'journal_view_vat' => 'TVA',
     'journal_view_cost_centers' => 'Centres de coûts',

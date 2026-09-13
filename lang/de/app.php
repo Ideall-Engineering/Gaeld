@@ -2559,6 +2559,7 @@ return [
     'vat_code' => 'MWST-Code',
     'journal_views' => 'Ansichten',
     'journal_view_basic' => 'Basis',
+    'journal_view_accounts' => 'Konten',
     'journal_view_complete' => 'Komplett',
     'journal_view_vat' => 'MWST',
     'journal_view_cost_centers' => 'Kostenstellen',

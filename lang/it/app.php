@@ -2563,6 +2563,7 @@ return [
     'vat_code' => 'Codice IVA',
     'journal_views' => 'Viste',
     'journal_view_basic' => 'Base',
+    'journal_view_accounts' => 'Conti',
     'journal_view_complete' => 'Completa',
     'journal_view_vat' => 'IVA',
     'journal_view_cost_centers' => 'Centri di costo',

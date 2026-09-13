@@ -18,6 +18,7 @@ import FormSelect from '@/Components/UI/FormSelect.vue'
 import HelpText from '@/Components/HelpText.vue'
 import EmptyState from '@/Components/UI/EmptyState.vue'
 import JournalCorrectionDialog from '@/Components/Accounting/JournalCorrectionDialog.vue'
+import JournalAccountCell from '@/Components/Accounting/JournalAccountCell.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 import { BookText, Plus, Check, RotateCcw, Replace, Trash2, Pencil, HelpCircle } from 'lucide-vue-next'
@@ -84,6 +85,10 @@ const VIEW_STORAGE_KEY = 'gaeld.journal-entries.view'
 
 const VIEW_COLUMNS = {
   basic: ['date', 'reference', 'description', 'debit_account', 'credit_account', 'amount', 'is_posted', 'actions'],
+  // The accounts view spends the width saved on reference, status and cost
+  // centre to write both account names out in full instead of abbreviating
+  // them to their number.
+  accounts: ['date', 'description', 'debit_account', 'credit_account', 'amount', 'actions'],
   complete: ['date', 'reference', 'description', 'line_description', 'debit_account', 'credit_account', 'amount', 'vat_code', 'vat_amount', 'cost_center', 'is_posted', 'actions'],
   vat: ['date', 'reference', 'description', 'debit_account', 'credit_account', 'amount', 'vat_code', 'vat_amount', 'is_posted', 'actions'],
   cost_centers: ['date', 'reference', 'description', 'debit_account', 'credit_account', 'amount', 'cost_center', 'is_posted', 'actions'],
@@ -91,6 +96,7 @@ const VIEW_COLUMNS = {
 
 const views = computed(() => [
   { value: 'basic', label: t('journal_view_basic') },
+  { value: 'accounts', label: t('journal_view_accounts') },
   { value: 'complete', label: t('journal_view_complete') },
   { value: 'vat', label: t('journal_view_vat') },
   { value: 'cost_centers', label: t('journal_view_cost_centers') },
@@ -116,13 +122,22 @@ watch(activeView, view => {
   }
 })
 
+// Spelled-out account names need room; the numbers alone do not.
+const showsAccountNames = computed(() => activeView.value === 'accounts')
+const accountColumnWidth = computed(() => (showsAccountNames.value ? 220 : 120))
+
+// The reference cell carries the link into the entry. Where a view drops that
+// column, the description has to take the link over, or the row cannot be
+// opened at all.
+const descriptionOpensEntry = computed(() => !VIEW_COLUMNS[activeView.value].includes('reference'))
+
 const columnDefinitions = computed(() => ({
   date: { key: 'date', label: t('date'), format: v => formatDate(v), sortable: true },
   reference: { key: 'reference', label: t('reference'), sortable: true },
   description: { key: 'description', label: t('description'), sortable: true },
   line_description: { key: 'line_description', label: t('journal_line_description') },
-  debit_account: { key: 'debit_account', label: t('debit'), minWidth: 120 },
-  credit_account: { key: 'credit_account', label: t('credit'), minWidth: 120 },
+  debit_account: { key: 'debit_account', label: t('debit'), minWidth: accountColumnWidth.value },
+  credit_account: { key: 'credit_account', label: t('credit'), minWidth: accountColumnWidth.value },
   amount: { key: 'amount', label: t('amount'), class: 'text-right whitespace-nowrap' },
   vat_code: { key: 'vat_code', label: t('vat_code') },
   vat_amount: { key: 'vat_amount', label: t('vat_amount'), class: 'text-right whitespace-nowrap' },
@@ -346,23 +361,17 @@ function doDelete() {
               <Badge v-else-if="row.correction_role === 'replacement'" variant="info">{{ t('journal_correction_replacement_badge') }}</Badge>
             </span>
           </template>
+          <template #cell-description="{ value, row }">
+            <Link v-if="descriptionOpensEntry" :href="`/accounting/journal-entries/${row.id}`" class="hover:underline">
+              {{ value || t('journal_entry') }}
+            </Link>
+            <span v-else>{{ value }}</span>
+          </template>
           <template #cell-debit_account="{ value, row }">
-            <span v-if="value" class="whitespace-nowrap">
-              <Tooltip :content="value.name" side="top">
-                <span class="font-mono">{{ value.code }}</span>
-              </Tooltip>
-            </span>
-            <Badge v-else-if="row.is_split" variant="secondary">{{ t('journal_multiple_accounts') }}</Badge>
-            <span v-else class="text-[hsl(var(--muted-foreground))]">—</span>
+            <JournalAccountCell :account="value" :is-split="row.is_split" :show-name="showsAccountNames" />
           </template>
           <template #cell-credit_account="{ value, row }">
-            <span v-if="value" class="whitespace-nowrap">
-              <Tooltip :content="value.name" side="top">
-                <span class="font-mono">{{ value.code }}</span>
-              </Tooltip>
-            </span>
-            <Badge v-else-if="row.is_split" variant="secondary">{{ t('journal_multiple_accounts') }}</Badge>
-            <span v-else class="text-[hsl(var(--muted-foreground))]">—</span>
+            <JournalAccountCell :account="value" :is-split="row.is_split" :show-name="showsAccountNames" />
           </template>
           <template #cell-amount="{ value }">
             {{ formatCurrency(value) }}

@@ -2640,6 +2640,7 @@ return [
     'vat_code' => 'VAT code',
     'journal_views' => 'Views',
     'journal_view_basic' => 'Basic',
+    'journal_view_accounts' => 'Accounts',
     'journal_view_complete' => 'Complete',
     'journal_view_vat' => 'VAT',
     'journal_view_cost_centers' => 'Cost centres',
