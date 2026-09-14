@@ -26,10 +26,13 @@ const props = defineProps({
 // Step state: 1=Select, 2=Preview, 3=Generate, 4=Post
 const step = ref(1)
 const selectedEmployeeIds = ref([])
+// The agreed flat expense sum is the default, not zero: a run sheet that starts
+// at 0.00 silently drops what the employment contract already settled.
 const adjustments = ref(Object.fromEntries(
   props.employees.map(employee => [employee.id, {
     unpaid_leave_days: 0,
-    reimbursement_amount: '0.00',
+    reimbursement_amount: employee.expense_allowance ?? '0.00',
+    hours_worked: '0.00',
   }])
 ))
 const month = ref(String(((new Date().getMonth() + 11) % 12) + 1))
@@ -83,6 +86,31 @@ const yearOptions = computed(() =>
         return { value: String(v), label: String(v) }
       })
 )
+
+// A deduction carries its own name from the calculation. A built-in code has a
+// translated label; anything an organization configured itself does not, and
+// falls back to the name the rate was calculated under.
+function deductionLabel(line) {
+  const translated = t(line.code)
+
+  return translated === line.code ? (line.name || line.code) : translated
+}
+
+const deductionColumns = computed(() => {
+  const columns = new Map()
+
+  for (const row of preview.value) {
+    for (const line of row.deduction_lines ?? []) {
+      if (!columns.has(line.code)) columns.set(line.code, deductionLabel(line))
+    }
+  }
+
+  return [...columns].map(([code, label]) => ({ code, label }))
+})
+
+function deductionAmount(row, code) {
+  return (row.deduction_lines ?? []).find(line => line.code === code)?.amount ?? '0.00'
+}
 
 const steps = computed(() => [
   { n: 1, label: t('payroll_step_select') },
@@ -160,10 +188,9 @@ async function goToPreview() {
         ...employee,
         id: slip.employee_id,
         gross_salary: slip.gross_salary,
-        avs: deductions.avs_employee ?? '0.00',
-        ac: deductions.ac_employee ?? '0.00',
-        aanp: deductions.aanp_employee ?? '0.00',
-        lpp: deductions.lpp_employee ?? '0.00',
+        // Every deduction the calculation produced, not a fixed selection —
+        // a rate the organization added itself belongs on screen too.
+        deduction_lines: (deductions.lines ?? []).filter(line => line.type === 'employee'),
         base_salary: deductions.base_salary ?? slip.gross_salary,
         thirteenth_salary: deductions.thirteenth_salary ?? '0.00',
         unpaid_leave_amount: deductions.unpaid_leave_amount ?? '0.00',
@@ -377,10 +404,11 @@ async function postSlips() {
                 <th class="min-w-[8rem] whitespace-nowrap px-3 pb-2 text-right font-medium">{{ t('thirteenth_salary') }}</th>
                 <th class="min-w-[10rem] whitespace-nowrap px-3 pb-2 text-right font-medium">{{ t('unpaid_leave') }}</th>
                 <th class="min-w-[13rem] whitespace-nowrap px-3 pb-2 text-right font-medium">{{ t('expense_reimbursement') }}</th>
-                <th class="min-w-[6rem] whitespace-nowrap px-3 pb-2 text-right font-medium">AVS</th>
-                <th class="min-w-[6rem] whitespace-nowrap px-3 pb-2 text-right font-medium">AC</th>
-                <th class="min-w-[6rem] whitespace-nowrap px-3 pb-2 text-right font-medium">AANP</th>
-                <th class="min-w-[6rem] whitespace-nowrap px-3 pb-2 text-right font-medium">LPP</th>
+                <th
+                  v-for="column in deductionColumns"
+                  :key="column.code"
+                  class="min-w-[7rem] whitespace-nowrap px-3 pb-2 text-right font-medium"
+                >{{ column.label }}</th>
                 <th v-if="withholdingTaxEnabled" class="min-w-[8rem] whitespace-nowrap px-3 pb-2 text-right font-medium">{{ t('withholding_tax') }}</th>
                 <th class="min-w-[8rem] whitespace-nowrap px-3 pb-2 text-right font-medium">{{ t('net_salary') }}</th>
               </tr>
@@ -392,10 +420,11 @@ async function postSlips() {
                 <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono">{{ formatCurrency(emp.thirteenth_salary) }}</td>
                 <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.unpaid_leave_amount) }}</td>
                 <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-green-700 dark:text-green-400">{{ formatCurrency(emp.reimbursement_amount) }}</td>
-                <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.avs) }}</td>
-                <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.ac) }}</td>
-                <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.aanp) }}</td>
-                <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.lpp) }}</td>
+                <td
+                  v-for="column in deductionColumns"
+                  :key="column.code"
+                  class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600"
+                >{{ formatCurrency(-deductionAmount(emp, column.code)) }}</td>
                 <td v-if="withholdingTaxEnabled" class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.source_tax) }}</td>
                 <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono font-bold text-green-700 dark:text-green-400">{{ formatCurrency(emp.net) }}</td>
               </tr>

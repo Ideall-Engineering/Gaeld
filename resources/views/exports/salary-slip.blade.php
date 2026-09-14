@@ -1,5 +1,51 @@
 @php
     $employeeData = $employeeData ?? $slip->employeeDocumentData();
+
+    $deductions = $slip->deductions;
+
+    // The named breakdown the calculation froze into the slip. Listing it is
+    // what keeps the rows and the total underneath them talking about the same
+    // set of contributions — a chart with KTG, FAK or BU used to show a total
+    // larger than the lines above it.
+    $deductionLines = is_array($deductions['lines'] ?? null) ? $deductions['lines'] : [];
+
+    // Slips written before the breakdown existed still print what they printed.
+    if ($deductionLines === []) {
+        foreach (['avs_employee', 'ac_employee', 'aanp_employee', 'lpp_employee'] as $code) {
+            if (isset($deductions[$code])) {
+                $deductionLines[] = ['code' => $code, 'name' => '', 'type' => 'employee', 'amount' => (string) $deductions[$code]];
+            }
+        }
+        foreach (['avs_employer', 'ac_employer', 'lpp_employer'] as $code) {
+            if (isset($deductions[$code])) {
+                $deductionLines[] = ['code' => $code, 'name' => '', 'type' => 'employer', 'amount' => (string) $deductions[$code]];
+            }
+        }
+    }
+
+    $standardLabels = [
+        'avs_employee' => 'exports.salary_slip.avs_ai_apg',
+        'ac_employee' => 'exports.salary_slip.unemployment_insurance',
+        'aanp_employee' => 'exports.salary_slip.aanp',
+        'lpp_employee' => 'exports.salary_slip.pension_lpp',
+        'avs_employer' => 'exports.salary_slip.avs_ai_apg_employer',
+        'ac_employer' => 'exports.salary_slip.unemployment_insurance_employer',
+        'lpp_employer' => 'exports.salary_slip.pension_lpp_employer',
+    ];
+
+    $deductionLabel = static function (array $line) use ($standardLabels): string {
+        $code = (string) ($line['code'] ?? '');
+
+        return isset($standardLabels[$code])
+            ? __($standardLabels[$code])
+            : (string) ($line['name'] !== '' ? $line['name'] : $code);
+    };
+
+    $linesOfType = static fn (string $type): array => array_values(array_filter(
+        $deductionLines,
+        static fn (array $line): bool => ($line['type'] ?? '') === $type
+            && bccomp((string) ($line['amount'] ?? '0'), '0', 2) > 0,
+    ));
 @endphp
 <!DOCTYPE html>
 <html lang="{{ app()->getLocale() }}">
@@ -58,19 +104,9 @@
     <div class="section">
         <div class="section-title">{{ __('exports.salary_slip.employee_deductions') }}</div>
         <table>
-            @php $deductions = $slip->deductions; @endphp
-            @if(isset($deductions['avs_employee']) && bccomp($deductions['avs_employee'], '0', 2) > 0)
-                <tr><td>{{ __('exports.salary_slip.avs_ai_apg') }}</td><td class="right">-{{ number_format((float) $deductions['avs_employee'], 2, '.', "'") }}</td></tr>
-            @endif
-            @if(isset($deductions['ac_employee']) && bccomp($deductions['ac_employee'], '0', 2) > 0)
-                <tr><td>{{ __('exports.salary_slip.unemployment_insurance') }}</td><td class="right">-{{ number_format((float) $deductions['ac_employee'], 2, '.', "'") }}</td></tr>
-            @endif
-            @if(isset($deductions['aanp_employee']) && bccomp($deductions['aanp_employee'], '0', 2) > 0)
-                <tr><td>{{ __('exports.salary_slip.aanp') }}</td><td class="right">-{{ number_format((float) $deductions['aanp_employee'], 2, '.', "'") }}</td></tr>
-            @endif
-            @if(isset($deductions['lpp_employee']) && bccomp($deductions['lpp_employee'], '0', 2) > 0)
-                <tr><td>{{ __('exports.salary_slip.pension_lpp') }}</td><td class="right">-{{ number_format((float) $deductions['lpp_employee'], 2, '.', "'") }}</td></tr>
-            @endif
+            @foreach($linesOfType('employee') as $line)
+                <tr><td>{{ $deductionLabel($line) }}</td><td class="right">-{{ number_format((float) $line['amount'], 2, '.', "'") }}</td></tr>
+            @endforeach
             @php $sourceTax = $deductions['source_tax'] ?? $slip->source_tax_amount ?? '0.00'; @endphp
             @if(bccomp((string) $sourceTax, '0', 2) > 0)
                 <tr><td>{{ __('exports.salary_slip.source_tax') }}</td><td class="right">-{{ number_format((float) $sourceTax, 2, '.', "'") }}</td></tr>
@@ -94,15 +130,9 @@
     <div class="section">
         <div class="section-title">{{ __('exports.salary_slip.employer_charges') }}</div>
         <table>
-            @if(isset($deductions['avs_employer']) && bccomp($deductions['avs_employer'], '0', 2) > 0)
-                <tr><td>{{ __('exports.salary_slip.avs_ai_apg_employer') }}</td><td class="right">{{ number_format((float) $deductions['avs_employer'], 2, '.', "'") }}</td></tr>
-            @endif
-            @if(isset($deductions['ac_employer']) && bccomp($deductions['ac_employer'], '0', 2) > 0)
-                <tr><td>{{ __('exports.salary_slip.unemployment_insurance_employer') }}</td><td class="right">{{ number_format((float) $deductions['ac_employer'], 2, '.', "'") }}</td></tr>
-            @endif
-            @if(isset($deductions['lpp_employer']) && bccomp($deductions['lpp_employer'], '0', 2) > 0)
-                <tr><td>{{ __('exports.salary_slip.pension_lpp_employer') }}</td><td class="right">{{ number_format((float) $deductions['lpp_employer'], 2, '.', "'") }}</td></tr>
-            @endif
+            @foreach($linesOfType('employer') as $line)
+                <tr><td>{{ $deductionLabel($line) }}</td><td class="right">{{ number_format((float) $line['amount'], 2, '.', "'") }}</td></tr>
+            @endforeach
             <tr class="total-row">
                 <td>{{ __('exports.salary_slip.total_employer_charges') }}</td>
                 <td class="right">{{ number_format((float) ($deductions['total_employer'] ?? '0'), 2, '.', "'") }}</td>
