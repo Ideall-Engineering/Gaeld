@@ -45,6 +45,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $founded_at
  * @property bool $require_two_factor
  * @property int|null $default_payment_terms_days
+ * @property int|null $payroll_payday
  * @property Carbon|null $suspended_at
  * @property string|null $suspended_reason
  * @property Carbon|null $deleted_at
@@ -59,6 +60,7 @@ class Organization extends Model
     protected $fillable = [
         'payroll_salary_account_code',
         'payroll_reimbursement_account_code',
+        'payroll_payday',
         'name',
         'legal_name',
         'address',
@@ -92,6 +94,7 @@ class Organization extends Model
         return [
             'require_two_factor' => 'boolean',
             'default_payment_terms_days' => 'integer',
+            'payroll_payday' => 'integer',
             'closed_fiscal_years' => 'array',
             'enabled_modules' => 'array',
             'business_type' => BusinessType::class,

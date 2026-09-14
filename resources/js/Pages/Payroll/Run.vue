@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
 import CardHeader from '@/Components/UI/CardHeader.vue'
@@ -20,6 +20,7 @@ const { intlMonthName, formatCurrency } = useFormatters()
 const props = defineProps({
   employees: { type: Array, default: () => [] },
   fiscalYears: { type: Array, default: () => [] },
+  defaultPayday: { type: [Number, String], default: null },
   withholdingTaxEnabled: { type: Boolean, default: false },
 })
 
@@ -46,6 +47,41 @@ const year = ref(
       : String(lastMonthYear)
   })()
 )
+// The day the money actually leaves, not the last day of the month. Bounded to
+// the payroll month: a date in an already settled quarter costs a further VAT
+// settlement version to undo.
+const postingDate = ref('')
+const postingDateBounds = computed(() => {
+  const periodYear = Number.parseInt(year.value, 10)
+  const periodMonth = Number.parseInt(month.value, 10)
+
+  if (!Number.isFinite(periodYear) || !Number.isFinite(periodMonth)) return { min: '', max: '' }
+
+  const lastDay = new Date(Date.UTC(periodYear, periodMonth, 0)).getUTCDate()
+  const pad = value => String(value).padStart(2, '0')
+
+  return {
+    min: `${periodYear}-${pad(periodMonth)}-01`,
+    max: `${periodYear}-${pad(periodMonth)}-${pad(lastDay)}`,
+  }
+})
+
+watch([month, year], () => {
+  const payday = Number.parseInt(props.defaultPayday, 10)
+
+  if (!Number.isFinite(payday)) {
+    postingDate.value = ''
+
+    return
+  }
+
+  const { min, max } = postingDateBounds.value
+  if (!min) return
+
+  const candidate = `${min.slice(0, 8)}${String(payday).padStart(2, '0')}`
+  postingDate.value = candidate > max ? max : candidate
+}, { immediate: true })
+
 const preview = ref([])
 const generatedSlipIds = ref([])
 const generating = ref(false)
@@ -222,6 +258,7 @@ async function generateSlips() {
         employee_ids: selectedEmployeeIds.value,
         month: month.value,
         year: year.value,
+        posting_date: postingDate.value || null,
         adjustments: adjustmentPayload(),
       }),
     })
@@ -316,7 +353,18 @@ async function postSlips() {
         <div class="flex flex-wrap gap-4">
           <FormSelect id="month" v-model="month" :label="t('month')" :options="monthOptions" required class="w-full sm:w-40" />
           <FormSelect id="year" v-model="year" :label="t('year')" :options="yearOptions" required class="w-full sm:w-28" />
+          <label class="w-full text-xs text-[hsl(var(--muted-foreground))] sm:w-48">
+            {{ t('payroll_posting_date') }}
+            <input
+              v-model="postingDate"
+              type="date"
+              :min="postingDateBounds.min"
+              :max="postingDateBounds.max"
+              class="mt-1 flex h-9 w-full rounded-md border border-[hsl(var(--input))] bg-transparent px-2 text-sm text-[hsl(var(--foreground))]"
+            />
+          </label>
         </div>
+        <p class="-mt-3 text-xs text-[hsl(var(--muted-foreground))]">{{ t('payroll_posting_date_hint') }}</p>
 
         <div>
           <div class="mb-3 flex items-center justify-between">

@@ -26,9 +26,10 @@ class DeductionRatesCommand extends Command
     protected $signature = 'gaeld:deduction-rates
                             {--organization= : Organization id (default: the only one, if there is exactly one)}
                             {--set : Create or update a rate}
-                            {--set-accounts : Set the payroll salary and reimbursement accounts}
+                            {--set-accounts : Set the payroll salary and reimbursement accounts, and the payday}
                             {--salary-account= : Account the gross salary is debited to}
                             {--reimbursement-account= : Account an expense reimbursement is debited to}
+                            {--payday= : Day of the month a payroll run is posted on, 1–31}
                             {--delete : Remove a rate}
                             {--code= : Deduction code, e.g. avs_employee or fak_employer}
                             {--name= : Human-readable name}
@@ -100,7 +101,8 @@ class DeductionRatesCommand extends Command
 
         $this->newLine();
         $this->line('Gross salary → '.($organization->payroll_salary_account_code ?? '5000 (default)')
-            .'   ·   Reimbursement → '.($organization->payroll_reimbursement_account_code ?? '6530 (default)'));
+            .'   ·   Reimbursement → '.($organization->payroll_reimbursement_account_code ?? '6530 (default)')
+            .'   ·   Payday → '.($organization->payroll_payday ?? 'last day of the month'));
         $this->newLine();
         $this->line('A rate without a liability account uses the built-in mapping. A code that has');
         $this->line('neither is refused when the payroll entry is posted, never booked silently.');
@@ -131,14 +133,26 @@ class DeductionRatesCommand extends Command
             $attributes[$column] = (string) $code;
         }
 
+        $payday = $this->option('payday');
+
+        if ($payday !== null) {
+            if (! ctype_digit((string) $payday) || (int) $payday < 1 || (int) $payday > 31) {
+                $this->error('--payday must be a day of the month between 1 and 31.');
+
+                return self::FAILURE;
+            }
+
+            $attributes['payroll_payday'] = (int) $payday;
+        }
+
         if ($attributes === []) {
-            $this->error('Give --salary-account and/or --reimbursement-account.');
+            $this->error('Give --salary-account, --reimbursement-account and/or --payday.');
 
             return self::FAILURE;
         }
 
         $organization->update($attributes);
-        $this->info('Payroll accounts updated.');
+        $this->info('Payroll settings updated.');
 
         return self::SUCCESS;
     }

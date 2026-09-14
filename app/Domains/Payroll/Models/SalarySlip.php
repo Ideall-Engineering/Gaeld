@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Crypt;
  * @property string $organization_id
  * @property int $period_month
  * @property int $period_year
+ * @property Carbon|null $posting_date
  * @property string $gross_salary
  * @property string $net_salary
  * @property string|null $journal_entry_id
@@ -51,6 +52,7 @@ class SalarySlip extends Model
         'organization_id',
         'period_month',
         'period_year',
+        'posting_date',
         'gross_salary',
         'net_salary',
         'journal_entry_id',
@@ -70,6 +72,7 @@ class SalarySlip extends Model
         return [
             'period_month' => 'integer',
             'period_year' => 'integer',
+            'posting_date' => 'date',
             'gross_salary' => 'decimal:2',
             'net_salary' => 'decimal:2',
             'deductions' => 'array',

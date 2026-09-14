@@ -9,6 +9,7 @@ use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Contracts\SourceTaxServiceInterface;
+use App\Domains\Payroll\Exceptions\PostingDateOutsidePeriodException;
 use App\Domains\Payroll\Exceptions\UnmappedDeductionException;
 use App\Domains\Payroll\Models\DeductionRate;
 use App\Domains\Payroll\Models\SalarySlip;
@@ -161,7 +162,7 @@ class PostPayrollAction
         $monthPad = str_pad((string) $slip->period_month, 2, '0', STR_PAD_LEFT);
 
         $entry = new JournalEntryData(
-            date: Carbon::create($slip->period_year, $slip->period_month)->endOfMonth()->toDateString(),
+            date: self::postingDate($slip, $organization)->toDateString(),
             reference: "PAY-{$tag}-{$slip->period_year}-{$monthPad}",
             description: $description,
             lines: $lines,
@@ -178,6 +179,43 @@ class PostPayrollAction
         $this->sendEmail->execute($postedSlip);
 
         return $postedSlip;
+    }
+
+    /**
+     * The date the entry is written under.
+     *
+     * The slip's own date wins, then the day of the month the organization
+     * pays on, then the last day of the month — which is what every slip got
+     * before a date could be chosen at all.
+     *
+     * @throws PostingDateOutsidePeriodException
+     */
+    public static function postingDate(SalarySlip $slip, ?Organization $organization): Carbon
+    {
+        $periodStart = Carbon::create($slip->period_year, $slip->period_month, 1)->startOfDay();
+        $periodEnd = $periodStart->copy()->endOfMonth()->startOfDay();
+
+        if ($slip->posting_date !== null) {
+            $chosen = Carbon::parse($slip->posting_date)->startOfDay();
+
+            if ($chosen->lessThan($periodStart) || $chosen->greaterThan($periodEnd)) {
+                throw new PostingDateOutsidePeriodException(
+                    "Posting date {$chosen->toDateString()} is outside the payroll month "
+                    ."{$periodStart->format('m/Y')}."
+                );
+            }
+
+            return $chosen;
+        }
+
+        $payday = $organization?->payroll_payday;
+
+        if ($payday === null || $payday < 1) {
+            return $periodEnd;
+        }
+
+        // A payday of 31 in a short month is that month's last day.
+        return $periodStart->copy()->setDay(min($payday, $periodStart->daysInMonth));
     }
 
     /**

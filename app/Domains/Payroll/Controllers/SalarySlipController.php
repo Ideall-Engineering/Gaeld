@@ -14,6 +14,7 @@ use App\Domains\Payroll\Services\PayrollCalculator;
 use App\Http\Controllers\Controller;
 use App\Support\FeatureFlag;
 use App\Support\PdfExportService;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -108,6 +109,7 @@ class SalarySlipController extends Controller
             'year' => ['required', 'integer', 'min:2000'],
             'unpaid_leave_days' => PayrollAdjustmentRules::unpaidLeaveDays($request),
             'reimbursement_amount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0'],
+            'posting_date' => PayrollAdjustmentRules::postingDate($request),
         ]);
 
         $employee = Employee::query()->whereKey($validated['employee_id'])->firstOrFail();
@@ -118,6 +120,11 @@ class SalarySlipController extends Controller
             (int) ($validated['unpaid_leave_days'] ?? 0),
             (string) ($validated['reimbursement_amount'] ?? '0.00'),
         );
+
+        if (($validated['posting_date'] ?? null) !== null) {
+            $slip->posting_date = Carbon::parse((string) $validated['posting_date']);
+        }
+
         $slip->save();
 
         return redirect()->route('payroll.salarySlips.show', $slip)
@@ -135,6 +142,14 @@ class SalarySlipController extends Controller
             }
 
             return redirect()->back()->with('error', __('app.salary_slip_already_posted'));
+        }
+
+        $validated = $request->validate([
+            'posting_date' => PayrollAdjustmentRules::postingDateForSlip($slip),
+        ]);
+
+        if (($validated['posting_date'] ?? null) !== null) {
+            $slip->forceFill(['posting_date' => Carbon::parse((string) $validated['posting_date'])])->save();
         }
 
         $action->execute($slip);
