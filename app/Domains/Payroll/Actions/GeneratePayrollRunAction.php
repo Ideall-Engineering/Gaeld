@@ -21,10 +21,12 @@ class GeneratePayrollRunAction
 
     /**
      * @param  array<int, string>  $employeeIds  Optional subset of employee UUIDs to process. Empty array = all active employees.
-     * @param  array<int, array{employee_id: string, unpaid_leave_days?: int|string, reimbursement_amount?: string|int|float}>  $adjustments
+     * @param  array<int, array{employee_id: string, unpaid_leave_days?: int|string, reimbursement_amount?: string|int|float, hours_worked?: string|int|float}>  $adjustments
+     * @param  string|null  $postingDate  Y-m-d the run's entries are dated; null leaves it to the organization's payday.
+     * @param  bool  $bookedExternally  Record the month without ever posting it — for months already booked by hand.
      * @return Collection<int, SalarySlip>
      */
-    public function execute(string $orgId, int $month, int $year, bool $shouldPost = false, array $employeeIds = [], array $adjustments = []): Collection
+    public function execute(string $orgId, int $month, int $year, bool $shouldPost = false, array $employeeIds = [], array $adjustments = [], ?string $postingDate = null, bool $bookedExternally = false): Collection
     {
         $employees = $this->employees($orgId, $month, $year, $employeeIds);
         $adjustmentsByEmployee = collect($adjustments)->keyBy('employee_id');
@@ -41,17 +43,32 @@ class GeneratePayrollRunAction
             }
 
             $adjustment = $adjustmentsByEmployee->get($employee->id, []);
-            $slip = DB::transaction(function () use ($employee, $month, $year, $shouldPost, $adjustment): SalarySlip {
+
+            // An hourly employee with no hours this month has earned nothing.
+            // Writing a slip of zero would mean an unbalanced entry to post and
+            // a salary certificate line claiming a month of work.
+            if ($employee->isHourly() && ! self::hasHours($adjustment)) {
+                continue;
+            }
+
+            $slip = DB::transaction(function () use ($employee, $month, $year, $shouldPost, $adjustment, $postingDate, $bookedExternally): SalarySlip {
                 $slip = $this->calculator->calculate(
                     $employee,
                     $month,
                     $year,
                     (int) ($adjustment['unpaid_leave_days'] ?? 0),
                     self::reimbursementFor($employee, $adjustment),
+                    (string) ($adjustment['hours_worked'] ?? '0.00'),
                 );
+
+                if ($postingDate !== null) {
+                    $slip->posting_date = Carbon::parse($postingDate);
+                }
+
+                $slip->booked_externally = $bookedExternally;
                 $slip->save();
 
-                if ($shouldPost) {
+                if ($shouldPost && ! $bookedExternally) {
                     $this->postAction->execute($slip);
                 }
 
@@ -68,7 +85,7 @@ class GeneratePayrollRunAction
      * Calculate a payroll preview without persisting salary slips.
      *
      * @param  array<int, string>  $employeeIds
-     * @param  array<int, array{employee_id: string, unpaid_leave_days?: int|string, reimbursement_amount?: string|int|float}>  $adjustments
+     * @param  array<int, array{employee_id: string, unpaid_leave_days?: int|string, reimbursement_amount?: string|int|float, hours_worked?: string|int|float}>  $adjustments
      * @return Collection<int, SalarySlip>
      */
     public function preview(string $orgId, int $month, int $year, array $employeeIds = [], array $adjustments = []): Collection
@@ -76,6 +93,8 @@ class GeneratePayrollRunAction
         $adjustmentsByEmployee = collect($adjustments)->keyBy('employee_id');
 
         return $this->employees($orgId, $month, $year, $employeeIds)
+            ->reject(fn (Employee $employee): bool => $employee->isHourly()
+                && ! self::hasHours($adjustmentsByEmployee->get($employee->id, [])))
             ->map(function (Employee $employee) use ($adjustmentsByEmployee, $month, $year): SalarySlip {
                 $adjustment = $adjustmentsByEmployee->get($employee->id, []);
 
@@ -85,9 +104,20 @@ class GeneratePayrollRunAction
                     $year,
                     (int) ($adjustment['unpaid_leave_days'] ?? 0),
                     self::reimbursementFor($employee, $adjustment),
+                    (string) ($adjustment['hours_worked'] ?? '0.00'),
                 );
             })
             ->values();
+    }
+
+    /**
+     * @param  array<string, mixed>  $adjustment
+     */
+    private static function hasHours(array $adjustment): bool
+    {
+        $hours = $adjustment['hours_worked'] ?? null;
+
+        return $hours !== null && is_numeric($hours) && (float) $hours > 0;
     }
 
     /**

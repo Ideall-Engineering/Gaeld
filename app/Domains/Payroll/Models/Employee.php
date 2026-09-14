@@ -36,6 +36,10 @@ use Illuminate\Support\Carbon;
  * @property Carbon $entry_date
  * @property Carbon|null $exit_date
  * @property string $gross_salary
+ * @property string $salary_type
+ * @property string|null $hourly_rate
+ * @property string|null $vacation_compensation_rate
+ * @property string|null $thirteenth_compensation_rate
  * @property string|null $expense_allowance
  * @property bool $is_active
  * @property bool $is_source_tax_subject
@@ -75,6 +79,10 @@ class Employee extends Model
         'entry_date',
         'exit_date',
         'gross_salary',
+        'salary_type',
+        'hourly_rate',
+        'vacation_compensation_rate',
+        'thirteenth_compensation_rate',
         'expense_allowance',
         'is_active',
         'is_source_tax_subject',
@@ -91,6 +99,9 @@ class Employee extends Model
             'entry_date' => 'date',
             'exit_date' => 'date',
             'gross_salary' => 'decimal:2',
+            'hourly_rate' => 'decimal:2',
+            'vacation_compensation_rate' => 'decimal:4',
+            'thirteenth_compensation_rate' => 'decimal:4',
             'expense_allowance' => 'decimal:2',
             'employment_rate' => 'decimal:2',
             'is_active' => 'boolean',
@@ -102,6 +113,18 @@ class Employee extends Model
             // IBAN is encrypted at rest — same rationale as ahv_number.
             'iban' => 'encrypted',
         ];
+    }
+
+    /**
+     * Paid for the hours worked rather than a monthly salary.
+     *
+     * The distinction runs through the whole calculation: an hourly wage is not
+     * pro-rated over the days of a month, carries no December thirteenth month,
+     * and needs the month's hours before it can be worked out at all.
+     */
+    public function isHourly(): bool
+    {
+        return $this->salary_type === 'hourly';
     }
 
     /** @return BelongsTo<Organization, $this> */

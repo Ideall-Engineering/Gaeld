@@ -46,10 +46,21 @@ class SwissDeductionService
     // ──────────────────────────────────────────────────────────────
 
     /**
+     * The key under which the named breakdown is stored, alongside the plain
+     * code => amount entries. Reserved: a deduction rate must not use it.
+     */
+    public const LINES_KEY = 'lines';
+
+    /**
      * Calculate all deductions for a given gross salary.
      *
+     * Besides the plain code => amount entries the result carries a `lines`
+     * breakdown: every deduction with the name and type it was calculated
+     * under. Screens and documents render that list instead of a hardcoded
+     * selection, so a rate an organization added itself is no longer invisible.
+     *
      * @param  Collection<int, DeductionRate>|null  $rates
-     * @return array{avs_employee: string, avs_employer: string, ac_employee: string, ac_employer: string, aanp_employee: string, lpp_employee: string, lpp_employer: string, total_employee: string, total_employer: string, net_salary: string}
+     * @return array{avs_employee: string, avs_employer: string, ac_employee: string, ac_employer: string, aanp_employee: string, lpp_employee: string, lpp_employer: string, total_employee: string, total_employer: string, net_salary: string, lines: array<int, array{code: string, name: string, type: string, amount: string}>}
      */
     public function calculateDeductions(string $grossSalary, ?Collection $rates = null): array
     {
@@ -65,6 +76,7 @@ class SwissDeductionService
         $rateMap = $this->buildRateMap($rates);
 
         $deductions = [];
+        $lines = [];
         $totalEmployee = '0.00';
         $totalEmployer = '0.00';
 
@@ -75,6 +87,12 @@ class SwissDeductionService
                 ? Money::normalize($rate['amount'])
                 : Money::percentage($grossSalary, (string) $rate['rate']);
             $deductions[$code] = $amount;
+            $lines[] = [
+                'code' => (string) $code,
+                'name' => (string) $rate['name'],
+                'type' => (string) $rate['type'],
+                'amount' => $amount,
+            ];
 
             if ($rate['type'] === 'employee') {
                 $totalEmployee = Money::add($totalEmployee, $amount);
@@ -83,6 +101,7 @@ class SwissDeductionService
             }
         }
 
+        $deductions[self::LINES_KEY] = $lines;
         $deductions['total_employee'] = $totalEmployee;
         $deductions['total_employer'] = $totalEmployer;
         $deductions['net_salary'] = Money::subtract($grossSalary, $totalEmployee);

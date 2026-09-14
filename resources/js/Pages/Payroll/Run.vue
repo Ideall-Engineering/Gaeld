@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
 import CardHeader from '@/Components/UI/CardHeader.vue'
@@ -20,16 +20,20 @@ const { intlMonthName, formatCurrency } = useFormatters()
 const props = defineProps({
   employees: { type: Array, default: () => [] },
   fiscalYears: { type: Array, default: () => [] },
+  defaultPayday: { type: [Number, String], default: null },
   withholdingTaxEnabled: { type: Boolean, default: false },
 })
 
 // Step state: 1=Select, 2=Preview, 3=Generate, 4=Post
 const step = ref(1)
 const selectedEmployeeIds = ref([])
+// The agreed flat expense sum is the default, not zero: a run sheet that starts
+// at 0.00 silently drops what the employment contract already settled.
 const adjustments = ref(Object.fromEntries(
   props.employees.map(employee => [employee.id, {
     unpaid_leave_days: 0,
-    reimbursement_amount: '0.00',
+    reimbursement_amount: employee.expense_allowance ?? '0.00',
+    hours_worked: '0.00',
   }])
 ))
 const month = ref(String(((new Date().getMonth() + 11) % 12) + 1))
@@ -43,6 +47,44 @@ const year = ref(
       : String(lastMonthYear)
   })()
 )
+// The day the money actually leaves, not the last day of the month. Bounded to
+// the payroll month: a date in an already settled quarter costs a further VAT
+// settlement version to undo.
+const postingDate = ref('')
+// A month that was already booked by hand: calculate and record it so the
+// salary certificate covers the whole year, but never post it.
+const bookedExternally = ref(false)
+const postingDateBounds = computed(() => {
+  const periodYear = Number.parseInt(year.value, 10)
+  const periodMonth = Number.parseInt(month.value, 10)
+
+  if (!Number.isFinite(periodYear) || !Number.isFinite(periodMonth)) return { min: '', max: '' }
+
+  const lastDay = new Date(Date.UTC(periodYear, periodMonth, 0)).getUTCDate()
+  const pad = value => String(value).padStart(2, '0')
+
+  return {
+    min: `${periodYear}-${pad(periodMonth)}-01`,
+    max: `${periodYear}-${pad(periodMonth)}-${pad(lastDay)}`,
+  }
+})
+
+watch([month, year], () => {
+  const payday = Number.parseInt(props.defaultPayday, 10)
+
+  if (!Number.isFinite(payday)) {
+    postingDate.value = ''
+
+    return
+  }
+
+  const { min, max } = postingDateBounds.value
+  if (!min) return
+
+  const candidate = `${min.slice(0, 8)}${String(payday).padStart(2, '0')}`
+  postingDate.value = candidate > max ? max : candidate
+}, { immediate: true })
+
 const preview = ref([])
 const generatedSlipIds = ref([])
 const generating = ref(false)
@@ -84,6 +126,31 @@ const yearOptions = computed(() =>
       })
 )
 
+// A deduction carries its own name from the calculation. A built-in code has a
+// translated label; anything an organization configured itself does not, and
+// falls back to the name the rate was calculated under.
+function deductionLabel(line) {
+  const translated = t(line.code)
+
+  return translated === line.code ? (line.name || line.code) : translated
+}
+
+const deductionColumns = computed(() => {
+  const columns = new Map()
+
+  for (const row of preview.value) {
+    for (const line of row.deduction_lines ?? []) {
+      if (!columns.has(line.code)) columns.set(line.code, deductionLabel(line))
+    }
+  }
+
+  return [...columns].map(([code, label]) => ({ code, label }))
+})
+
+function deductionAmount(row, code) {
+  return (row.deduction_lines ?? []).find(line => line.code === code)?.amount ?? '0.00'
+}
+
 const steps = computed(() => [
   { n: 1, label: t('payroll_step_select') },
   { n: 2, label: t('payroll_step_preview') },
@@ -119,6 +186,7 @@ function adjustmentPayload() {
       employee_id: employeeId,
       unpaid_leave_days: Number(adjustment?.unpaid_leave_days) || 0,
       reimbursement_amount: adjustment?.reimbursement_amount || '0.00',
+      hours_worked: adjustment?.hours_worked || '0.00',
     }
   })
 }
@@ -160,10 +228,9 @@ async function goToPreview() {
         ...employee,
         id: slip.employee_id,
         gross_salary: slip.gross_salary,
-        avs: deductions.avs_employee ?? '0.00',
-        ac: deductions.ac_employee ?? '0.00',
-        aanp: deductions.aanp_employee ?? '0.00',
-        lpp: deductions.lpp_employee ?? '0.00',
+        // Every deduction the calculation produced, not a fixed selection —
+        // a rate the organization added itself belongs on screen too.
+        deduction_lines: (deductions.lines ?? []).filter(line => line.type === 'employee'),
         base_salary: deductions.base_salary ?? slip.gross_salary,
         thirteenth_salary: deductions.thirteenth_salary ?? '0.00',
         unpaid_leave_amount: deductions.unpaid_leave_amount ?? '0.00',
@@ -195,6 +262,8 @@ async function generateSlips() {
         employee_ids: selectedEmployeeIds.value,
         month: month.value,
         year: year.value,
+        posting_date: postingDate.value || null,
+        booked_externally: bookedExternally.value,
         adjustments: adjustmentPayload(),
       }),
     })
@@ -289,7 +358,26 @@ async function postSlips() {
         <div class="flex flex-wrap gap-4">
           <FormSelect id="month" v-model="month" :label="t('month')" :options="monthOptions" required class="w-full sm:w-40" />
           <FormSelect id="year" v-model="year" :label="t('year')" :options="yearOptions" required class="w-full sm:w-28" />
+          <label class="w-full text-xs text-[hsl(var(--muted-foreground))] sm:w-48">
+            {{ t('payroll_posting_date') }}
+            <input
+              v-model="postingDate"
+              type="date"
+              :min="postingDateBounds.min"
+              :max="postingDateBounds.max"
+              class="mt-1 flex h-9 w-full rounded-md border border-[hsl(var(--input))] bg-transparent px-2 text-sm text-[hsl(var(--foreground))]"
+            />
+          </label>
         </div>
+        <p class="-mt-3 text-xs text-[hsl(var(--muted-foreground))]">{{ t('payroll_posting_date_hint') }}</p>
+
+        <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-[hsl(var(--border))] p-3">
+          <input v-model="bookedExternally" type="checkbox" class="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" />
+          <span>
+            <span class="block text-sm font-medium">{{ t('payroll_booked_externally') }}</span>
+            <span class="block text-xs text-[hsl(var(--muted-foreground))]">{{ t('payroll_booked_externally_hint') }}</span>
+          </span>
+        </label>
 
         <div>
           <div class="mb-3 flex items-center justify-between">
@@ -313,7 +401,11 @@ async function postSlips() {
               />
               <div class="flex-1">
                 <p class="font-medium text-sm">{{ emp.first_name }} {{ emp.last_name }}</p>
-                <p class="text-xs text-[hsl(var(--muted-foreground))]">{{ emp.position }} — {{ formatCurrency(emp.gross_salary) }}{{ t('per_month') }}</p>
+                <p class="text-xs text-[hsl(var(--muted-foreground))]">
+                  {{ emp.position }} —
+                  <template v-if="emp.salary_type === 'hourly'">{{ formatCurrency(emp.hourly_rate) }} / {{ t('hours_worked') }}</template>
+                  <template v-else>{{ formatCurrency(emp.gross_salary) }}{{ t('per_month') }}</template>
+                </p>
               </div>
             </label>
           </div>
@@ -330,7 +422,17 @@ async function postSlips() {
             class="grid grid-cols-1 gap-3 rounded-lg border border-[hsl(var(--border))] p-3 sm:grid-cols-[1fr_10rem_10rem] sm:items-end"
           >
             <p class="text-sm font-medium">{{ emp.first_name }} {{ emp.last_name }}</p>
-            <label class="text-xs text-[hsl(var(--muted-foreground))]">
+            <label v-if="emp.salary_type === 'hourly'" class="text-xs text-[hsl(var(--muted-foreground))]">
+              {{ t('hours_worked') }}
+              <input
+                v-model="adjustmentFor(emp.id).hours_worked"
+                type="number"
+                min="0"
+                step="0.01"
+                class="mt-1 flex h-9 w-full rounded-md border border-[hsl(var(--input))] bg-transparent px-2 text-sm text-[hsl(var(--foreground))]"
+              />
+            </label>
+            <label v-else class="text-xs text-[hsl(var(--muted-foreground))]">
               {{ t('unpaid_leave_days') }}
               <input
                 v-model.number="adjustmentFor(emp.id).unpaid_leave_days"
@@ -377,10 +479,11 @@ async function postSlips() {
                 <th class="min-w-[8rem] whitespace-nowrap px-3 pb-2 text-right font-medium">{{ t('thirteenth_salary') }}</th>
                 <th class="min-w-[10rem] whitespace-nowrap px-3 pb-2 text-right font-medium">{{ t('unpaid_leave') }}</th>
                 <th class="min-w-[13rem] whitespace-nowrap px-3 pb-2 text-right font-medium">{{ t('expense_reimbursement') }}</th>
-                <th class="min-w-[6rem] whitespace-nowrap px-3 pb-2 text-right font-medium">AVS</th>
-                <th class="min-w-[6rem] whitespace-nowrap px-3 pb-2 text-right font-medium">AC</th>
-                <th class="min-w-[6rem] whitespace-nowrap px-3 pb-2 text-right font-medium">AANP</th>
-                <th class="min-w-[6rem] whitespace-nowrap px-3 pb-2 text-right font-medium">LPP</th>
+                <th
+                  v-for="column in deductionColumns"
+                  :key="column.code"
+                  class="min-w-[7rem] whitespace-nowrap px-3 pb-2 text-right font-medium"
+                >{{ column.label }}</th>
                 <th v-if="withholdingTaxEnabled" class="min-w-[8rem] whitespace-nowrap px-3 pb-2 text-right font-medium">{{ t('withholding_tax') }}</th>
                 <th class="min-w-[8rem] whitespace-nowrap px-3 pb-2 text-right font-medium">{{ t('net_salary') }}</th>
               </tr>
@@ -392,10 +495,11 @@ async function postSlips() {
                 <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono">{{ formatCurrency(emp.thirteenth_salary) }}</td>
                 <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.unpaid_leave_amount) }}</td>
                 <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-green-700 dark:text-green-400">{{ formatCurrency(emp.reimbursement_amount) }}</td>
-                <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.avs) }}</td>
-                <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.ac) }}</td>
-                <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.aanp) }}</td>
-                <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.lpp) }}</td>
+                <td
+                  v-for="column in deductionColumns"
+                  :key="column.code"
+                  class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600"
+                >{{ formatCurrency(-deductionAmount(emp, column.code)) }}</td>
                 <td v-if="withholdingTaxEnabled" class="whitespace-nowrap px-3 py-2.5 text-right font-mono text-red-600">{{ formatCurrency(-emp.source_tax) }}</td>
                 <td class="whitespace-nowrap px-3 py-2.5 text-right font-mono font-bold text-green-700 dark:text-green-400">{{ formatCurrency(emp.net) }}</td>
               </tr>
@@ -420,8 +524,16 @@ async function postSlips() {
         <p class="text-sm text-[hsl(var(--muted-foreground))]">
           {{ t('payroll_generated_count', { count: generatedSlipIds.length }) }}
         </p>
+        <p v-if="bookedExternally" class="text-sm text-[hsl(var(--muted-foreground))]">
+          {{ t('payroll_booked_externally_hint') }}
+        </p>
         <div class="flex gap-3">
-          <Button :disabled="posting || isYearClosed" :title="isYearClosed ? t('fiscal_year_closed_action_disabled') : undefined" @click="postSlips">
+          <Button
+            v-if="!bookedExternally"
+            :disabled="posting || isYearClosed"
+            :title="isYearClosed ? t('fiscal_year_closed_action_disabled') : undefined"
+            @click="postSlips"
+          >
             {{ posting ? t('posting') + '…' : t('payroll_step_post') }}
           </Button>
           <Button variant="outline" as="a" href="/payroll/salary-slips">

@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useForm, Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
@@ -52,9 +52,29 @@ function downloadPdf() {
   window.open(`/payroll/salary-slips/${props.slip.id}/pdf`, '_blank')
 }
 
-function deductionRow(label, employee, employer) {
-  return { label, employee, employer, total: (Number(employee) || 0) + (Number(employer) || 0) }
+// A deduction carries its own name from the calculation. A built-in code has a
+// translated label; anything an organization configured itself does not, and
+// falls back to the name the rate was calculated under.
+function deductionLabel(line) {
+  const translated = t(line.code)
+
+  return translated === line.code ? (line.name || line.code) : translated
 }
+
+// Every deduction that was calculated, not a fixed selection. Before this the
+// screen listed four and totalled eight, so the rows did not add up to the
+// total underneath them.
+const deductionLines = computed(() =>
+  (props.slip.deductions?.lines ?? []).map(line => ({
+    ...line,
+    label: deductionLabel(line),
+    employee: line.type === 'employee' ? line.amount : null,
+    employer: line.type === 'employer' ? line.amount : null,
+  }))
+)
+
+const totalEmployee = computed(() => props.slip.deductions?.total_employee ?? '0.00')
+const totalEmployer = computed(() => props.slip.deductions?.total_employer ?? '0.00')
 </script>
 
 <template>
@@ -108,6 +128,24 @@ function deductionRow(label, employee, employer) {
                 <td class="whitespace-nowrap py-2 text-right">—</td>
                 <td class="whitespace-nowrap py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.base_salary) }}</td>
               </tr>
+              <tr v-if="Number(slip.adjustments?.hours_worked) > 0" class="text-[hsl(var(--muted-foreground))]">
+                <td class="py-2">{{ t('hours_worked') }} × {{ formatCurrency(slip.adjustments.hourly_rate) }}</td>
+                <td class="py-2 text-right font-mono">{{ slip.adjustments.hours_worked }}</td>
+                <td class="py-2 text-right">—</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.base_salary) }}</td>
+              </tr>
+              <tr v-if="Number(slip.adjustments?.vacation_compensation) > 0" class="text-green-700 dark:text-green-400">
+                <td class="py-2">{{ t('vacation_compensation') }}</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.vacation_compensation) }}</td>
+                <td class="py-2 text-right">—</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.vacation_compensation) }}</td>
+              </tr>
+              <tr v-if="Number(slip.adjustments?.thirteenth_compensation) > 0" class="text-green-700 dark:text-green-400">
+                <td class="py-2">{{ t('thirteenth_compensation') }}</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.thirteenth_compensation) }}</td>
+                <td class="py-2 text-right">—</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.thirteenth_compensation) }}</td>
+              </tr>
               <tr v-if="Number(slip.adjustments?.thirteenth_salary) > 0" class="text-green-700 dark:text-green-400">
                 <td class="py-2">{{ t('thirteenth_salary') }}</td>
                 <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.thirteenth_salary) }}</td>
@@ -134,22 +172,23 @@ function deductionRow(label, employee, employer) {
                 <td class="py-2.5 text-right font-mono">{{ formatCurrency(slip.gross_salary) }}</td>
               </tr>
               <!-- Deductions -->
-              <tr v-for="d in [
-                deductionRow(t('avs_employee'), slip.deductions?.avs_employee, slip.deductions?.avs_employer),
-                deductionRow(t('ac_employee'), slip.deductions?.ac_employee, slip.deductions?.ac_employer),
-                deductionRow(t('aanp_employee'), slip.deductions?.aanp_employee, slip.deductions?.aanp_employer),
-                deductionRow(t('lpp_employee'), slip.deductions?.lpp_employee, slip.deductions?.lpp_employer),
-              ]" :key="d.label" class="text-red-700 dark:text-red-400">
+              <tr v-for="d in deductionLines" :key="d.code" class="text-red-700 dark:text-red-400">
                 <td class="py-2">{{ d.label }}</td>
-                <td class="py-2 text-right font-mono">{{ formatCurrency(-d.employee) }}</td>
-                <td class="py-2 text-right font-mono">{{ formatCurrency(-d.employer) }}</td>
-                <td class="py-2 text-right font-mono">{{ formatCurrency(-d.total) }}</td>
+                <td class="py-2 text-right font-mono">{{ d.employee === null ? '—' : formatCurrency(-d.employee) }}</td>
+                <td class="py-2 text-right font-mono">{{ d.employer === null ? '—' : formatCurrency(-d.employer) }}</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(-d.amount) }}</td>
               </tr>
               <tr v-if="Number(slip.deductions?.source_tax) > 0" class="text-red-700 dark:text-red-400">
                 <td class="py-2">{{ t('withholding_tax') }}</td>
                 <td class="py-2 text-right font-mono">{{ formatCurrency(-slip.deductions.source_tax) }}</td>
                 <td class="py-2 text-right">—</td>
                 <td class="py-2 text-right font-mono">{{ formatCurrency(-slip.deductions.source_tax) }}</td>
+              </tr>
+              <tr v-if="deductionLines.length" class="font-medium">
+                <td class="py-2">{{ t('total_deductions') }}</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(-totalEmployee) }}</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(-totalEmployer) }}</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(-(Number(totalEmployee) + Number(totalEmployer))) }}</td>
               </tr>
             </tbody>
             <tfoot>
@@ -170,7 +209,7 @@ function deductionRow(label, employee, employer) {
       <!-- Actions -->
       <div class="flex flex-wrap gap-3">
         <Button
-          v-if="canManage && slip.status !== 'posted'"
+          v-if="canManage && slip.status === 'draft'"
           size="sm"
           :disabled="postForm.processing"
           @click="postToLedger"
@@ -197,6 +236,9 @@ function deductionRow(label, employee, employer) {
         <Button variant="outline" size="sm" @click="downloadPdf">
           {{ t('download_pdf') }}
         </Button>
+        <p v-if="slip.status === 'external'" class="flex items-center text-sm text-[hsl(var(--muted-foreground))]">
+          {{ t('payroll_booked_externally_hint') }}
+        </p>
         <p v-if="slip.status === 'posted'" class="flex items-center text-sm text-green-700 dark:text-green-400">
           {{ t('slip_posted_to_ledger') }}
           <span v-if="canManage && slip.journal_entry_id" class="ml-2">

@@ -107,6 +107,9 @@ return [
         'period' => 'Journal Entries — :from to :to',
     ],
     'salary_slip' => [
+        'hours_worked' => 'Hours',
+        'vacation_compensation' => 'Holiday compensation',
+        'thirteenth_compensation' => 'Share of 13th salary',
         'title' => 'Salary Slip',
         'employee' => 'Employee',
         'name' => 'Name',

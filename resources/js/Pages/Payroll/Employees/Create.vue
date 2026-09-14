@@ -42,6 +42,10 @@ const form = useForm({
   employment_rate: '',
   entry_date: new Date().toISOString().slice(0, 10),
   gross_salary: '',
+  salary_type: 'monthly',
+  hourly_rate: '',
+  vacation_compensation_rate: '',
+  thirteenth_compensation_rate: '',
   expense_allowance: '',
   status: 'active',
   iban: '',
@@ -68,6 +72,10 @@ function submit() {
     ahv_number: data.ahv_number || null,
     entry_date: data.entry_date,
     gross_salary: data.gross_salary,
+    salary_type: data.salary_type,
+    hourly_rate: data.salary_type === 'hourly' ? data.hourly_rate : null,
+    vacation_compensation_rate: data.salary_type === 'hourly' ? (data.vacation_compensation_rate || null) : null,
+    thirteenth_compensation_rate: data.salary_type === 'hourly' ? (data.thirteenth_compensation_rate || null) : null,
     expense_allowance: data.expense_allowance || null,
     is_active: data.status === 'active',
     is_source_tax_subject: data.is_source_tax_subject,
@@ -194,6 +202,49 @@ function submit() {
               :label="t('gross_salary') + ' (CHF' + t('per_month') + ')'"
               :error="form.errors.gross_salary"
               required
+            />
+            <FormSelect
+              id="salary_type"
+              v-model="form.salary_type"
+              :label="t('salary_type')"
+              :options="[
+                { value: 'monthly', label: t('salary_type_monthly') },
+                { value: 'hourly', label: t('salary_type_hourly') },
+              ]"
+              :error="form.errors.salary_type"
+            />
+            <FormInput
+              v-if="form.salary_type === 'hourly'"
+              id="hourly_rate"
+              v-model="form.hourly_rate"
+              type="number"
+              step="0.01"
+              min="0"
+              :label="t('hourly_rate') + ' (CHF)'"
+              :error="form.errors.hourly_rate"
+              required
+            />
+            <FormInput
+              v-if="form.salary_type === 'hourly'"
+              id="vacation_compensation_rate"
+              v-model="form.vacation_compensation_rate"
+              type="number"
+              step="0.0001"
+              min="0"
+              max="100"
+              :label="t('vacation_compensation_rate')"
+              :error="form.errors.vacation_compensation_rate"
+            />
+            <FormInput
+              v-if="form.salary_type === 'hourly'"
+              id="thirteenth_compensation_rate"
+              v-model="form.thirteenth_compensation_rate"
+              type="number"
+              step="0.0001"
+              min="0"
+              max="100"
+              :label="t('thirteenth_compensation_rate')"
+              :error="form.errors.thirteenth_compensation_rate"
             />
             <FormInput
               id="job_title"

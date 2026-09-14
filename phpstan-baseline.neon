@@ -343,7 +343,7 @@ parameters:
 			path: app/Domains/Organizations/Models/Organization.php
 
 		-
-			message: '#^Method App\\Domains\\Payroll\\Services\\SwissDeductionService\:\:calculateDeductions\(\) should return array\{avs_employee\: string, avs_employer\: string, ac_employee\: string, ac_employer\: string, aanp_employee\: string, lpp_employee\: string, lpp_employer\: string, total_employee\: string, \.\.\.\} but returns non\-empty\-array\<string, numeric\-string\>\.$#'
+			message: '#^Method App\\Domains\\Payroll\\Services\\SwissDeductionService\:\:calculateDeductions\(\) should return array\{avs_employee\: string, avs_employer\: string, ac_employee\: string, ac_employer\: string, aanp_employee\: string, lpp_employee\: string, lpp_employer\: string, total_employee\: string, \.\.\.\} but returns non\-empty\-array\<string, list\<array\{code\: string, name\: string, type\: string, amount\: numeric\-string\}\>\|numeric\-string\>\.$#'
 			identifier: return.type
 			count: 1
 			path: app/Domains/Payroll/Services/SwissDeductionService.php

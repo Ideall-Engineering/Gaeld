@@ -32,6 +32,13 @@ trait EmployeeRules
             'entry_date' => ['required', 'date'],
             'exit_date' => ['nullable', 'date', 'after_or_equal:entry_date'],
             'gross_salary' => ['required', 'numeric', 'min:0'],
+            'salary_type' => ['nullable', 'in:monthly,hourly'],
+            // An hourly wage needs a rate; holiday pay and the share of a
+            // thirteenth salary come from the employment contract, so they are
+            // asked for rather than assumed.
+            'hourly_rate' => ['nullable', 'numeric', 'min:0', 'required_if:salary_type,hourly'],
+            'vacation_compensation_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'thirteenth_compensation_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'expense_allowance' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['boolean'],
             'is_source_tax_subject' => ['boolean'],

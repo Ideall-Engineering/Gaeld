@@ -107,6 +107,9 @@ return [
         'period' => 'Journalbuchungen — :from bis :to',
     ],
     'salary_slip' => [
+        'hours_worked' => 'Stunden',
+        'vacation_compensation' => 'Ferienentschädigung',
+        'thirteenth_compensation' => 'Anteil 13. Monatslohn',
         'title' => 'Lohnabrechnung',
         'employee' => 'Mitarbeiter',
         'name' => 'Name',

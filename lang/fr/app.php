@@ -2706,4 +2706,36 @@ return [
     'captcha_required' => 'Le captcha est requis.',
     'captcha_failed' => 'La vérification du captcha a échoué. Veuillez réessayer.',
     'captcha_unavailable' => 'La vérification du captcha est temporairement indisponible.',
+    // Payroll — journal texts, written once in the organization's language.
+    'payroll_journal_description' => 'Salaire :name — :period',
+    'payroll_journal_gross_salary' => 'Salaire brut : :name',
+    'payroll_journal_net_salary' => 'Salaire net versé : :name',
+    'payroll_journal_reimbursement' => 'Remboursement de frais : :name',
+    'payroll_journal_withholding_tax' => 'Impôt à la source',
+
+    // Payroll — posting date
+    'payroll_posting_date' => 'Date de comptabilisation',
+    'payroll_posting_date_hint' => 'Doit se situer dans le mois de paie. Sans indication, le jour de paie de l\'organisation s\'applique.',
+    'payroll_posting_date_outside_period' => 'La date de comptabilisation doit se situer dans le mois de paie.',
+    'payroll_default_payday' => 'Jour de paie',
+    'payroll_default_payday_hint' => 'Jour du mois auquel une paie est comptabilisée.',
+
+    // Payroll — externally booked slips
+    'payroll_booked_externally' => 'Comptabilisé en externe',
+    'payroll_booked_externally_hint' => 'Déjà comptabilisé hors du module de paie — compte pour le certificat de salaire, mais ne crée aucune écriture.',
+    'payroll_booked_externally_not_postable' => 'Une fiche de salaire comptabilisée en externe ne peut pas être comptabilisée.',
+
+    // Payroll — hourly wages
+    'salary_type' => 'Type de salaire',
+    'salary_type_monthly' => 'Salaire mensuel',
+    'salary_type_hourly' => 'Salaire horaire',
+    'hourly_rate' => 'Taux horaire',
+    'hours_worked' => 'Heures',
+    'vacation_compensation_rate' => 'Indemnité de vacances (%)',
+    'thirteenth_compensation_rate' => 'Part du 13e salaire (%)',
+    'vacation_compensation' => 'Indemnité de vacances',
+    'thirteenth_compensation' => 'Part du 13e salaire',
+    'hourly_rate_required' => 'Un salaire horaire nécessite un taux horaire.',
+    'total_deductions' => 'Total des déductions',
+    'slip_status_external' => 'Comptabilisé en externe',
 ];

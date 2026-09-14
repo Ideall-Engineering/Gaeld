@@ -144,16 +144,31 @@ class DeductionAccountMappingTest extends TestCase
         $this->assertSame('8.62', (string) $byCode['5750']->sum(fn ($l) => (float) $l->debit));
     }
 
-    public function test_liabilities_are_aggregated_per_account(): void
+    public function test_each_liability_keeps_its_own_line_and_they_sum_to_the_account_total(): void
     {
         $this->seedFullSwissRates();
 
         $slip = $this->postFor($this->employeeA);
-        $lines = $slip->journalEntry->lines->load('account')->keyBy(fn ($l) => $l->account->code);
+        $lines = $slip->journalEntry->lines->load('account')
+            ->groupBy(fn ($line) => $line->account->code);
 
         // 2270 carries AHV and ALV from both sides plus administration and FAK.
+        // One line each: a reader can check a contribution in the journal
+        // instead of only on the salary slip.
         $expected2270 = $this->total(['58.71', '58.71', '12.18', '12.18', '5.54', '16.06']);
-        $this->assertSame($expected2270, (string) $lines['2270']->credit);
+        $this->assertCount(6, $lines['2270']);
+        $this->assertSame($expected2270, $this->total($lines['2270']->pluck('credit')->all()));
+    }
+
+    public function test_a_liability_line_is_named_after_its_contribution(): void
+    {
+        $this->seedFullSwissRates();
+
+        $slip = $this->postFor($this->employeeA);
+        $descriptions = $slip->journalEntry->lines->pluck('description')->all();
+
+        $this->assertContains('FAK', $descriptions);
+        $this->assertNotContains('Social security contributions', $descriptions);
     }
 
     public function test_a_fixed_amount_is_used_instead_of_a_percentage(): void
