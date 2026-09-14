@@ -2,6 +2,7 @@
 
 namespace Plugins\AccountantApi;
 
+use App\Domains\Accounting\Models\Budget;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Api\Contracts\AbilityCatalog;
 use App\Domains\Organizations\Enums\Permission;
@@ -34,5 +35,14 @@ class AccountantApiServiceProvider extends ServiceProvider
     private function registerAbilities(): void
     {
         AbilityCatalog::register(JournalEntry::class, 'correct', Permission::AccountingEdit);
+
+        // TokenPermissionMap is keyed by model class and does not know
+        // Budget at all: without these, an organization token could not
+        // reach the budget endpoints even with the right permissions.
+        AbilityCatalog::register(Budget::class, 'viewAny', Permission::AccountingView);
+        AbilityCatalog::register(Budget::class, 'view', Permission::AccountingView);
+        AbilityCatalog::register(Budget::class, 'create', Permission::AccountingCreate);
+        AbilityCatalog::register(Budget::class, 'update', Permission::AccountingEdit);
+        AbilityCatalog::register(Budget::class, 'delete', Permission::AccountingDelete);
     }
 }

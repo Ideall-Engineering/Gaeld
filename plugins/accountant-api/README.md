@@ -2,8 +2,9 @@
 
 Extends the core `/api/v1` with the guided journal correction endpoints
 (`specs/007-accountant-api/plan.md`, Etappe 2 "Fokusdesign — Geführte
-Journal-Korrektur"), and is the landing place for the rest of that plan's
-etappen as they are built. It is a thin transport layer: controllers here
+Journal-Korrektur") and the budget endpoints (Etappe 8, pulled forward —
+see `specs/007-accountant-api/tasks-budgets.md`), and is the landing place
+for the rest of that plan's etappen as they are built. It is a thin transport layer: controllers here
 call only core Domain-Actions and Query-Services, through `CoreBridge/`
 adapters where a direct core dependency is unavoidable. Fachlogik and
 fachliche Daten stay in the core.
@@ -66,6 +67,44 @@ constitution asks to avoid:
   the correction endpoints would make them behave differently from every
   other `/api/v1` write. Revisit as a cross-cutting core-seam if concurrent
   editing of the same record becomes a real, observed problem.
+
+## Budgets (plan.md Etappe 8)
+
+```text
+GET    /api/v1/budgets?fiscal_year=2026
+GET    /api/v1/budgets/{account_code}/{fiscal_year}
+PUT    /api/v1/budgets/{account_code}/{fiscal_year}
+DELETE /api/v1/budgets/{account_code}/{fiscal_year}
+```
+
+A budget is a monthly target amount for one ledger account in one fiscal
+year. The endpoints are gated by `feature:budgets` in addition to
+`feature:api_access`, matching the web routes.
+
+**Addressed by the natural key, not by id.** The `budgets` table has no
+uuid column, and the core `/api/v1/accounts` resource exposes only the
+account uuid — so the integer `account_id` the table needs is not
+obtainable through the API at all. `(organization_id, account_id,
+fiscal_year)` is already a unique index, so the natural key needs no new
+migration and makes `PUT`/`DELETE` idempotent by construction. There is
+deliberately no `id` field in the response.
+
+**No Idempotency-Key, and no `HandleApiIdempotency` in the route group.**
+This is the one place where the budget routes differ from the correction
+routes on purpose. A repeated `PUT` writes the same value and a repeated
+`DELETE` removes nothing that is not already gone, so there is nothing for
+a reservation to protect. The middleware would in fact break them: its
+automatic fallback key is built from the route *name* plus a body hash and
+never sees the concrete path parameters. Core routes escape that only
+because their parameters are implicit model bindings, which
+`fallbackReference()` resolves to a model id; module routes use plain
+strings by design, so `PUT /budgets/3000/2026` and `PUT /budgets/6000/2026`
+carrying the same amount would collide on a single key and the second would
+replay the first instead of writing. `BudgetIdempotencyTest` pins this down.
+
+`create` and `update` are separate abilities in `BudgetPolicy`, so the
+upsert checks whichever of the two the call actually is, and answers `201`
+for a new target, `200` for a replaced one.
 
 ## Job status table (T019)
 

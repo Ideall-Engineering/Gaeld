@@ -2,7 +2,7 @@
     "_meta": {
         "module": "accountant-api",
         "core_contract_version": "1.0.0",
-        "note": "Reconciled against contract/api-contract.json by tests/Feature/Plugins/ModuleContractReconciliationTest.php — no (method, path) pair may appear in both files. Routes below are the journal-correction endpoints (plan.md 'API-Vertrag'), implemented in Phase 4; route names match routes/api.php exactly."
+        "note": "Reconciled against contract/api-contract.json by tests/Feature/Plugins/ModuleContractReconciliationTest.php — no (method, path) pair may appear in both files. Routes below are the journal-correction endpoints (plan.md 'API-Vertrag') and the budget endpoints (plan.md Etappe 8); route names match routes/api.php exactly."
     },
     "routes": [
         {
@@ -11,7 +11,9 @@
             "path": "/api/v1/journal-entries/{original}/corrections",
             "controller": "Plugins\\AccountantApi\\Controllers\\JournalCorrectionController@store",
             "auth_required": true,
-            "abilities_required": ["correct"],
+            "abilities_required": [
+                "correct"
+            ],
             "notes": "Prepares a guided correction: creates a locked reversal draft and an editable replacement draft from the original. Requires Idempotency-Key."
         },
         {
@@ -20,7 +22,9 @@
             "path": "/api/v1/journal-corrections/{correction}",
             "controller": "Plugins\\AccountantApi\\Controllers\\JournalCorrectionController@show",
             "auth_required": true,
-            "abilities_required": ["correct"],
+            "abilities_required": [
+                "correct"
+            ],
             "notes": "Returns the correction with original/reversal/replacement and their relationship links."
         },
         {
@@ -29,7 +33,9 @@
             "path": "/api/v1/journal-corrections/{correction}/replacement",
             "controller": "Plugins\\AccountantApi\\Controllers\\JournalCorrectionController@updateReplacement",
             "auth_required": true,
-            "abilities_required": ["correct"],
+            "abilities_required": [
+                "correct"
+            ],
             "notes": "Edits only the replacement draft. Requires Idempotency-Key."
         },
         {
@@ -38,7 +44,9 @@
             "path": "/api/v1/journal-corrections/{correction}/post",
             "controller": "Plugins\\AccountantApi\\Controllers\\JournalCorrectionController@post",
             "auth_required": true,
-            "abilities_required": ["correct"],
+            "abilities_required": [
+                "correct"
+            ],
             "notes": "Posts the reversal and replacement together, atomically. Requires Idempotency-Key."
         },
         {
@@ -47,8 +55,55 @@
             "path": "/api/v1/journal-corrections/{correction}",
             "controller": "Plugins\\AccountantApi\\Controllers\\JournalCorrectionController@destroy",
             "auth_required": true,
-            "abilities_required": ["correct"],
+            "abilities_required": [
+                "correct"
+            ],
             "notes": "Discards an open (draft) correction. Only allowed while status is draft."
+        },
+        {
+            "name": "api.accountant-api.budgets.index",
+            "method": "GET",
+            "path": "/api/v1/budgets",
+            "controller": "Plugins\\AccountantApi\\Controllers\\BudgetController@index",
+            "auth_required": true,
+            "abilities_required": [
+                "viewAny"
+            ],
+            "notes": "Monthly budget targets of the organization. Optional fiscal_year filter, paginated (max 100 per page). Requires feature:budgets."
+        },
+        {
+            "name": "api.accountant-api.budgets.show",
+            "method": "GET",
+            "path": "/api/v1/budgets/{account_code}/{fiscal_year}",
+            "controller": "Plugins\\AccountantApi\\Controllers\\BudgetController@show",
+            "auth_required": true,
+            "abilities_required": [
+                "viewAny"
+            ],
+            "notes": "A single budget, addressed by its natural key. 404 when the code is unknown or inactive, or no target is set for that year."
+        },
+        {
+            "name": "api.accountant-api.budgets.put",
+            "method": "PUT",
+            "path": "/api/v1/budgets/{account_code}/{fiscal_year}",
+            "controller": "Plugins\\AccountantApi\\Controllers\\BudgetController@put",
+            "auth_required": true,
+            "abilities_required": [
+                "create",
+                "update"
+            ],
+            "notes": "Upsert: 201 when the target is new, 200 when it replaces an existing one. Idempotent by construction (natural key), therefore deliberately not run through HandleApiIdempotency and requiring no Idempotency-Key."
+        },
+        {
+            "name": "api.accountant-api.budgets.destroy",
+            "method": "DELETE",
+            "path": "/api/v1/budgets/{account_code}/{fiscal_year}",
+            "controller": "Plugins\\AccountantApi\\Controllers\\BudgetController@destroy",
+            "auth_required": true,
+            "abilities_required": [
+                "delete"
+            ],
+            "notes": "Removes a budget target. 204 on success, 404 when nothing is set."
         }
     ]
 }
