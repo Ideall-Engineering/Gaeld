@@ -2,6 +2,8 @@
 
 namespace App\Domains\Accounting\Controllers;
 
+use App\Domains\Accounting\Actions\DeleteBudgetAction;
+use App\Domains\Accounting\Actions\UpsertBudgetAction;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\Budget;
 use App\Domains\Accounting\Requests\StoreBudgetRequest;
@@ -48,45 +50,52 @@ class BudgetController extends Controller
         ]);
     }
 
-    public function store(StoreBudgetRequest $request, CurrentOrganization $currentOrg): RedirectResponse
-    {
+    public function store(
+        StoreBudgetRequest $request,
+        CurrentOrganization $currentOrg,
+        UpsertBudgetAction $upsertBudget,
+    ): RedirectResponse {
         $this->authorize('create', Budget::class);
 
         $validated = $request->validated();
 
-        Budget::updateOrCreate(
-            [
-                'organization_id' => $currentOrg->id(),
-                'account_id' => $validated['account_id'],
-                'fiscal_year' => $validated['fiscal_year'],
-            ],
-            [
-                'monthly_amount' => $validated['monthly_amount'],
-            ],
+        $upsertBudget->execute(
+            $currentOrg->id(),
+            Account::whereKey($validated['account_id'])->firstOrFail(),
+            (int) $validated['fiscal_year'],
+            (string) $validated['monthly_amount'],
         );
 
         return redirect()->route('accounting.budgets', ['year' => $validated['fiscal_year']])
             ->with('success', __('app.budget_saved'));
     }
 
-    public function destroy(Budget $budget): RedirectResponse
+    public function destroy(Budget $budget, DeleteBudgetAction $deleteBudget): RedirectResponse
     {
         $this->authorize('delete', $budget);
 
         $year = $budget->fiscal_year;
-        $budget->delete();
+        $deleteBudget->execute($budget);
 
         return redirect()->route('accounting.budgets', ['year' => $year])
             ->with('success', __('app.budget_deleted'));
     }
 
-    public function update(UpdateBudgetRequest $request, Budget $budget): RedirectResponse
-    {
+    public function update(
+        UpdateBudgetRequest $request,
+        Budget $budget,
+        UpsertBudgetAction $upsertBudget,
+    ): RedirectResponse {
         $this->authorize('update', $budget);
 
         $validated = $request->validated();
 
-        $budget->update($validated);
+        $upsertBudget->execute(
+            $budget->organization_id,
+            $budget->account,
+            $budget->fiscal_year,
+            (string) $validated['monthly_amount'],
+        );
 
         return redirect()->route('accounting.budgets', ['year' => $budget->fiscal_year])
             ->with('success', __('app.budget_updated'));
