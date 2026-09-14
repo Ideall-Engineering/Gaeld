@@ -124,7 +124,7 @@ müsste das Modul sie duplizieren — genau die Drift, die plan.md ausschliesst.
 - [x] T118 Pint und PHPStan auf jeder berührten Datei; Frontend-Build nur nötig, falls T105 eine Navigationsanpassung nach sich zieht.
 - [x] T119 `plugins/accountant-api/README.md` um die Budget-Endpunkte, den Entscheid zum natürlichen Schlüssel und die bewusst optionale Idempotenz erweitern.
 - [x] T120 `plan.md` → `## Umsetzungsstand`: Etappe 8 von „offen" auf „teilweise — Fokuspaket Budgets geliefert" setzen und diese Datei verlinken.
-- [ ] T121 Nachweis gegen eine laufende Anwendung statt nur gegen die Testsuite: für eine Wegwerf-Organisation ein Budget per `PUT` setzen, in der Weboberfläche unter Buchhaltung → Budgets gegenprüfen, die Erfolgsrechnung mit Budgetspalte öffnen, per `DELETE` aufräumen und die Wegwerfdaten löschen (Vorgehen wie T064).
+- [x] T121 Nachweis gegen eine laufende Anwendung statt nur gegen die Testsuite: für eine Wegwerf-Organisation ein Budget per `PUT` setzen, in der Weboberfläche unter Buchhaltung → Budgets gegenprüfen, die Erfolgsrechnung mit Budgetspalte öffnen, per `DELETE` aufräumen und die Wegwerfdaten löschen (Vorgehen wie T064).
 
 ---
 
@@ -169,3 +169,37 @@ zum Korrektur-Fokuspaket. Ein Rollback ist deshalb auf drei Ebenen trivial:
 Track A bleibt auch bei abgeschaltetem Modul sinnvoll: T101–T103 sind eine reine
 Refaktorierung, T104 eine Korrektur an einer zu breiten Regel, T105 schliesst
 eine Lücke im Kern.
+
+---
+
+## Nachweis am laufenden Dev-Stack (T121, 2026-09-14)
+
+Gegen `http://127.0.0.1:8090` mit einem echten Sanctum-Token, für eine
+Wegwerf-Organisation, die danach samt Benutzer, Token, Konten und Budgets
+gelöscht wurde. `route:list --path=budgets` zeigte alle vier Modulrouten
+neben den vier Webrouten.
+
+| Aufruf | Ergebnis |
+|---|---|
+| `GET /budgets` (leer) | `200`, `data`/`links`/`meta` |
+| `PUT /budgets/3000/2026` `5000.00` | `201` |
+| `PUT /budgets/3000/2026` `5500.00` | `200`, ersetzt, keine zweite Zeile |
+| `PUT /budgets/6000/2026` `5500.00` | `201` — **identischer Rumpf, anderer Pfad, trotzdem geschrieben**; genau der Fall, den der automatische Idempotenz-Rückfall verschluckt hätte |
+| `GET /budgets` | beide Zeilen, `total: 2`, `annual_amount` je `66000.00` |
+| `GET /budgets/3000/2026` | Einzelzeile korrekt |
+| `GET /budgets?fiscal_year=2027` | 0 Treffer |
+| `PUT /budgets/9999/2026` | `404` |
+| `PUT /budgets/3000/1999` | `422`, `code: validation_error`, Feld `fiscal_year` |
+| `PUT` mit `-5.00` | `422` |
+| `DELETE /budgets/3000/2026` | `204` |
+| `DELETE` nochmal | `404` |
+
+Danach über den Webpfad (`Budget::forYear(2026)` in der Organisation)
+gegengeprüft: die verbliebene Zeile `6000 / 2026 / 5500.00` erscheint dort
+unverändert — API und Weboberfläche lesen dieselbe Quelle.
+
+Nicht live geprüft: die Sperre bei abgeschaltetem `feature:budgets` (durch
+`BudgetSecurityTest` abgedeckt). Die drei ausstehenden Lohn-Migrationen des
+parallelen Zweigs wurden im Dev-Stack bewusst **nicht** ausgeführt; Budgets
+brauchen keine Migration. Der Dev-Stack läuft nach dem Nachweis wieder gestoppt.
+
