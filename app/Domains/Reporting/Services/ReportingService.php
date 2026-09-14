@@ -4,6 +4,7 @@ namespace App\Domains\Reporting\Services;
 
 use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Enums\StatementBasis;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\Budget;
 use App\Domains\Accounting\Models\FiscalYear;
@@ -21,6 +22,21 @@ use Illuminate\Support\Facades\Cache;
  */
 class ReportingService
 {
+    /**
+     * What the profit and loss statement counts.
+     *
+     * A statement of trading answers "what did the year earn and spend", and the
+     * year-end closing is no part of that answer: it empties every revenue and
+     * expense account by design, so counting it in reports a closed year as all
+     * zeros. Operational basis therefore, and the account statement reached by
+     * clicking a figure here reads this constant rather than repeating it.
+     *
+     * The balance sheet is the other case and keeps {@see StatementBasis::Ledger}:
+     * it is a statement of position, the closing is what carries a result into
+     * equity, and dropping it would lose the result or count it twice.
+     */
+    public const PROFIT_AND_LOSS_BASIS = StatementBasis::Operational;
+
     public function __construct(
         private LedgerQueryService $ledgerService,
     ) {}
@@ -42,15 +58,19 @@ class ReportingService
         ?string $compareFrom = null,
         ?string $compareTo = null,
     ): array {
-        $cacheKey = "pnl:{$organizationId}:{$fromDate}:{$toDate}";
+        // Versioned because the shape and the figures have both changed: v2 gave
+        // the account rows a uuid to be followed by, v3 moved them off the ledger
+        // basis. A key left unchanged would serve the old answer for the rest of
+        // the cache window.
+        $cacheKey = "pnl:v3:{$organizationId}:{$fromDate}:{$toDate}";
         if ($compareFrom && $compareTo) {
             $cacheKey .= ":vs:{$compareFrom}:{$compareTo}";
         }
         $orgTag = "org:{$organizationId}:reports";
 
         return Cache::tags([$orgTag])->remember($cacheKey, now()->addMinutes(30), function () use ($organizationId, $fromDate, $toDate, $compareFrom, $compareTo) {
-            $revenue = $this->accountsWithBalances($organizationId, AccountType::Revenue, $fromDate, $toDate);
-            $expenses = $this->accountsWithBalances($organizationId, AccountType::Expense, $fromDate, $toDate);
+            $revenue = $this->accountsWithBalances($organizationId, AccountType::Revenue, $fromDate, $toDate, self::PROFIT_AND_LOSS_BASIS);
+            $expenses = $this->accountsWithBalances($organizationId, AccountType::Expense, $fromDate, $toDate, self::PROFIT_AND_LOSS_BASIS);
 
             $totalRevenue = $revenue->sum('balance');
             $totalExpenses = $expenses->sum('balance');
@@ -89,7 +109,7 @@ class ReportingService
      */
     public function balanceSheet(string $organizationId, string $asOfDate, ?string $compareAsOfDate = null): array
     {
-        $cacheKey = "bs:{$organizationId}:{$asOfDate}";
+        $cacheKey = "bs:v2:{$organizationId}:{$asOfDate}";
         if ($compareAsOfDate) {
             $cacheKey .= ":vs:{$compareAsOfDate}";
         }
@@ -119,7 +139,7 @@ class ReportingService
         $sections = [];
 
         foreach ($types as $type) {
-            $accounts = $this->accountsWithBalances($organizationId, $type, null, $asOfDate);
+            $accounts = $this->accountsWithBalances($organizationId, $type, null, $asOfDate, StatementBasis::Ledger);
 
             $sections[$type->value] = [
                 'accounts' => $accounts->values()->toArray(),
@@ -130,8 +150,12 @@ class ReportingService
         // Compute current-year net income (revenue − expenses) and add it
         // as a synthetic row in the equity section so the balance sheet balances.
         $fiscalYearStart = $this->resolveFiscalYearStart($organizationId, $asOfDate);
-        $revenue = $this->accountsWithBalances($organizationId, AccountType::Revenue, $fiscalYearStart, $asOfDate);
-        $expenses = $this->accountsWithBalances($organizationId, AccountType::Expense, $fiscalYearStart, $asOfDate);
+        // Ledger basis on purpose: once the year is closed these net to zero
+        // and no synthetic row is added, because account 2979 already carries
+        // the result. On the operational basis they would not, and the balance
+        // sheet would count the year twice.
+        $revenue = $this->accountsWithBalances($organizationId, AccountType::Revenue, $fiscalYearStart, $asOfDate, StatementBasis::Ledger);
+        $expenses = $this->accountsWithBalances($organizationId, AccountType::Expense, $fiscalYearStart, $asOfDate, StatementBasis::Ledger);
         $currentYearResult = Money::subtract((string) $revenue->sum('balance'), (string) $expenses->sum('balance'));
 
         if (! Money::isZero($currentYearResult)) {
@@ -198,8 +222,8 @@ class ReportingService
      */
     private function computeComparison(array $result, string $organizationId, string $compareFrom, string $compareTo): array
     {
-        $compRevenue = $this->accountsWithBalances($organizationId, AccountType::Revenue, $compareFrom, $compareTo);
-        $compExpenses = $this->accountsWithBalances($organizationId, AccountType::Expense, $compareFrom, $compareTo);
+        $compRevenue = $this->accountsWithBalances($organizationId, AccountType::Revenue, $compareFrom, $compareTo, self::PROFIT_AND_LOSS_BASIS);
+        $compExpenses = $this->accountsWithBalances($organizationId, AccountType::Expense, $compareFrom, $compareTo, self::PROFIT_AND_LOSS_BASIS);
 
         $compTotalRevenue = $compRevenue->sum('balance');
         $compTotalExpenses = $compExpenses->sum('balance');
@@ -241,16 +265,20 @@ class ReportingService
     /**
      * @return Collection<int, mixed>
      */
-    private function accountsWithBalances(string $organizationId, AccountType $type, ?string $fromDate, ?string $toDate): Collection
+    private function accountsWithBalances(string $organizationId, AccountType $type, ?string $fromDate, ?string $toDate, StatementBasis $basis): Collection
     {
         return Account::where('organization_id', $organizationId)
             ->where('type', $type->value)
             ->where('is_active', true)
             ->get()
             ->map(fn (Account $account) => [
+                // The uuid is what lets a reader follow a figure to the postings
+                // it is made of; the exports pick their columns by name and stay
+                // as they were.
+                'uuid' => $account->uuid,
                 'code' => $account->code,
                 'name' => $account->name,
-                'balance' => $this->ledgerService->accountBalance($account->id, $fromDate, $toDate),
+                'balance' => $this->ledgerService->accountBalance($account->id, $fromDate, $toDate, $basis),
             ])
             ->filter(fn ($accountRow) => ! Money::isZero((string) $accountRow['balance']));
     }

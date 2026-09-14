@@ -202,7 +202,7 @@
         {"method": "POST", "path": "/accounting/accounts/import", "controller": "AccountController@import", "name": "accounting.accounts.import"},
         {"method": "GET", "path": "/accounting/accounts/export", "controller": "AccountController@export", "name": "accounting.accounts.export"},
         {"method": "GET", "path": "/accounting/accounts/export/download", "controller": "AccountController@downloadExport", "name": "accounting.accounts.export.download"},
-        {"method": "GET", "path": "/accounting/accounts/{account:uuid}/statement", "controller": "AccountStatementController@__invoke", "page": "Accounting/AccountStatement", "name": "accounting.accounts.statement", "props": ["account", "month", "previousMonth", "nextMonth", "statement"]},
+        {"method": "GET", "path": "/accounting/accounts/{account:uuid}/statement", "controller": "AccountStatementController@__invoke", "page": "Accounting/AccountStatement", "name": "accounting.accounts.statement", "props": ["account", "mode", "month", "previousMonth", "nextMonth", "period", "basis", "backUrl", "backLabel", "statement"]},
         {"method": "GET", "path": "/accounting/journal-entries", "controller": "AccountingController@journalEntries", "page": "Accounting/JournalEntries", "name": "accounting.journal", "props": ["entries"]},
         {"method": "GET", "path": "/accounting/trial-balance", "controller": "AccountingController@trialBalance", "page": "Accounting/TrialBalance", "name": "accounting.trial-balance", "props": ["balances", "asOfDate"]},
         {"method": "GET", "path": "/accounting/trial-balance/export/{format}", "controller": "AccountingController@exportTrialBalance", "name": "accounting.trial-balance.export"},

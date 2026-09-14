@@ -16,20 +16,34 @@ import { useTranslations } from '@/lib/useTranslations'
 
 const props = defineProps({
   account: { type: Object, required: true },
-  month: { type: String, required: true },
-  previousMonth: { type: String, required: true },
-  nextMonth: { type: String, required: true },
+  mode: { type: String, default: 'month' },
+  month: { type: String, default: null },
+  previousMonth: { type: String, default: null },
+  nextMonth: { type: String, default: null },
+  period: { type: Object, default: null },
+  basis: { type: String, default: 'operational' },
+  backUrl: { type: String, required: true },
+  backLabel: { type: String, required: true },
   statement: { type: Object, required: true },
 })
 
 const { t } = useTranslations()
 const { formatCurrency, formatDate, intlMonthName } = useFormatters()
 
-const monthLabel = computed(() => {
-  const [year, month] = props.month.split('-')
+const isMonthMode = computed(() => props.mode === 'month')
 
-  return `${intlMonthName(Number(month) - 1)} ${year}`
+const periodLabel = computed(() => {
+  if (isMonthMode.value) {
+    const [year, month] = props.month.split('-')
+
+    return `${intlMonthName(Number(month) - 1)} ${year}`
+  }
+
+  return `${formatDate(props.period.from)} – ${formatDate(props.period.to)}`
 })
+
+// Only meaningful inside a single fiscal year; the backend sends null otherwise.
+const carriesBalance = computed(() => props.statement.openingBalance !== null)
 
 function href(month) {
   return `/accounting/accounts/${props.account.uuid}/statement?month=${month}`
@@ -42,7 +56,9 @@ const columns = computed(() => [
   { key: 'counterAccounts', label: t('statement_counter_account') },
   { key: 'debit', label: t('debit'), class: 'text-right', format: v => Number(v) > 0 ? formatCurrency(v) : '' },
   { key: 'credit', label: t('credit'), class: 'text-right', format: v => Number(v) > 0 ? formatCurrency(v) : '' },
-  { key: 'balance', label: t('statement_running_balance'), class: 'text-right', format: v => formatCurrency(v) },
+  ...(carriesBalance.value
+    ? [{ key: 'balance', label: t('statement_running_balance'), class: 'text-right', format: v => formatCurrency(v) }]
+    : []),
 ])
 </script>
 
@@ -50,11 +66,11 @@ const columns = computed(() => [
   <AppLayout :title="`${account.code} ${account.name}`" help-page="accounting-basics">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-start gap-3">
-        <!-- Back to the month this account was opened from, not merely to the
-             dashboard's default month. -->
-        <Button as="a" :href="`/dashboard?month=${month}#monthly-accounts`" variant="outline" size="sm">
+        <!-- Back to wherever this account was opened from, and for the figure it
+             was opened on — the server builds the target, this only follows it. -->
+        <Button as="a" :href="backUrl" variant="outline" size="sm">
           <ArrowLeft class="h-4 w-4 sm:mr-2" />
-          <span class="hidden sm:inline">{{ t('back_to_month_view') }}</span>
+          <span class="hidden sm:inline">{{ backLabel }}</span>
         </Button>
         <div>
           <h1 class="text-xl font-semibold">
@@ -65,7 +81,7 @@ const columns = computed(() => [
         </div>
       </div>
 
-      <div class="flex items-center gap-1">
+      <div v-if="isMonthMode" class="flex items-center gap-1">
         <Link
           :href="href(previousMonth)"
           class="rounded-md p-1.5 text-gray-500 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
@@ -73,7 +89,7 @@ const columns = computed(() => [
         >
           <ChevronLeft class="h-4 w-4" />
         </Link>
-        <span class="min-w-[9rem] text-center text-sm font-medium">{{ monthLabel }}</span>
+        <span class="min-w-[9rem] text-center text-sm font-medium">{{ periodLabel }}</span>
         <Link
           :href="href(nextMonth)"
           class="rounded-md p-1.5 text-gray-500 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
@@ -82,24 +98,25 @@ const columns = computed(() => [
           <ChevronRight class="h-4 w-4" />
         </Link>
       </div>
+      <span v-else class="text-sm font-medium tabular-nums text-gray-600 dark:text-gray-300">{{ periodLabel }}</span>
     </div>
 
     <Card>
       <CardHeader>
         <CardTitle>{{ t('statement_title') }}</CardTitle>
-        <CardDescription>{{ t('statement_desc') }}</CardDescription>
+        <CardDescription>{{ isMonthMode ? t('statement_desc') : t('statement_period_desc') }}</CardDescription>
       </CardHeader>
       <CardContent>
         <div class="mb-4 flex flex-wrap gap-6 border-b border-gray-200 pb-4 text-sm dark:border-gray-700">
-          <div>
+          <div v-if="carriesBalance">
             <p class="text-gray-500 dark:text-gray-400">{{ t('statement_opening_balance') }}</p>
             <p class="mt-0.5 font-medium tabular-nums">{{ formatCurrency(statement.openingBalance) }}</p>
           </div>
           <div>
-            <p class="text-gray-500 dark:text-gray-400">{{ t('statement_month_total') }}</p>
+            <p class="text-gray-500 dark:text-gray-400">{{ isMonthMode ? t('statement_month_total') : t('statement_period_total') }}</p>
             <p class="mt-0.5 font-medium tabular-nums">{{ formatCurrency(statement.total) }}</p>
           </div>
-          <div>
+          <div v-if="carriesBalance">
             <p class="text-gray-500 dark:text-gray-400">{{ t('statement_closing_balance') }}</p>
             <p class="mt-0.5 text-base font-bold tabular-nums">{{ formatCurrency(statement.closingBalance) }}</p>
           </div>
@@ -123,7 +140,7 @@ const columns = computed(() => [
             <EmptyState
               :icon="BookOpen"
               :title="t('statement_empty_title')"
-              :description="t('statement_empty_desc')"
+              :description="isMonthMode ? t('statement_empty_desc') : t('statement_period_empty_desc')"
             />
           </template>
         </DataTable>

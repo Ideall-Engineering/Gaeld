@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Follow a figure in the profit and loss statement:** clicking an account
+  there opens its statement for the report's own period — every posted movement
+  with its counter account, and a way back to the report rather than to a
+  default view. Each report names the basis its figures rest on and the
+  statement computes on that basis, so its total is the figure that was clicked
+  and not a near miss.
 - **Draft invoice preview:** see what an invoice will look like before it is
   finalised and booked — on the invoice screen, in the list, and over the API at
   `GET /api/v1/invoices/{invoice}/pdf/preview`. The document is stamped as a
@@ -69,6 +75,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot drift between them.
 
 ### Fixed
+- **A tax return is summarised over the fiscal year it names.** The figures were
+  gathered by calendar year, so an organization running July to June — or one
+  with a long first year — was summarised over twelve months that were not its
+  own. The organization's recorded fiscal year decides the period now, and an
+  installation that has never recorded one keeps the calendar year it had.
+- **VAT on a tax return is the settlement, not a guess.** The figure came from
+  one line — 8.1% of revenue — which named output tax at the standard rate and
+  nothing else: it gave no account of input tax, so it overstated what was
+  payable by whatever had been reclaimed and could never show a credit; it
+  charged the standard rate on turnover taxed at 2.6% or 3.8% and on turnover not
+  taxed at all; and it presented a liability to organizations that are not
+  registered. The return now reads the Swiss settlement Gäld already computes
+  from the VAT recorded on each posting, so it agrees with the VAT report by
+  construction: tax owed, deductible input tax, and the amount payable or the
+  credit. An organization that records no VAT is shown none rather than a
+  worked-out looking 0.00.
+- **Tax return rows are labelled in the reader's language.** They were named by
+  capitalising the internal key, so a row read "Vat Payable Estimate" in German,
+  French and Italian alike. Rows finalised under the old keys still read, and are
+  marked as the superseded estimate.
+- **A closed year no longer reports itself as nothing traded.** The year-end
+  closing empties every revenue and expense account by design, and both the
+  profit and loss statement and the figures behind a tax return were counting it
+  in — so once the books were closed, a year that had earned and spent read as
+  all zeros, and the VAT estimate derived from it read as zero too. Both now
+  count what the year traded and leave the closing out of that question. The
+  balance sheet and the balance-sheet figures of a tax return are unchanged and
+  still count it, because the closing is what carries a result into equity;
+  counting it in one place and not the other is the whole point. Tax return
+  figures had no test coverage at all before and now have their own.
+- **An accountant's invoice permissions are described by the test that guards
+  them.** A security test still asserted that the role cannot delete invoices,
+  which stopped being true when discarding a draft was granted. It now states
+  the rule that actually holds: a draft may be discarded, a cancelled invoice
+  stays with the roles that run the organization, and an issued one with nobody.
 - **API token abilities:** the form offered the whole ability catalogue to every
   role, so an accountant could tick `organization.delete`. On a personal token
   that granted nothing — the policy still decides — but it promised something

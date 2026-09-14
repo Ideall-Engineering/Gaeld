@@ -5,6 +5,9 @@ namespace Tests\Security\Authorization;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Policies\AccountPolicy;
+use App\Domains\Invoicing\Enums\InvoiceStatus;
+use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Policies\InvoicePolicy;
 use App\Domains\Organizations\Enums\Role;
 use App\Domains\Organizations\Policies\OrganizationPolicy;
 use App\Domains\Organizations\Services\CurrentOrganization;
@@ -71,10 +74,43 @@ class PermissionFixesTest extends SecurityTestCase
         $this->assertNotContains('organization.view-audit-log', $perms);
     }
 
-    public function test_accountant_cannot_delete_invoices(): void
+    /**
+     * The accountant was given invoicing.delete so a draft can be discarded.
+     * That is a working paper — no number, no journal entry, nothing of record.
+     * The document that did once exist under a number is the boundary this test
+     * guards: a cancelled invoice stays with the roles that run the
+     * organization, and holding the permission is not enough to reach it.
+     */
+    public function test_accountant_may_discard_a_draft_invoice_but_not_a_cancelled_one(): void
     {
-        $perms = Role::Accountant->permissionValues();
-        $this->assertNotContains('invoicing.delete', $perms);
+        $this->assertContains('invoicing.delete', Role::Accountant->permissionValues());
+
+        $policy = new InvoicePolicy;
+
+        $this->assertTrue(
+            $policy->delete($this->accountant, $this->invoice(InvoiceStatus::Draft)),
+            'Preparing invoices includes throwing a draft away.',
+        );
+        $this->assertFalse(
+            $policy->delete($this->accountant, $this->invoice(InvoiceStatus::Cancelled)),
+            'Removing a booked document from the visible trail is an administrative act.',
+        );
+        $this->assertTrue(
+            $policy->delete($this->admin, $this->invoice(InvoiceStatus::Cancelled)),
+            'And it stays with the roles that held it before the accountant was given the permission.',
+        );
+    }
+
+    public function test_no_role_may_delete_an_issued_invoice(): void
+    {
+        $policy = new InvoicePolicy;
+
+        foreach (['accountant' => $this->accountant, 'admin' => $this->admin] as $label => $user) {
+            $this->assertFalse(
+                $policy->delete($user, $this->invoice(InvoiceStatus::Sent)),
+                "An issued invoice stays with nobody, {$label} included.",
+            );
+        }
     }
 
     public function test_accountant_cannot_manage_users(): void
@@ -213,5 +249,20 @@ class PermissionFixesTest extends SecurityTestCase
             ->withSession(['current_organization_id' => $this->orgA->id])
             ->get('/accounting/archives')
             ->assertOk();
+    }
+
+    private function invoice(InvoiceStatus $status): Invoice
+    {
+        return Invoice::create([
+            'organization_id' => $this->orgA->id,
+            'number' => $status === InvoiceStatus::Draft ? null : 'INV-'.$status->value.'-'.uniqid(),
+            'status' => $status,
+            'issue_date' => '2026-09-12',
+            'due_date' => '2026-10-12',
+            'currency' => 'CHF',
+            'subtotal' => '100.00',
+            'vat_amount' => '8.10',
+            'total' => '108.10',
+        ]);
     }
 }
