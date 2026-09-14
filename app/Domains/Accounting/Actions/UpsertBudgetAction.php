@@ -4,6 +4,7 @@ namespace App\Domains\Accounting\Actions;
 
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\Budget;
+use App\Domains\Reporting\Services\DashboardService;
 
 /**
  * Sets the monthly budget target for one account in one fiscal year.
@@ -17,12 +18,23 @@ use App\Domains\Accounting\Models\Budget;
  * fiscal_year)` is unique: setting a target that already exists is a normal
  * correction, not a conflict. That also makes the API route naturally
  * idempotent — repeating the same call yields the same single row.
+ *
+ * Flushes the report and dashboard caches afterwards. ReportingService caches
+ * the profit and loss statement — budget column included — for 30 minutes,
+ * and LedgerService only flushes on a ledger write, which a budget is not.
+ * Without this the new target stays invisible in the report for up to half an
+ * hour, in the web UI just as much as over the API. The ledger tag is left
+ * alone on purpose: a budget moves no balance.
  */
 class UpsertBudgetAction
 {
+    public function __construct(
+        private DashboardService $dashboardService,
+    ) {}
+
     public function execute(string $organizationId, Account $account, int $fiscalYear, string $monthlyAmount): Budget
     {
-        return Budget::updateOrCreate(
+        $budget = Budget::updateOrCreate(
             [
                 'organization_id' => $organizationId,
                 'account_id' => $account->id,
@@ -32,5 +44,9 @@ class UpsertBudgetAction
                 'monthly_amount' => $monthlyAmount,
             ],
         );
+
+        $this->dashboardService->flushCache($organizationId);
+
+        return $budget;
     }
 }

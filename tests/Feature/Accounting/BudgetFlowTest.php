@@ -5,6 +5,8 @@ namespace Tests\Feature\Accounting;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\Budget;
+use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Reporting\Services\ReportingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use Tests\Traits\WithAuthenticatedOrganization;
@@ -172,6 +174,83 @@ class BudgetFlowTest extends TestCase
         $this->delete(route('accounting.budgets.destroy', $budget))->assertForbidden();
 
         $this->assertDatabaseHas('budgets', ['id' => $budget->id, 'monthly_amount' => '5000.00']);
+    }
+
+    /**
+     * ReportingService caches the profit and loss statement for 30 minutes,
+     * and LedgerService only flushes on a ledger write — which a budget is
+     * not. Without an explicit flush in the budget actions, a freshly set
+     * target stays invisible in the report for up to half an hour.
+     */
+    public function test_setting_a_budget_shows_up_in_the_report_at_once(): void
+    {
+        $this->postRevenueOf('500.00');
+        $service = app(ReportingService::class);
+
+        $before = $service->profitAndLoss($this->org->id, '2026-01-01', '2026-12-31');
+        $this->assertNull($before['budget'], 'no budget set yet');
+
+        $this->actingAs($this->user)
+            ->withSession(['current_organization_id' => $this->org->id])
+            ->post(route('accounting.budgets.store'), [
+                'account_id' => $this->revenueAccount->id,
+                'fiscal_year' => 2026,
+                'monthly_amount' => '1000.00',
+            ])->assertRedirect();
+
+        $after = $service->profitAndLoss($this->org->id, '2026-01-01', '2026-12-31');
+        $this->assertNotNull($after['budget'], 'the report still serves a cache without the budget');
+
+        $row = collect($after['revenue'])->firstWhere('code', '3000');
+        $this->assertNotNull($row, 'the revenue account is missing from the report');
+        $this->assertSame('12000.00', $row['budget_amount']);
+        $this->assertSame('-11500.00', $row['budget_variance']);
+    }
+
+    /**
+     * A posted entry so the revenue account actually appears in the report —
+     * accountsWithBalances() only lists accounts that moved.
+     */
+    private function postRevenueOf(string $amount): void
+    {
+        $bank = Account::create([
+            'organization_id' => $this->org->id,
+            'code' => '1020',
+            'name' => 'Bank',
+            'type' => AccountType::Asset->value,
+        ]);
+
+        $entry = JournalEntry::create([
+            'organization_id' => $this->org->id,
+            'date' => '2026-02-01',
+            'reference' => 'BUDGET-CACHE-'.uniqid(),
+            'is_posted' => true,
+        ]);
+
+        $entry->lines()->createMany([
+            ['account_id' => $bank->id, 'debit' => $amount, 'credit' => '0.00'],
+            ['account_id' => $this->revenueAccount->id, 'debit' => '0.00', 'credit' => $amount],
+        ]);
+    }
+
+    public function test_deleting_a_budget_disappears_from_the_report_at_once(): void
+    {
+        $budget = Budget::create([
+            'organization_id' => $this->org->id,
+            'account_id' => $this->revenueAccount->id,
+            'fiscal_year' => 2026,
+            'monthly_amount' => '1000.00',
+        ]);
+
+        $service = app(ReportingService::class);
+        $this->assertNotNull($service->profitAndLoss($this->org->id, '2026-01-01', '2026-12-31')['budget']);
+
+        $this->actingAs($this->user)
+            ->withSession(['current_organization_id' => $this->org->id])
+            ->delete(route('accounting.budgets.destroy', $budget))
+            ->assertRedirect();
+
+        $this->assertNull($service->profitAndLoss($this->org->id, '2026-01-01', '2026-12-31')['budget']);
     }
 
     public function test_budget_scope_for_year(): void
