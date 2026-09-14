@@ -68,22 +68,47 @@ class ProfitAndLossDrilldownTest extends TestCase
         $this->assertReportReconcilesWithStatements();
     }
 
-    public function test_a_fully_closed_year_leaves_nothing_to_click(): void
+    public function test_a_closed_year_still_reports_what_it_traded(): void
     {
         $this->postSale('2026-02-11', '4000.00');
         $this->closeTheYear('2026-12-31', ['3000' => '4000.00']);
 
         $report = app(ReportingService::class)->profitAndLoss($this->org->id, self::FROM, self::TO);
 
-        // Pinned deliberately: the closing entry cancels the year out, the rows
-        // net to zero and the report drops them. Nothing here is clickable, so
-        // nothing here can contradict a statement. The day this report is moved
-        // to the operational basis, this test is the one that will say so.
-        $this->assertSame([], $report['revenue']);
-        $this->assertSame('0.00', (string) $report['net_profit']);
+        // The closing entry empties the revenue account by design. Counting it
+        // into a statement of trading reported the year as all zeros, which is
+        // what this report no longer does: what the year earned is what it
+        // earned, whether or not the books have since been closed on it.
+        $this->assertSame('4000.00', (string) collect($report['revenue'])->firstWhere('code', '3000')['balance']);
+        $this->assertSame('4000.00', (string) $report['net_profit']);
     }
 
-    public function test_the_zero_of_a_closed_year_explains_itself(): void
+    public function test_closing_a_year_does_not_disturb_the_balance_sheet(): void
+    {
+        $this->postSale('2026-02-11', '4000.00');
+        $this->closeTheYear('2026-12-31', ['3000' => '4000.00']);
+
+        $sheet = app(ReportingService::class)->balanceSheet($this->org->id, self::TO);
+
+        // The other half of the same decision. The balance sheet stays on the
+        // ledger basis, so the closing entry keeps carrying the result into
+        // equity exactly once — counted there and not also in a synthetic row.
+        $this->assertSame(
+            bcadd((string) $sheet['assets']['total'], '0', 2),
+            bcadd((string) $sheet['liabilities']['total'], (string) $sheet['equity']['total'], 2),
+            'Assets = liabilities + equity has to hold after a closing.',
+        );
+        $this->assertSame('4000.00', bcadd((string) $sheet['equity']['total'], '0', 2));
+    }
+
+    /**
+     * The ledger basis keeps its own behaviour. No report reaches a statement
+     * this way today — both entry points ask for the operational basis — but
+     * the mode is public on the service, and a statement computed on it says
+     * plainly which part of its total came from a closing rather than leaving
+     * a reader to guess.
+     */
+    public function test_a_statement_on_the_ledger_basis_names_what_a_closing_did(): void
     {
         $this->postSale('2026-02-11', '4000.00');
         $this->closeTheYear('2026-12-31', ['3000' => '4000.00']);
@@ -142,7 +167,7 @@ class ProfitAndLossDrilldownTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('Accounting/AccountStatement')
                 ->where('mode', 'period')
-                ->where('basis', StatementBasis::Ledger->value)
+                ->where('basis', ReportingService::PROFIT_AND_LOSS_BASIS->value)
                 ->where('period.from', self::FROM)
                 ->where('period.to', self::TO)
                 ->where('backUrl', '/reports/profit-and-loss?from='.self::FROM.'&to='.self::TO)
@@ -209,7 +234,7 @@ class ProfitAndLossDrilldownTest extends TestCase
                 Account::where('organization_id', $this->org->id)->where('uuid', $row['uuid'])->firstOrFail(),
                 Carbon::parse(self::FROM),
                 Carbon::parse(self::TO),
-                StatementBasis::Ledger,
+                ReportingService::PROFIT_AND_LOSS_BASIS,
             );
 
             $this->assertSame(

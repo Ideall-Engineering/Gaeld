@@ -31,26 +31,37 @@ class LedgerQueryService
      * Liability, equity, and revenue accounts return credit-normal (credits − debits).
      * Only posted entries are included.
      *
-     * Computed on {@see StatementBasis::Ledger} over the same query the account
-     * statement uses, so a statement opened from a report that rests on this
-     * method adds up to the figure that was clicked. Reports built on other
-     * bases must pass theirs down to the statement.
+     * Computed over the same query the account statement walks, so a statement
+     * opened from a report that rests on this method adds up to the figure that
+     * was clicked — provided both are asked for the same basis.
      *
-     * Results are cached per account + date range (tag: org:{orgId}:ledger).
+     * The default is {@see StatementBasis::Ledger}: every posted entry, which is
+     * what a balance sheet needs, since the year-end closing is what moves a
+     * result into equity and leaving it out would lose it. A report about
+     * trading rather than about position asks for the operational basis instead.
+     *
+     * Results are cached per account + basis + date range (tag: org:{orgId}:ledger).
      *
      * @param  int  $accountId  The account's primary key
      * @param  string|null  $fromDate  Start date (inclusive, Y-m-d)
      * @param  string|null  $toDate  End date (inclusive, Y-m-d)
+     * @param  StatementBasis  $basis  Which set of postings to count
      * @return string The calculated balance (bcmath-compatible string, 2 decimal places)
      */
-    public function accountBalance(int $accountId, ?string $fromDate = null, ?string $toDate = null): string
-    {
+    public function accountBalance(
+        int $accountId,
+        ?string $fromDate = null,
+        ?string $toDate = null,
+        StatementBasis $basis = StatementBasis::Ledger,
+    ): string {
         $account = Account::findOrFail($accountId);
-        $cacheKey = "account_balance:{$accountId}:{$fromDate}:{$toDate}";
+        // The basis belongs in the key: the same account over the same dates has
+        // two different answers, and they must not overwrite one another.
+        $cacheKey = "account_balance:{$basis->value}:{$accountId}:{$fromDate}:{$toDate}";
         $orgTag = "org:{$account->organization_id}:ledger";
 
-        return Cache::tags([$orgTag])->remember($cacheKey, now()->addHour(), function () use ($account, $fromDate, $toDate) {
-            $totals = $this->accountLines($account, $fromDate, $toDate, StatementBasis::Ledger)
+        return Cache::tags([$orgTag])->remember($cacheKey, now()->addHour(), function () use ($account, $fromDate, $toDate, $basis) {
+            $totals = $this->accountLines($account, $fromDate, $toDate, $basis)
                 ->selectRaw('COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')
                 ->first();
 

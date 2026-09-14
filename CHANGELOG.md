@@ -11,13 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Follow a figure in the profit and loss statement:** clicking an account
   there opens its statement for the report's own period — every posted movement
   with its counter account, and a way back to the report rather than to a
-  default view. The statement now computes on the basis the report it was opened
-  from reports on, so its total is the figure that was clicked and not a near
-  miss: the dashboard's month view still leaves year-end closings out, while the
-  profit and loss statement counts them in because its own figures do. Where a
-  closing entry falls inside the period, the statement names both parts — what
-  was traded and what the closing cancelled — so a zeroed account explains
-  itself instead of looking like a miscalculation.
+  default view. Each report names the basis its figures rest on and the
+  statement computes on that basis, so its total is the figure that was clicked
+  and not a near miss.
 - **Draft invoice preview:** see what an invoice will look like before it is
   finalised and booked — on the invoice screen, in the list, and over the API at
   `GET /api/v1/invoices/{invoice}/pdf/preview`. The document is stamped as a
@@ -79,6 +75,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot drift between them.
 
 ### Fixed
+- **A closed year no longer reports itself as nothing traded.** The year-end
+  closing empties every revenue and expense account by design, and both the
+  profit and loss statement and the figures behind a tax return were counting it
+  in — so once the books were closed, a year that had earned and spent read as
+  all zeros, and the VAT estimate derived from it read as zero too. Both now
+  count what the year traded and leave the closing out of that question. The
+  balance sheet and the balance-sheet figures of a tax return are unchanged and
+  still count it, because the closing is what carries a result into equity;
+  counting it in one place and not the other is the whole point. Tax return
+  figures had no test coverage at all before and now have their own.
 - **API token abilities:** the form offered the whole ability catalogue to every
   role, so an accountant could tick `organization.delete`. On a personal token
   that granted nothing — the policy still decides — but it promised something

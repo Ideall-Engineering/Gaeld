@@ -6,6 +6,7 @@ use App\Domains\Accounting\Enums\TaxDeclarationStatus;
 use App\Domains\Accounting\Models\TaxDeclaration;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Requests\StoreTaxDeclarationRequest;
+use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
@@ -101,6 +102,7 @@ class TaxDeclarationController extends Controller
         $lines = TransactionLine::query()
             ->select([
                 'accounts.type as account_type',
+                'journal_entries.type as entry_type',
                 DB::raw('SUM(transaction_lines.debit) as total_debit'),
                 DB::raw('SUM(transaction_lines.credit) as total_credit'),
             ])
@@ -109,7 +111,7 @@ class TaxDeclarationController extends Controller
             ->where('journal_entries.organization_id', $organizationId)
             ->where('journal_entries.is_posted', true)
             ->whereYear('journal_entries.date', $fiscalYear)
-            ->groupBy('accounts.type')
+            ->groupBy('accounts.type', 'journal_entries.type')
             ->toBase()
             ->get();
 
@@ -125,12 +127,19 @@ class TaxDeclarationController extends Controller
         ];
 
         foreach ($lines as $line) {
-            /** @var object{account_type:string,total_credit:float|int|string,total_debit:float|int|string} $line */
-            if ((string) $line->account_type === 'revenue') {
+            /** @var object{account_type:string,entry_type:string|null,total_credit:float|int|string,total_debit:float|int|string} $line */
+            $isStructural = in_array($line->entry_type, LedgerQueryService::STRUCTURAL_ENTRY_TYPES, true);
+
+            // What the year traded, which is what a tax return asks about. The
+            // year-end closing empties every revenue and expense account by
+            // design, so counting it in reported a closed year as nothing earned
+            // and nothing spent. It stays counted for the balance-sheet
+            // categories below, where it is what carries the result into equity.
+            if ((string) $line->account_type === 'revenue' && ! $isStructural) {
                 $totals['revenue'] += (float) $line->total_credit - (float) $line->total_debit;
             }
 
-            if ((string) $line->account_type === 'expense') {
+            if ((string) $line->account_type === 'expense' && ! $isStructural) {
                 $totals['expenses'] += (float) $line->total_debit - (float) $line->total_credit;
             }
 
