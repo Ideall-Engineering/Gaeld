@@ -128,6 +128,24 @@ const totalEmployer = computed(() => props.slip.deductions?.total_employer ?? '0
                 <td class="whitespace-nowrap py-2 text-right">—</td>
                 <td class="whitespace-nowrap py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.base_salary) }}</td>
               </tr>
+              <tr v-if="Number(slip.adjustments?.hours_worked) > 0" class="text-[hsl(var(--muted-foreground))]">
+                <td class="py-2">{{ t('hours_worked') }} × {{ formatCurrency(slip.adjustments.hourly_rate) }}</td>
+                <td class="py-2 text-right font-mono">{{ slip.adjustments.hours_worked }}</td>
+                <td class="py-2 text-right">—</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.base_salary) }}</td>
+              </tr>
+              <tr v-if="Number(slip.adjustments?.vacation_compensation) > 0" class="text-green-700 dark:text-green-400">
+                <td class="py-2">{{ t('vacation_compensation') }}</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.vacation_compensation) }}</td>
+                <td class="py-2 text-right">—</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.vacation_compensation) }}</td>
+              </tr>
+              <tr v-if="Number(slip.adjustments?.thirteenth_compensation) > 0" class="text-green-700 dark:text-green-400">
+                <td class="py-2">{{ t('thirteenth_compensation') }}</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.thirteenth_compensation) }}</td>
+                <td class="py-2 text-right">—</td>
+                <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.thirteenth_compensation) }}</td>
+              </tr>
               <tr v-if="Number(slip.adjustments?.thirteenth_salary) > 0" class="text-green-700 dark:text-green-400">
                 <td class="py-2">{{ t('thirteenth_salary') }}</td>
                 <td class="py-2 text-right font-mono">{{ formatCurrency(slip.adjustments.thirteenth_salary) }}</td>

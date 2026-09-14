@@ -116,6 +116,7 @@ final class PayrollAdjustmentRules
             'adjustments.*.employee_id' => $adjustmentEmployeeRules,
             'adjustments.*.unpaid_leave_days' => self::unpaidLeaveDays($request),
             'adjustments.*.reimbursement_amount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0'],
+            'adjustments.*.hours_worked' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:744'],
         ];
     }
 }

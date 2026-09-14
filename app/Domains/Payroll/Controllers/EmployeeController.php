@@ -72,7 +72,8 @@ class EmployeeController extends Controller
             'employee' => $employee,
             'salarySlips' => $salarySlips,
             'certificateYears' => $salarySlips
-                ->whereNotNull('posted_at')
+                // A month booked by hand counts for the certificate too.
+                ->filter(fn ($slip): bool => $slip->posted_at !== null || $slip->isBookedExternally())
                 ->pluck('period_year')
                 ->unique()
                 ->sortDesc()

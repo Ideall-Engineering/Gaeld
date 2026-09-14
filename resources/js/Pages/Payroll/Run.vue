@@ -186,6 +186,7 @@ function adjustmentPayload() {
       employee_id: employeeId,
       unpaid_leave_days: Number(adjustment?.unpaid_leave_days) || 0,
       reimbursement_amount: adjustment?.reimbursement_amount || '0.00',
+      hours_worked: adjustment?.hours_worked || '0.00',
     }
   })
 }
@@ -400,7 +401,11 @@ async function postSlips() {
               />
               <div class="flex-1">
                 <p class="font-medium text-sm">{{ emp.first_name }} {{ emp.last_name }}</p>
-                <p class="text-xs text-[hsl(var(--muted-foreground))]">{{ emp.position }} — {{ formatCurrency(emp.gross_salary) }}{{ t('per_month') }}</p>
+                <p class="text-xs text-[hsl(var(--muted-foreground))]">
+                  {{ emp.position }} —
+                  <template v-if="emp.salary_type === 'hourly'">{{ formatCurrency(emp.hourly_rate) }} / {{ t('hours_worked') }}</template>
+                  <template v-else>{{ formatCurrency(emp.gross_salary) }}{{ t('per_month') }}</template>
+                </p>
               </div>
             </label>
           </div>
@@ -417,7 +422,17 @@ async function postSlips() {
             class="grid grid-cols-1 gap-3 rounded-lg border border-[hsl(var(--border))] p-3 sm:grid-cols-[1fr_10rem_10rem] sm:items-end"
           >
             <p class="text-sm font-medium">{{ emp.first_name }} {{ emp.last_name }}</p>
-            <label class="text-xs text-[hsl(var(--muted-foreground))]">
+            <label v-if="emp.salary_type === 'hourly'" class="text-xs text-[hsl(var(--muted-foreground))]">
+              {{ t('hours_worked') }}
+              <input
+                v-model="adjustmentFor(emp.id).hours_worked"
+                type="number"
+                min="0"
+                step="0.01"
+                class="mt-1 flex h-9 w-full rounded-md border border-[hsl(var(--input))] bg-transparent px-2 text-sm text-[hsl(var(--foreground))]"
+              />
+            </label>
+            <label v-else class="text-xs text-[hsl(var(--muted-foreground))]">
               {{ t('unpaid_leave_days') }}
               <input
                 v-model.number="adjustmentFor(emp.id).unpaid_leave_days"

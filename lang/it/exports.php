@@ -107,6 +107,9 @@ return [
         'period' => 'Registrazioni contabili — da :from a :to',
     ],
     'salary_slip' => [
+        'hours_worked' => 'Ore',
+        'vacation_compensation' => 'Indennità vacanze',
+        'thirteenth_compensation' => 'Quota 13esima',
         'title' => 'Busta paga',
         'employee' => 'Dipendente',
         'name' => 'Nome',

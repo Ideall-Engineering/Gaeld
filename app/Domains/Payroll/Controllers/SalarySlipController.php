@@ -109,6 +109,7 @@ class SalarySlipController extends Controller
             'year' => ['required', 'integer', 'min:2000'],
             'unpaid_leave_days' => PayrollAdjustmentRules::unpaidLeaveDays($request),
             'reimbursement_amount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0'],
+            'hours_worked' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:744'],
             'posting_date' => PayrollAdjustmentRules::postingDate($request),
             'booked_externally' => ['boolean'],
         ]);
@@ -120,6 +121,7 @@ class SalarySlipController extends Controller
             (int) $validated['year'],
             (int) ($validated['unpaid_leave_days'] ?? 0),
             (string) ($validated['reimbursement_amount'] ?? '0.00'),
+            (string) ($validated['hours_worked'] ?? '0.00'),
         );
 
         if (($validated['posting_date'] ?? null) !== null) {

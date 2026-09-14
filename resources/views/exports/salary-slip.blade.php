@@ -77,6 +77,18 @@
             @if(isset($slip->adjustments['base_salary']) && bccomp($slip->adjustments['base_salary'], $slip->gross_salary, 2) !== 0)
                 <tr><td>{{ __('exports.salary_slip.base_salary') }}</td><td class="right">{{ number_format((float) $slip->adjustments['base_salary'], 2, '.', "'") }}</td></tr>
             @endif
+            @if(isset($slip->adjustments['hours_worked']) && bccomp($slip->adjustments['hours_worked'], '0', 2) > 0)
+                <tr>
+                    <td>{{ __('exports.salary_slip.hours_worked') }} × {{ number_format((float) $slip->adjustments['hourly_rate'], 2, '.', "'") }}</td>
+                    <td class="right">{{ rtrim(rtrim($slip->adjustments['hours_worked'], '0'), '.') }}</td>
+                </tr>
+            @endif
+            @if(isset($slip->adjustments['vacation_compensation']) && bccomp($slip->adjustments['vacation_compensation'], '0', 2) > 0)
+                <tr><td>{{ __('exports.salary_slip.vacation_compensation') }}</td><td class="right">{{ number_format((float) $slip->adjustments['vacation_compensation'], 2, '.', "'") }}</td></tr>
+            @endif
+            @if(isset($slip->adjustments['thirteenth_compensation']) && bccomp($slip->adjustments['thirteenth_compensation'], '0', 2) > 0)
+                <tr><td>{{ __('exports.salary_slip.thirteenth_compensation') }}</td><td class="right">{{ number_format((float) $slip->adjustments['thirteenth_compensation'], 2, '.', "'") }}</td></tr>
+            @endif
             @if(isset($slip->adjustments['thirteenth_salary']) && bccomp($slip->adjustments['thirteenth_salary'], '0', 2) > 0)
                 <tr><td>{{ __('exports.salary_slip.thirteenth_salary') }}</td><td class="right">{{ number_format((float) $slip->adjustments['thirteenth_salary'], 2, '.', "'") }}</td></tr>
             @endif

@@ -107,6 +107,9 @@ return [
         'period' => 'Écritures comptables — du :from au :to',
     ],
     'salary_slip' => [
+        'hours_worked' => 'Heures',
+        'vacation_compensation' => 'Indemnité de vacances',
+        'thirteenth_compensation' => 'Part du 13e salaire',
         'title' => 'Fiche de salaire',
         'employee' => 'Collaborateur',
         'name' => 'Nom',
