@@ -7,6 +7,7 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Payroll\Actions\GeneratePayrollRunAction;
 use App\Domains\Payroll\Actions\GenerateSalaryCertificateAction;
 use App\Domains\Payroll\Actions\PostPayrollAction;
+use App\Domains\Payroll\Models\DeductionRate;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Services\PayrollCalculator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -75,6 +76,93 @@ class SalaryCertificateForm11Test extends TestCase
         $this->assertSame('420.00', $chiffres['10.1']['amount'], 'Ziff. 10.1 pension');
         $this->assertSame('5136.00', $chiffres['11']['amount'], 'Ziff. 11 net salary');
         $this->assertSame('0.00', $chiffres['12']['amount'], 'Ziff. 12 withholding tax');
+    }
+
+    #[Test]
+    public function a_contribution_that_may_not_reduce_the_gross_stays_out_of_the_boxes(): void
+    {
+        // A sickness daily-allowance contribution charged to the employee is
+        // not deductible and must not reduce the gross salary, so box 9 cannot
+        // hold it and box 11 — box 8 less boxes 9 and 10 — must not feel it.
+        $this->seedRatesWithSicknessAllowance();
+        $this->postSlip(3);
+
+        $certificate = app(GenerateSalaryCertificateAction::class)->execute($this->employee, 2026);
+        $chiffres = collect($certificate['chiffres'])->keyBy('chiffre');
+
+        $this->assertSame('444.00', $chiffres['9']['amount'], 'Ziff. 9 carries AHV/ALV/NBU only');
+        $this->assertSame('420.00', $chiffres['10.1']['amount']);
+        $this->assertSame('5136.00', $chiffres['11']['amount'], 'Ziff. 11 = 8 − 9 − 10.1');
+
+        // What the employee actually received is lower, and says so elsewhere.
+        $this->assertSame('5089.29', $certificate['total_paid']);
+    }
+
+    #[Test]
+    public function such_a_contribution_is_disclosed_in_the_remarks(): void
+    {
+        $this->seedRatesWithSicknessAllowance();
+        $this->postSlip(3);
+
+        $certificate = app(GenerateSalaryCertificateAction::class)->execute($this->employee, 2026);
+
+        $this->assertSame('46.71', $certificate['non_deductible_total']);
+        $this->assertSame(
+            [['name' => 'KTG Krankentaggeld (AN)', 'amount' => '46.71']],
+            $certificate['non_deductible_lines'],
+        );
+
+        $html = view('exports.salary-certificate-form11', [
+            'certificate' => $certificate,
+            'organization' => $this->org,
+        ])->render();
+        $this->assertStringContainsString('KTG Krankentaggeld (AN)', $html);
+        $this->assertStringContainsString('46.71', $html);
+    }
+
+    #[Test]
+    public function withholding_tax_does_not_reduce_the_net_salary_box(): void
+    {
+        // Withholding tax is box 12 and is reported beside the net salary, not
+        // taken off it.
+        $this->postSlip(3);
+
+        $slip = $this->employee->salarySlips()->sole();
+        $deductions = $slip->deductions;
+        $deductions['source_tax'] = '500.00';
+        $slip->forceFill(['deductions' => $deductions])->saveQuietly();
+
+        $chiffres = collect(
+            app(GenerateSalaryCertificateAction::class)->execute($this->employee, 2026)['chiffres']
+        )->keyBy('chiffre');
+
+        $this->assertSame('500.00', $chiffres['12']['amount']);
+        $this->assertSame('5136.00', $chiffres['11']['amount']);
+    }
+
+    /**
+     * The four contributions the boxes cover, plus one they do not.
+     */
+    private function seedRatesWithSicknessAllowance(): void
+    {
+        foreach ([
+            ['AHV/IV/EO (AN)', 'avs_employee', '5.3000', '2270'],
+            ['ALV (AN)', 'ac_employee', '1.1000', '2271'],
+            ['NBU (AN)', 'aanp_employee', '1.0000', '2272'],
+            ['BVG (AN)', 'lpp_employee', '7.0000', '2272'],
+            ['KTG Krankentaggeld (AN)', 'ktg_employee', '0.7785', '2272'],
+        ] as [$name, $code, $rate, $account]) {
+            DeductionRate::create([
+                'organization_id' => $this->org->id,
+                'name' => $name,
+                'code' => $code,
+                'rate' => $rate,
+                'type' => 'employee',
+                'account_code' => $account,
+                'expense_account_code' => '5700',
+                'is_active' => true,
+            ]);
+        }
     }
 
     #[Test]

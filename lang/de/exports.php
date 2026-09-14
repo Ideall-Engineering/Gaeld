@@ -156,6 +156,7 @@ return [
         'total_employer_charges' => 'Total Arbeitgeberbeiträge',
     ],
     'salary_certificate_form11' => [
+        'non_deductible' => 'Nicht abzugsfähige Beiträge (KTG, UVG-Zusatz)',
         'title' => 'Lohnausweis',
         'period' => 'Vom :from bis :to',
         'employee' => 'Arbeitnehmerin / Arbeitnehmer',

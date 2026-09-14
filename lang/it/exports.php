@@ -156,6 +156,7 @@ return [
         'total_employer_charges' => 'Totale oneri datore di lavoro',
     ],
     'salary_certificate_form11' => [
+        'non_deductible' => 'Contributi non deducibili (indennità giornaliera malattia, LAINF complementare)',
         'title' => 'Certificato di salario',
         'period' => 'Dal :from al :to',
         'employee' => 'Dipendente',

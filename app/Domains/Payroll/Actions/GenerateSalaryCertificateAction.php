@@ -5,6 +5,7 @@ namespace App\Domains\Payroll\Actions;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
+use App\Domains\Payroll\Services\SwissDeductionService;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -18,6 +19,8 @@ final class GenerateSalaryCertificateAction
      *     period_to: CarbonImmutable,
      *     employee: Employee,
      *     organization: Organization,
+     *     non_deductible_total: string,
+     *     non_deductible_lines: array<int, array{name: string, amount: string}>,
      *     year: int,
      *     months_covered: int,
      *     gross_salary: string,
@@ -55,29 +58,47 @@ final class GenerateSalaryCertificateAction
         $grossSalary = $this->sumSlipValues($slips, 'gross_salary');
         $sourceTax = $this->sumDeduction($slips, 'source_tax');
         $reimbursements = $this->sumAdjustment($slips, 'reimbursement_amount');
-        $employeeDeductions = $this->sumDeduction($slips, 'total_employee');
-        $employeeDeductions = Money::add($employeeDeductions, $sourceTax);
-        $netSalary = Money::subtract($grossSalary, $employeeDeductions);
-        $totalPaid = Money::add($netSalary, $reimbursements);
+
+        // Box 9 takes the statutory contributions and nothing else.
+        $socialContributions = Money::add(
+            Money::add(
+                $this->sumDeduction($slips, 'avs_employee'),
+                $this->sumDeduction($slips, 'ac_employee'),
+            ),
+            $this->sumDeduction($slips, 'aanp_employee'),
+        );
+        $pension = $this->sumDeduction($slips, 'lpp_employee');
+
+        // Box 11 is a formula, not the payment: the guide defines it as box 8
+        // less boxes 9 and 10. Withholding tax is box 12 and is not subtracted
+        // here, and a contribution that may not reduce the gross — sickness
+        // daily-allowance and supplementary accident premiums — is not either.
+        $netSalary = Money::subtract(Money::subtract($grossSalary, $socialContributions), $pension);
+
+        // What the employee was actually paid, which the certificate does not
+        // state but a reader checking against a bank statement needs.
+        $withheld = Money::add($this->sumDeduction($slips, 'total_employee'), $sourceTax);
+        $totalPaid = Money::add(Money::subtract($grossSalary, $withheld), $reimbursements);
+
+        // Everything withheld that neither box may contain. It is disclosed in
+        // the remarks instead, so the deductions on the payslips and the boxes
+        // on the certificate can be reconciled.
+        $nonDeductible = $this->nonDeductibleContributions($slips, $socialContributions, $pension);
 
         $flatExpenses = $this->sumFlatExpenses($slips);
 
         return [
             'chiffres' => $this->chiffres(
                 grossSalary: $grossSalary,
-                socialContributions: Money::add(
-                    Money::add(
-                        $this->sumDeduction($slips, 'avs_employee'),
-                        $this->sumDeduction($slips, 'ac_employee'),
-                    ),
-                    $this->sumDeduction($slips, 'aanp_employee'),
-                ),
-                pension: $this->sumDeduction($slips, 'lpp_employee'),
+                socialContributions: $socialContributions,
+                pension: $pension,
                 netSalary: $netSalary,
                 sourceTax: $sourceTax,
                 flatExpenses: $flatExpenses,
                 actualExpenses: Money::subtract($reimbursements, $flatExpenses),
             ),
+            'non_deductible_total' => $nonDeductible['total'],
+            'non_deductible_lines' => $nonDeductible['lines'],
             'period_from' => $this->periodStart($employee, $year),
             'period_to' => $this->periodEnd($employee, $year),
             'employee' => $employee,
@@ -153,6 +174,57 @@ final class GenerateSalaryCertificateAction
             ['chiffre' => '13.1.2', 'key' => 'expenses_actual_other', 'amount' => $actualExpenses],
             ['chiffre' => '13.2.3', 'key' => 'expenses_flat_other', 'amount' => $flatExpenses],
         ];
+    }
+
+    /**
+     * The contributions withheld from the employee that no box may contain.
+     *
+     * Sickness daily-allowance contributions and supplementary accident
+     * premiums charged to an employee are not deductible and must not reduce
+     * the gross salary; the guide allows them to be stated in the remarks
+     * instead. Anything withheld beyond AHV/IV/EO, ALV, NBU and the pension is
+     * of that kind, so the rule needs no list of codes to keep up to date.
+     *
+     * @param  Collection<int, SalarySlip>  $slips
+     * @return array{total: string, lines: array<int, array{name: string, amount: string}>}
+     */
+    private function nonDeductibleContributions(Collection $slips, string $socialContributions, string $pension): array
+    {
+        $total = Money::subtract(
+            Money::subtract($this->sumDeduction($slips, 'total_employee'), $socialContributions),
+            $pension,
+        );
+
+        $boxed = ['avs_employee', 'ac_employee', 'aanp_employee', 'lpp_employee'];
+        $named = [];
+
+        foreach ($slips as $slip) {
+            $lines = $slip->deductions[SwissDeductionService::LINES_KEY] ?? [];
+
+            if (! is_array($lines)) {
+                continue;
+            }
+
+            foreach ($lines as $line) {
+                $code = (string) ($line['code'] ?? '');
+
+                if (($line['type'] ?? '') !== 'employee' || in_array($code, $boxed, true)) {
+                    continue;
+                }
+
+                $name = (string) ($line['name'] ?? $code);
+                $named[$name] = Money::add($named[$name] ?? '0.00', (string) ($line['amount'] ?? '0.00'));
+            }
+        }
+
+        $lines = [];
+        foreach ($named as $name => $amount) {
+            if (Money::isPositive($amount)) {
+                $lines[] = ['name' => $name, 'amount' => $amount];
+            }
+        }
+
+        return ['total' => $total, 'lines' => $lines];
     }
 
     /**

@@ -156,6 +156,7 @@ return [
         'total_employer_charges' => 'Total charges patronales',
     ],
     'salary_certificate_form11' => [
+        'non_deductible' => 'Cotisations non déductibles (indemnités journalières maladie, LAA complémentaire)',
         'title' => 'Certificat de salaire',
         'period' => 'Du :from au :to',
         'employee' => 'Salariée / Salarié',

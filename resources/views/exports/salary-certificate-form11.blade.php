@@ -121,6 +121,21 @@
                 <td class="label">{{ __('exports.salary_certificate_form11.months_covered') }}</td>
                 <td>{{ $certificate['months_covered'] }}</td>
             </tr>
+            {{-- Contributions that may not reduce the gross salary and so
+                 appear in no box. Stated here, which is where the guide allows
+                 them, so the payslips and the boxes can be reconciled. --}}
+            @foreach ($certificate['non_deductible_lines'] as $line)
+                <tr>
+                    <td class="label">{{ $line['name'] }}</td>
+                    <td>{{ number_format((float) $line['amount'], 2, '.', "'") }}</td>
+                </tr>
+            @endforeach
+            @if ($certificate['non_deductible_lines'] === [] && bccomp($certificate['non_deductible_total'], '0', 2) > 0)
+                <tr>
+                    <td class="label">{{ __('exports.salary_certificate_form11.non_deductible') }}</td>
+                    <td>{{ number_format((float) $certificate['non_deductible_total'], 2, '.', "'") }}</td>
+                </tr>
+            @endif
         </table>
     </div>
 

@@ -156,6 +156,7 @@ return [
         'total_employer_charges' => 'Total employer charges',
     ],
     'salary_certificate_form11' => [
+        'non_deductible' => 'Non-deductible contributions (sickness daily allowance, supplementary accident)',
         'title' => 'Salary Certificate',
         'period' => 'From :from to :to',
         'employee' => 'Employee',
