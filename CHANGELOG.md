@@ -85,6 +85,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still count it, because the closing is what carries a result into equity;
   counting it in one place and not the other is the whole point. Tax return
   figures had no test coverage at all before and now have their own.
+- **An accountant's invoice permissions are described by the test that guards
+  them.** A security test still asserted that the role cannot delete invoices,
+  which stopped being true when discarding a draft was granted. It now states
+  the rule that actually holds: a draft may be discarded, a cancelled invoice
+  stays with the roles that run the organization, and an issued one with nobody.
 - **API token abilities:** the form offered the whole ability catalogue to every
   role, so an accountant could tick `organization.delete`. On a personal token
   that granted nothing — the policy still decides — but it promised something
