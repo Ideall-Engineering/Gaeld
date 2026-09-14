@@ -75,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot drift between them.
 
 ### Fixed
+- **A tax return is summarised over the fiscal year it names.** The figures were
+  gathered by calendar year, so an organization running July to June — or one
+  with a long first year — was summarised over twelve months that were not its
+  own. The organization's recorded fiscal year decides the period now, and an
+  installation that has never recorded one keeps the calendar year it had.
 - **VAT on a tax return is the settlement, not a guess.** The figure came from
   one line — 8.1% of revenue — which named output tax at the standard rate and
   nothing else: it gave no account of input tax, so it overstated what was

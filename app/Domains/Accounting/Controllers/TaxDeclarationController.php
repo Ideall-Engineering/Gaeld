@@ -7,8 +7,10 @@ use App\Domains\Accounting\Models\TaxDeclaration;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Requests\StoreTaxDeclarationRequest;
+use App\Domains\Accounting\Services\FiscalYearService;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\VatReportService;
+use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
@@ -20,6 +22,7 @@ class TaxDeclarationController extends Controller
 {
     public function __construct(
         private VatReportService $vatReports,
+        private FiscalYearService $fiscalYears,
     ) {}
 
     public function index(): Response
@@ -52,13 +55,13 @@ class TaxDeclarationController extends Controller
             ],
             [
                 'status' => TaxDeclarationStatus::Draft,
-                'data' => $this->buildSummaryData($currentOrg->id(), $validated['fiscal_year']),
+                'data' => $this->buildSummaryData($currentOrg->get(), $validated['fiscal_year']),
             ],
         );
 
         if ($declaration->status === TaxDeclarationStatus::Draft && empty($declaration->data)) {
             $declaration->update([
-                'data' => $this->buildSummaryData($currentOrg->id(), $validated['fiscal_year']),
+                'data' => $this->buildSummaryData($currentOrg->get(), $validated['fiscal_year']),
             ]);
         }
 
@@ -72,7 +75,7 @@ class TaxDeclarationController extends Controller
 
         if ($taxDeclaration->status === TaxDeclarationStatus::Draft) {
             $taxDeclaration->update([
-                'data' => $this->buildSummaryData($currentOrg->id(), $taxDeclaration->fiscal_year),
+                'data' => $this->buildSummaryData($currentOrg->get(), $taxDeclaration->fiscal_year),
             ]);
             $taxDeclaration->refresh();
         }
@@ -93,7 +96,7 @@ class TaxDeclarationController extends Controller
                 'finalized_at' => now(),
                 'locked_at' => now(),
                 'locked_by_user_id' => request()->user()->id,
-                'data' => $this->buildSummaryData($currentOrg->id(), $taxDeclaration->fiscal_year),
+                'data' => $this->buildSummaryData($currentOrg->get(), $taxDeclaration->fiscal_year),
             ]);
         }
 
@@ -101,10 +104,22 @@ class TaxDeclarationController extends Controller
     }
 
     /**
+     * The summary a tax return is built from, over the fiscal year it names.
+     *
+     * The period comes from the organization's own fiscal year rather than from
+     * the calendar: an organization running July to June, or one with a long
+     * first year, would otherwise have been summarised over twelve months that
+     * are not its own. {@see FiscalYearService::resolvePeriod()} falls back to
+     * the calendar year when no fiscal year is on record, which is what every
+     * installation without them keeps getting.
+     *
      * @return array<string, float>
      */
-    private function buildSummaryData(string $organizationId, int $fiscalYear): array
+    private function buildSummaryData(Organization $organization, int $fiscalYear): array
     {
+        $period = $this->fiscalYears->resolvePeriod($organization, null, $fiscalYear);
+        $organizationId = $organization->id;
+
         $lines = TransactionLine::query()
             ->select([
                 'accounts.type as account_type',
@@ -116,7 +131,7 @@ class TaxDeclarationController extends Controller
             ->join('journal_entries', 'journal_entries.id', '=', 'transaction_lines.journal_entry_id')
             ->where('journal_entries.organization_id', $organizationId)
             ->where('journal_entries.is_posted', true)
-            ->whereYear('journal_entries.date', $fiscalYear)
+            ->whereBetween('journal_entries.date', [$period->fromDate, $period->toDate])
             ->groupBy('accounts.type', 'journal_entries.type')
             ->toBase()
             ->get();
@@ -164,7 +179,7 @@ class TaxDeclarationController extends Controller
         $totals['profit'] = $totals['revenue'] - $totals['expenses'];
         $totals['net_result'] = $totals['profit'];
 
-        return $totals + $this->vatFigures($organizationId, "{$fiscalYear}-01-01", "{$fiscalYear}-12-31");
+        return $totals + $this->vatFigures($organizationId, $period->fromDate, $period->toDate);
     }
 
     /**

@@ -3,8 +3,10 @@
 namespace Tests\Feature\Accounting;
 
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Enums\FiscalYearStatus;
 use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TaxDeclaration;
 use App\Domains\Accounting\Models\VatEntry;
@@ -162,6 +164,36 @@ class TaxDeclarationSummaryTest extends TestCase
         $this->actAsOrg()->get("/accounting/tax-declarations/{$declaration->getRouteKey()}")->assertOk();
 
         $this->assertSame(4000.0, (float) $declaration->refresh()->data['revenue'], 'A finalised return is not rewritten under the reader.');
+    }
+
+    public function test_a_july_to_june_fiscal_year_is_summarised_over_its_own_months(): void
+    {
+        FiscalYear::create([
+            'organization_id' => $this->org->id,
+            'name' => '2026/27',
+            'start_date' => '2026-07-01',
+            'end_date' => '2027-06-30',
+            'status' => FiscalYearStatus::Operative,
+        ]);
+
+        // Inside the fiscal year, outside the calendar one.
+        $this->postSale('2027-03-15', '5000.00');
+        // Inside the calendar year 2026, outside this fiscal year.
+        $this->postSale('2026-02-11', '4000.00');
+
+        $data = $this->summaryFor(2026);
+
+        $this->assertSame(5000.0, (float) $data['revenue'], 'The year the organization actually runs, not January to December.');
+    }
+
+    public function test_without_a_fiscal_year_on_record_the_calendar_year_still_applies(): void
+    {
+        $this->postSale('2026-02-11', '4000.00');
+        $this->postSale('2027-03-15', '5000.00');
+
+        // The legacy fallback in FiscalYearService, which is what an installation
+        // that never recorded fiscal years keeps getting.
+        $this->assertSame(4000.0, (float) $this->summaryFor(2026)['revenue']);
     }
 
     /**
