@@ -69,6 +69,12 @@ Route::middleware(['auth:sanctum', 'api-org', LogOrgTokenActivity::class, 'featu
     ->group(function () {
         Route::get('/budgets', [BudgetController::class, 'index'])
             ->name('budgets.index');
+        // Before the {account_code}/{fiscal_year} pair below: a literal
+        // segment must win over the placeholder that would otherwise swallow
+        // it. whereNumber() already separates them, the order makes it
+        // independent of that.
+        Route::get('/budgets/variance', [BudgetController::class, 'variance'])
+            ->name('budgets.variance');
         Route::get('/budgets/{account_code}/{fiscal_year}', [BudgetController::class, 'show'])
             ->whereNumber('fiscal_year')
             ->name('budgets.show');

@@ -72,6 +72,7 @@ constitution asks to avoid:
 
 ```text
 GET    /api/v1/budgets?fiscal_year=2026
+GET    /api/v1/budgets/variance?fiscal_year=2026[&from=&to=]
 GET    /api/v1/budgets/{account_code}/{fiscal_year}
 PUT    /api/v1/budgets/{account_code}/{fiscal_year}
 DELETE /api/v1/budgets/{account_code}/{fiscal_year}
@@ -105,6 +106,25 @@ replay the first instead of writing. `BudgetIdempotencyTest` pins this down.
 `create` and `update` are separate abilities in `BudgetPolicy`, so the
 upsert checks whichever of the two the call actually is, and answers `201`
 for a new target, `200` for a replaced one.
+
+**The variance endpoint runs no arithmetic of its own.** It projects
+`ReportingService::profitAndLoss()` — the same source the web profit and
+loss statement renders — and keeps only the budget-related fields. The
+prorated target, the variance and the variance percentage are all computed
+there. Recomputing any of it here would create a second source of truth that
+could drift from what a user sees on screen, which is the one thing a
+budget report must never do. Accounts with no target are left out rather
+than returned with nulls; a year with no targets at all yields an empty
+list and `200`, not `404`.
+
+`from`/`to` narrow the comparison to part of the year and prorate the
+target by month. Both must fall inside the requested fiscal year: the core
+report derives the fiscal year from the year of the start date, so a period
+straddling two years would silently compare against the wrong targets.
+
+Note that writing a budget flushes the report and dashboard caches (see
+`UpsertBudgetAction`). Without that the endpoint would serve a figure up to
+30 minutes old right after a change.
 
 ## Job status table (T019)
 

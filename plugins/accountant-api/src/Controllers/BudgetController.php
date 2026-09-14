@@ -9,8 +9,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Plugins\AccountantApi\CoreBridge\BudgetBridge;
+use Plugins\AccountantApi\Requests\BudgetVarianceRequest;
 use Plugins\AccountantApi\Requests\PutBudgetRequest;
 use Plugins\AccountantApi\Resources\BudgetResource;
+use Plugins\AccountantApi\Resources\BudgetVarianceResource;
 
 /**
  * Monthly budget targets per account and fiscal year (plan.md Etappe 8,
@@ -42,6 +44,31 @@ class BudgetController extends Controller
         return BudgetResource::collection(
             $this->bridge->paginate($this->currentOrganization->id(), $fiscalYear, $perPage)
         );
+    }
+
+    /**
+     * Budget versus actual. Reads through the bridge, which projects the
+     * core report rather than recomputing anything, so these figures and the
+     * web profit and loss statement cannot drift apart.
+     */
+    public function variance(BudgetVarianceRequest $request): JsonResponse
+    {
+        $this->authorize('viewAny', $this->bridge->budgetModelClass());
+
+        [$from, $to] = $request->period();
+
+        $result = $this->bridge->variance($this->currentOrganization->id(), $from, $to);
+
+        return BudgetVarianceResource::collection($result['rows'])
+            ->additional([
+                'meta' => [
+                    'fiscal_year' => (int) $request->validated('fiscal_year'),
+                    'period' => ['from' => $from, 'to' => $to],
+                    'months' => $result['months'],
+                    'totals' => $result['totals'],
+                ],
+            ])
+            ->response();
     }
 
     public function show(Request $request, string $account_code, string $fiscal_year): BudgetResource

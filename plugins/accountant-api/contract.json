@@ -72,6 +72,17 @@
             "notes": "Monthly budget targets of the organization. Optional fiscal_year filter, paginated (max 100 per page). Requires feature:budgets."
         },
         {
+            "name": "api.accountant-api.budgets.variance",
+            "method": "GET",
+            "path": "/api/v1/budgets/variance",
+            "controller": "Plugins\\AccountantApi\\Controllers\\BudgetController@variance",
+            "auth_required": true,
+            "abilities_required": [
+                "viewAny"
+            ],
+            "notes": "Budget versus actual per account for a fiscal year, optionally narrowed to a period inside it (the target is then prorated by month). Projects ReportingService::profitAndLoss() rather than recomputing, so the figures match the web profit and loss statement. Requires feature:budgets."
+        },
+        {
             "name": "api.accountant-api.budgets.show",
             "method": "GET",
             "path": "/api/v1/budgets/{account_code}/{fiscal_year}",
