@@ -32,9 +32,9 @@ liegen in einer anderen Domäne.
 [tasks-budgets.md](tasks-budgets.md):
 
 - Sollwerte je Konto und Geschäftsjahr per API setzen, lesen, ändern, löschen. **Erledigt.**
-- Den Soll-Ist-Vergleich per API lesen, mit Abweichung absolut und in Prozent. **Offen**, Phase 5.
-- Eine Budgetänderung wirkt sich sofort auf Berichte aus, statt bis zu 30 Minuten im Cache hängenzubleiben. **Offen**, Phase 5 — heute ein Fehler auch in der Weboberfläche.
-- Web und API lesen und schreiben dieselbe Quelle, nachgewiesen an einer laufenden Anwendung. **Erledigt** für die Pflege, für den Vergleich noch offen.
+- Den Soll-Ist-Vergleich per API lesen, mit Abweichung absolut und in Prozent. **Erledigt.**
+- Eine Budgetänderung wirkt sich sofort auf Berichte aus, statt bis zu 30 Minuten im Cache hängenzubleiben. **Erledigt** — die Korrektur behebt denselben Fehler auch in der Weboberfläche.
+- Web und API lesen und schreiben dieselbe Quelle, nachgewiesen an einer laufenden Anwendung. **Erledigt**, für Pflege und Vergleich.
 
 **Ausdrücklich nicht im Umfang**: Sammel-Upsert für ein ganzes Jahr (pro Konto
 ein Aufruf genügt), Budget-Webhooks, Budgetversionen oder -szenarien,
@@ -59,7 +59,7 @@ Zielbild unverändert.
 | 5 – MWST und Periodenabschluss | **geparkt** |
 | 6 – Anlagen, Jahresabschluss, Archiv | **geparkt** |
 | 7 – Payroll | **geparkt** |
-| 8 – Optionale Fachmodule (Budgets, Kostenstellen, Fremdwährung, Steuerdeklarationen, Konsolidierung) | **teilweise**: Fokuspaket **Budgets** vorgezogen und geliefert, siehe [tasks-budgets.md](tasks-budgets.md). Kostenstellen, Fremdwährung, Steuerdeklarationen und Konsolidierung geparkt |
+| 8 – Optionale Fachmodule (Budgets, Kostenstellen, Fremdwährung, Steuerdeklarationen, Konsolidierung) | **teilweise**: Fokuspaket **Budgets** vorgezogen und **abgeschlossen**, siehe [tasks-budgets.md](tasks-budgets.md). Kostenstellen, Fremdwährung, Steuerdeklarationen und Konsolidierung geparkt |
 | 9 – Pilot, Härtung, Upstream-Kompatibilität | **geparkt** |
 
 **Geliefert (Etappe 0)**: `plugins/accountant-api` mit Manifest, Service
@@ -95,10 +95,10 @@ seither im Betrieb verwendet.
 - `LogOrgTokenActivity` fehlt in der Routengruppe der Korrektur-Endpunkte; Aufrufe mit Organisationstoken werden dort nicht protokolliert (gefunden beim Budget-Paket, siehe tasks-budgets.md).
 - `ApiIdempotencyService::reserve()` bildet den Idempotenzschlüssel ohne die konkreten Pfadparameter. Für Kernrouten heute folgenlos, weil deren Parameter implizite Modellbindungen sind; für Modulrouten mit reinen String-Parametern wäre der automatische Rückfall falsch. Vor Etappe 3 zu entscheiden, zusammen mit T017.
 
-**Nächster Schritt**: Phase 5 in [tasks-budgets.md](tasks-budgets.md) —
-Soll-Ist-Endpunkt und Cache-Invalidierung. Danach ist die Budget-API
-geschlossen und die Arbeit an dieser Spezifikation ruht bis zu einem neuen
-Umfangsentscheid.
+**Nächster Schritt**: Keiner. Die Budget-API ist seit 2026-09-14 geschlossen,
+das Abnahmetor in [tasks-budgets.md](tasks-budgets.md) ist erfüllt und am
+laufenden Stack nachgewiesen. Die Arbeit an dieser Spezifikation ruht bis zu
+einem neuen Umfangsentscheid.
 
 Sobald wieder aufgenommen wird, bleibt Etappe 1 (Read-Modell und Stammdaten)
 der strukturell richtige nächste Block — sie ist die Voraussetzung dafür, dass
