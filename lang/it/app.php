@@ -2702,4 +2702,35 @@ return [
     'captcha_required' => 'Il captcha è obbligatorio.',
     'captcha_failed' => 'Verifica del captcha non riuscita. Riprova.',
     'captcha_unavailable' => 'La verifica del captcha è temporaneamente non disponibile.',
+    // Payroll — journal texts, written once in the organization's language.
+    'payroll_journal_description' => 'Salario :name — :period',
+    'payroll_journal_gross_salary' => 'Salario lordo: :name',
+    'payroll_journal_net_salary' => 'Salario netto versato: :name',
+    'payroll_journal_reimbursement' => 'Rimborso spese: :name',
+    'payroll_journal_withholding_tax' => 'Imposta alla fonte',
+
+    // Payroll — posting date
+    'payroll_posting_date' => 'Data di registrazione',
+    'payroll_posting_date_hint' => 'Deve cadere nel mese di paga. Senza indicazione vale il giorno di paga dell\'organizzazione.',
+    'payroll_posting_date_outside_period' => 'La data di registrazione deve cadere nel mese di paga.',
+    'payroll_default_payday' => 'Giorno di paga',
+    'payroll_default_payday_hint' => 'Giorno del mese in cui viene registrato un ciclo di paghe.',
+
+    // Payroll — externally booked slips
+    'payroll_booked_externally' => 'Registrato esternamente',
+    'payroll_booked_externally_hint' => 'Già registrato fuori dal modulo salari — conta per il certificato di salario, ma non crea alcuna registrazione.',
+    'payroll_booked_externally_not_postable' => 'Un cedolino registrato esternamente non può essere registrato.',
+
+    // Payroll — hourly wages
+    'salary_type' => 'Tipo di salario',
+    'salary_type_monthly' => 'Salario mensile',
+    'salary_type_hourly' => 'Salario orario',
+    'hourly_rate' => 'Tariffa oraria',
+    'hours_worked' => 'Ore',
+    'vacation_compensation_rate' => 'Indennità vacanze (%)',
+    'thirteenth_compensation_rate' => 'Quota 13esima (%)',
+    'vacation_compensation' => 'Indennità vacanze',
+    'thirteenth_compensation' => 'Quota 13esima',
+    'hourly_rate_required' => 'Un salario orario richiede una tariffa oraria.',
+    'total_deductions' => 'Totale deduzioni',
 ];

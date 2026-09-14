@@ -15,6 +15,7 @@ use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Payroll\Services\SwissDeductionService;
 use App\Support\Money;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Lang;
 
 /**
  * Posts a salary slip to the accounting ledger (gross salary, deductions, net pay).
@@ -53,11 +54,21 @@ class PostPayrollAction
         $orgId = $slip->organization_id;
 
         $employee = $slip->employee;
-        $description = "Salary {$employee->fullName()} — {$slip->period_month}/{$slip->period_year}";
 
         // Explicitly, not via $employee->organization: lazy loading is off
         // installation-wide and an unloaded relation throws.
         $organization = Organization::query()->whereKey($orgId)->first();
+
+        // The organization's language, not the language of whoever presses the
+        // button: a journal text is written once and read for years.
+        $locale = $organization === null || $organization->locale === null
+            ? app()->getLocale()
+            : $organization->locale;
+        $period = str_pad((string) $slip->period_month, 2, '0', STR_PAD_LEFT).'/'.$slip->period_year;
+        $description = __('app.payroll_journal_description', [
+            'name' => $employee->fullName(),
+            'period' => $period,
+        ], $locale);
         $salaryAccount = $this->ledgerQuery->resolveAccount(
             $orgId,
             $organization?->payroll_salary_account_code === null
@@ -68,7 +79,7 @@ class PostPayrollAction
 
         $sourceTaxAmount = Money::normalize((string) ($deductions['source_tax'] ?? $slip->source_tax_amount ?? '0.00'));
 
-        [$liabilities, $employerCosts] = $this->groupDeductions($slip, $deductions);
+        [$liabilities, $employerCosts] = $this->groupDeductions($slip, $deductions, $locale);
 
         $lines = [];
 
@@ -77,18 +88,20 @@ class PostPayrollAction
             accountId: (string) $salaryAccount->id,
             debit: $slip->gross_salary,
             credit: '0',
-            description: "Gross salary: {$employee->fullName()}",
+            description: __('app.payroll_journal_gross_salary', ['name' => $employee->fullName()], $locale),
         );
 
-        // Debit: Employer contributions, one line per expense account so a
-        // chart that separates AHV, FAK, BVG, UVG and KTG stays readable.
-        foreach ($employerCosts as $accountCode => $amount) {
-            $account = $this->ledgerQuery->resolveAccount($orgId, (string) $accountCode);
+        // Debit: Employer contributions, one line per contribution rather than
+        // one per account. The sums are the same either way; spelling them out
+        // is what lets a reader check AHV against FAK against BVG in the
+        // journal instead of only on the salary slip.
+        foreach ($employerCosts as $cost) {
+            $account = $this->ledgerQuery->resolveAccount($orgId, $cost['account']);
             $lines[] = new JournalLineData(
                 accountId: (string) $account->id,
-                debit: $amount,
+                debit: $cost['amount'],
                 credit: '0',
-                description: "Employer social charges: {$employee->fullName()}",
+                description: $cost['description'],
             );
         }
 
@@ -104,7 +117,7 @@ class PostPayrollAction
                 accountId: (string) $reimbursementAccount->id,
                 debit: $reimbursementAmount,
                 credit: '0',
-                description: "Expense reimbursement: {$employee->fullName()}",
+                description: __('app.payroll_journal_reimbursement', ['name' => $employee->fullName()], $locale),
             );
         }
 
@@ -113,17 +126,17 @@ class PostPayrollAction
             accountId: (string) $bankAccount->id,
             debit: '0',
             credit: $slip->net_salary,
-            description: "Net salary paid: {$employee->fullName()}",
+            description: __('app.payroll_journal_net_salary', ['name' => $employee->fullName()], $locale),
         );
 
-        // Credit: one liability line per account.
-        foreach ($liabilities as $accountCode => $amount) {
-            $account = $this->ledgerQuery->resolveAccount($orgId, (string) $accountCode);
+        // Credit: one liability line per contribution, named.
+        foreach ($liabilities as $liability) {
+            $account = $this->ledgerQuery->resolveAccount($orgId, $liability['account']);
             $lines[] = new JournalLineData(
                 accountId: (string) $account->id,
                 debit: '0',
-                credit: $amount,
-                description: 'Social security contributions',
+                credit: $liability['amount'],
+                description: $liability['description'],
             );
         }
 
@@ -133,7 +146,7 @@ class PostPayrollAction
                 accountId: (string) $sourceTaxAccount->id,
                 debit: '0',
                 credit: $sourceTaxAmount,
-                description: 'Withholding tax payable',
+                description: __('app.payroll_journal_withholding_tax', [], $locale),
             );
         }
 
@@ -168,17 +181,17 @@ class PostPayrollAction
     }
 
     /**
-     * Split the calculated deductions into liability totals per account and
-     * employer cost totals per expense account.
+     * Split the calculated deductions into one liability line and, for an
+     * employer share, one expense line per contribution.
      *
      * Every deduction must reach an account. A contribution that only appears
      * in the employer total without a matching credit unbalances the entry, so
      * an unmapped code is an error here rather than a silent omission.
      *
      * @param  array<string, mixed>  $deductions
-     * @return array{0: array<string, string>, 1: array<string, string>}
+     * @return array{0: array<int, array{account: string, amount: string, description: string}>, 1: array<int, array{account: string, amount: string, description: string}>}
      */
-    private function groupDeductions(SalarySlip $slip, array $deductions): array
+    private function groupDeductions(SalarySlip $slip, array $deductions, string $locale): array
     {
         /** @var array<string, DeductionRate> $rates */
         $rates = DeductionRate::query()
@@ -194,9 +207,15 @@ class PostPayrollAction
 
         $liabilities = [];
         $employerCosts = [];
+        $names = $this->deductionNames($deductions, $rates, $locale);
 
         foreach ($deductions as $code => $amount) {
             $code = (string) $code;
+            // The named breakdown lives in the same array and is not a figure.
+            if (! is_scalar($amount)) {
+                continue;
+            }
+
             // A code may well have no configured row of its own — the built-in
             // defaults are not in the table.
             $rate = $rates[$code] ?? null;
@@ -210,6 +229,8 @@ class PostPayrollAction
                 continue;
             }
 
+            $name = $names[$code] ?? $code;
+
             $fallbackAccount = self::FALLBACK_LIABILITY_ACCOUNTS[$code] ?? null;
             $liabilityAccount = $rate === null
                 ? $fallbackAccount
@@ -221,7 +242,11 @@ class PostPayrollAction
                 );
             }
 
-            $liabilities[$liabilityAccount] = Money::add($liabilities[$liabilityAccount] ?? '0.00', $amount);
+            $liabilities[] = [
+                'account' => $liabilityAccount,
+                'amount' => $amount,
+                'description' => $name,
+            ];
 
             $type = $rate === null
                 ? (str_ends_with($code, '_employer') ? 'employer' : 'employee')
@@ -231,11 +256,57 @@ class PostPayrollAction
                 $expenseAccount = $rate === null
                     ? AccountCode::SOCIAL_CHARGES_EMPLOYER
                     : ($rate->expense_account_code ?? AccountCode::SOCIAL_CHARGES_EMPLOYER);
-                $employerCosts[$expenseAccount] = Money::add($employerCosts[$expenseAccount] ?? '0.00', $amount);
+                $employerCosts[] = [
+                    'account' => $expenseAccount,
+                    'amount' => $amount,
+                    'description' => $name,
+                ];
             }
         }
 
         return [$liabilities, $employerCosts];
+    }
+
+    /**
+     * The name to write on a deduction's journal lines.
+     *
+     * The breakdown frozen into the slip wins, so a rate renamed later does not
+     * rewrite what an old entry says. Then the rate itself, and for the
+     * built-in defaults a translated label — an installation that configured
+     * nothing should not read "avs_employee" in its books.
+     *
+     * @param  array<string, mixed>  $deductions
+     * @param  array<string, DeductionRate>  $rates
+     * @return array<string, string>
+     */
+    private function deductionNames(array $deductions, array $rates, string $locale): array
+    {
+        $names = [];
+
+        foreach ($rates as $code => $rate) {
+            $names[(string) $code] = (string) $rate->name;
+        }
+
+        foreach (SwissDeductionService::defaultCodes() as $code) {
+            if (isset($names[$code]) || ! Lang::has('app.'.$code, $locale)) {
+                continue;
+            }
+
+            $names[$code] = __('app.'.$code, [], $locale);
+        }
+
+        /** @var array<int, array{code?: string, name?: string}> $lines */
+        $lines = is_array($deductions[SwissDeductionService::LINES_KEY] ?? null)
+            ? $deductions[SwissDeductionService::LINES_KEY]
+            : [];
+
+        foreach ($lines as $line) {
+            if (isset($line['code'], $line['name']) && $line['name'] !== '') {
+                $names[(string) $line['code']] = (string) $line['name'];
+            }
+        }
+
+        return $names;
     }
 
     private function ensureSourceTaxApplied(SalarySlip $slip): void

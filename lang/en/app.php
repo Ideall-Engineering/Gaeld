@@ -2760,4 +2760,35 @@ return [
     'captcha_required' => 'The captcha is required.',
     'captcha_failed' => 'Captcha verification failed. Please try again.',
     'captcha_unavailable' => 'Captcha verification is temporarily unavailable.',
+    // Payroll — journal texts, written once in the organization's language.
+    'payroll_journal_description' => 'Salary :name — :period',
+    'payroll_journal_gross_salary' => 'Gross salary: :name',
+    'payroll_journal_net_salary' => 'Net salary paid: :name',
+    'payroll_journal_reimbursement' => 'Expense reimbursement: :name',
+    'payroll_journal_withholding_tax' => 'Withholding tax payable',
+
+    // Payroll — posting date
+    'payroll_posting_date' => 'Posting date',
+    'payroll_posting_date_hint' => 'Must fall within the payroll month. Left empty, the organization payday applies.',
+    'payroll_posting_date_outside_period' => 'The posting date must fall within the payroll month.',
+    'payroll_default_payday' => 'Payday',
+    'payroll_default_payday_hint' => 'Day of the month a payroll run is posted on.',
+
+    // Payroll — externally booked slips
+    'payroll_booked_externally' => 'Booked externally',
+    'payroll_booked_externally_hint' => 'Already booked outside the payroll module — counts towards the salary certificate but creates no journal entry.',
+    'payroll_booked_externally_not_postable' => 'A salary slip booked externally cannot be posted.',
+
+    // Payroll — hourly wages
+    'salary_type' => 'Salary type',
+    'salary_type_monthly' => 'Monthly salary',
+    'salary_type_hourly' => 'Hourly wage',
+    'hourly_rate' => 'Hourly rate',
+    'hours_worked' => 'Hours',
+    'vacation_compensation_rate' => 'Holiday compensation (%)',
+    'thirteenth_compensation_rate' => 'Share of 13th salary (%)',
+    'vacation_compensation' => 'Holiday compensation',
+    'thirteenth_compensation' => 'Share of 13th salary',
+    'hourly_rate_required' => 'An hourly wage needs an hourly rate.',
+    'total_deductions' => 'Total deductions',
 ];

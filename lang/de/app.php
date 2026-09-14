@@ -2698,4 +2698,35 @@ return [
     'captcha_required' => 'Das Captcha ist erforderlich.',
     'captcha_failed' => 'Captcha-Überprüfung fehlgeschlagen. Bitte versuchen Sie es erneut.',
     'captcha_unavailable' => 'Die Captcha-Überprüfung ist vorübergehend nicht verfügbar.',
+    // Payroll — journal texts, written once in the organization's language.
+    'payroll_journal_description' => 'Lohn :name — :period',
+    'payroll_journal_gross_salary' => 'Bruttolohn: :name',
+    'payroll_journal_net_salary' => 'Nettolohn ausbezahlt: :name',
+    'payroll_journal_reimbursement' => 'Spesen: :name',
+    'payroll_journal_withholding_tax' => 'Quellensteuer',
+
+    // Payroll — posting date
+    'payroll_posting_date' => 'Buchungsdatum',
+    'payroll_posting_date_hint' => 'Muss im Abrechnungsmonat liegen. Ohne Angabe gilt der Zahltag der Organisation.',
+    'payroll_posting_date_outside_period' => 'Das Buchungsdatum muss im Abrechnungsmonat liegen.',
+    'payroll_default_payday' => 'Zahltag',
+    'payroll_default_payday_hint' => 'Tag im Monat, auf den ein Lohnlauf gebucht wird.',
+
+    // Payroll — externally booked slips
+    'payroll_booked_externally' => 'Extern verbucht',
+    'payroll_booked_externally_hint' => 'Bereits ausserhalb des Lohnmoduls gebucht — zählt für den Lohnausweis, erzeugt aber keine Buchung.',
+    'payroll_booked_externally_not_postable' => 'Eine extern verbuchte Lohnabrechnung kann nicht verbucht werden.',
+
+    // Payroll — hourly wages
+    'salary_type' => 'Lohnart',
+    'salary_type_monthly' => 'Monatslohn',
+    'salary_type_hourly' => 'Stundenlohn',
+    'hourly_rate' => 'Stundenansatz',
+    'hours_worked' => 'Stunden',
+    'vacation_compensation_rate' => 'Ferienentschädigung (%)',
+    'thirteenth_compensation_rate' => 'Anteil 13. Monatslohn (%)',
+    'vacation_compensation' => 'Ferienentschädigung',
+    'thirteenth_compensation' => 'Anteil 13. Monatslohn',
+    'hourly_rate_required' => 'Für einen Stundenlohn wird ein Stundenansatz benötigt.',
+    'total_deductions' => 'Total Abzüge',
 ];
