@@ -5,8 +5,10 @@ namespace App\Domains\Accounting\Controllers;
 use App\Domains\Accounting\Enums\TaxDeclarationStatus;
 use App\Domains\Accounting\Models\TaxDeclaration;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Requests\StoreTaxDeclarationRequest;
 use App\Domains\Accounting\Services\LedgerQueryService;
+use App\Domains\Accounting\Services\VatReportService;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
@@ -16,6 +18,10 @@ use Inertia\Response;
 
 class TaxDeclarationController extends Controller
 {
+    public function __construct(
+        private VatReportService $vatReports,
+    ) {}
+
     public function index(): Response
     {
         $this->authorize('viewAny', TaxDeclaration::class);
@@ -122,7 +128,6 @@ class TaxDeclarationController extends Controller
             'liabilities' => 0.0,
             'equity' => 0.0,
             'profit' => 0.0,
-            'vat_payable_estimate' => 0.0,
             'net_result' => 0.0,
         ];
 
@@ -158,8 +163,52 @@ class TaxDeclarationController extends Controller
 
         $totals['profit'] = $totals['revenue'] - $totals['expenses'];
         $totals['net_result'] = $totals['profit'];
-        $totals['vat_payable_estimate'] = max(0, round($totals['revenue'] * 0.081, 2));
 
-        return $totals;
+        return $totals + $this->vatFigures($organizationId, "{$fiscalYear}-01-01", "{$fiscalYear}-12-31");
+    }
+
+    /**
+     * VAT as settled rather than as guessed.
+     *
+     * This used to be one line — 8.1% of revenue — which named the output tax on
+     * the standard rate and nothing else. It owed no account of input tax, so it
+     * overstated what was payable by whatever had been reclaimed and could never
+     * show a credit; it applied the standard rate to turnover taxed at 2.6% or
+     * 3.8% and to turnover not taxed at all; and it presented a liability to
+     * organizations that are not registered.
+     *
+     * {@see VatReportService} already computes the Swiss settlement from the VAT
+     * recorded on each posting, which is what the VAT report shows. Reading it
+     * here means the two agree by construction instead of by coincidence.
+     *
+     * `vat_output` is the tax owed before deduction, acquisition tax included,
+     * so that output − input lands exactly on payable or credit.
+     *
+     * @return array<string, float>
+     */
+    private function vatFigures(string $organizationId, string $fromDate, string $toDate): array
+    {
+        // Nothing recorded is not the same as nothing owed. An organization that
+        // books no VAT would otherwise read 0.00 as though it had been worked
+        // out, which is the reading this whole change exists to avoid.
+        $recordsVat = VatEntry::query()
+            ->whereHas('journalEntry', fn ($query) => $query
+                ->where('organization_id', $organizationId)
+                ->where('is_posted', true)
+                ->whereBetween('date', [$fromDate, $toDate]))
+            ->exists();
+
+        if (! $recordsVat) {
+            return [];
+        }
+
+        $report = $this->vatReports->generate($organizationId, $fromDate, $toDate);
+
+        return [
+            'vat_output' => (float) $report['total_tax_owed'],
+            'vat_input' => (float) $report['total_input_vat'],
+            'vat_payable' => (float) $report['vat_payable'],
+            'vat_credit' => (float) $report['vat_credit'],
+        ];
     }
 }

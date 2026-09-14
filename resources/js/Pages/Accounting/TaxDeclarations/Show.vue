@@ -46,10 +46,28 @@ const declarationKeyOrder = [
   'assets',
   'liabilities',
   'equity',
+  'vat_output',
+  'vat_input',
+  'vat_payable',
+  'vat_credit',
+  // Only on declarations finalised before VAT came from the settlement. Kept in
+  // the order so an old document still reads in a sensible sequence.
   'vat_payable_estimate',
 ]
 
+/**
+ * Rows were labelled by capitalising the key, which read "Vat Payable Estimate"
+ * in every language. Translated where a name exists; a key from an older
+ * finalised declaration that has none falls back to the old behaviour rather
+ * than showing a missing-translation marker.
+ */
 function formatDeclarationLabel(key) {
+  const translated = t(`tax_declaration_field_${key}`)
+
+  if (translated && translated !== `tax_declaration_field_${key}`) {
+    return translated
+  }
+
   return key
     .split('_')
     .map(part => part.charAt(0).toUpperCase() + part.slice(1))

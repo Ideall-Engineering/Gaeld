@@ -3,9 +3,12 @@
 namespace Tests\Feature\Accounting;
 
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TaxDeclaration;
+use App\Domains\Accounting\Models\VatEntry;
+use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Accounting\Services\LedgerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -60,13 +63,17 @@ class TaxDeclarationSummaryTest extends TestCase
         $this->assertSame(2800.0, (float) $data['profit']);
     }
 
-    public function test_the_vat_estimate_follows_the_traded_revenue(): void
+    public function test_vat_survives_the_year_being_closed(): void
     {
         $this->postSale('2026-02-11', '4000.00');
+        $this->recordVat('2026-02-11', VatEntryType::Output, base: '4000.00', vat: '324.00');
         $this->closeTheYear('2026-12-31');
 
-        // Previously zero, because the revenue it is a percentage of was zero.
-        $this->assertSame(324.0, (float) $this->summaryFor(2026)['vat_payable_estimate']);
+        // The closing entry touches no VAT entry, so the settlement was never
+        // the part that collapsed. Held here anyway: both halves of this file's
+        // subject have to survive a closing together.
+        $this->assertSame(324.0, (float) $this->summaryFor(2026)['vat_payable']);
+        $this->assertSame(4000.0, (float) $this->summaryFor(2026)['revenue']);
     }
 
     public function test_the_closing_still_counts_towards_equity(): void
@@ -81,12 +88,90 @@ class TaxDeclarationSummaryTest extends TestCase
         $this->assertSame(2800.0, (float) $this->summaryFor(2026)['equity']);
     }
 
+    public function test_vat_comes_from_the_settlement_and_deducts_input_tax(): void
+    {
+        $this->postSale('2026-02-11', '100000.00');
+        $this->recordVat('2026-02-11', VatEntryType::Output, base: '100000.00', vat: '8100.00');
+        $this->recordVat('2026-03-05', VatEntryType::Input, base: '40000.00', vat: '3200.00');
+
+        $data = $this->summaryFor(2026);
+
+        // The old estimate said 8100 — output tax with no account of what had
+        // been reclaimed. What is owed is the difference.
+        $this->assertSame(8100.0, (float) $data['vat_output']);
+        $this->assertSame(3200.0, (float) $data['vat_input']);
+        $this->assertSame(4900.0, (float) $data['vat_payable']);
+        $this->assertSame(0.0, (float) $data['vat_credit']);
+        $this->assertArrayNotHasKey('vat_payable_estimate', $data);
+    }
+
+    public function test_more_input_than_output_is_a_credit_not_a_liability(): void
+    {
+        $this->postSale('2026-02-11', '20000.00');
+        $this->recordVat('2026-02-11', VatEntryType::Output, base: '20000.00', vat: '1620.00');
+        $this->recordVat('2026-03-05', VatEntryType::Input, base: '60000.00', vat: '4860.00');
+
+        $data = $this->summaryFor(2026);
+
+        // max(0, revenue * 0.081) could never express this: it reported a
+        // liability where the organization is owed money.
+        $this->assertSame(0.0, (float) $data['vat_payable']);
+        $this->assertSame(3240.0, (float) $data['vat_credit']);
+    }
+
+    public function test_a_reduced_rate_is_not_charged_at_the_standard_one(): void
+    {
+        $this->postSale('2026-02-11', '50000.00');
+        $this->recordVat('2026-02-11', VatEntryType::Output, base: '50000.00', vat: '1300.00', rateCode: 'REDUCED', rate: '2.60');
+
+        // The estimate applied 8.1% to all revenue and would have said 4050.
+        $this->assertSame(1300.0, (float) $this->summaryFor(2026)['vat_output']);
+    }
+
+    public function test_an_organization_that_records_no_vat_is_shown_none(): void
+    {
+        $this->postSale('2026-02-11', '100000.00');
+
+        $data = $this->summaryFor(2026);
+
+        // Not zero: zero reads as a figure that was worked out. Nothing recorded
+        // means there is nothing to state, and an association below the
+        // registration threshold should not be handed a liability.
+        $this->assertArrayNotHasKey('vat_payable', $data);
+        $this->assertArrayNotHasKey('vat_output', $data);
+        $this->assertArrayNotHasKey('vat_payable_estimate', $data);
+        $this->assertSame(100000.0, (float) $data['revenue'], 'The rest of the summary is unaffected.');
+    }
+
+    public function test_a_finalised_declaration_keeps_the_figures_it_was_finalised_with(): void
+    {
+        $this->postSale('2026-02-11', '4000.00');
+
+        $declaration = TaxDeclaration::create([
+            'organization_id' => $this->org->id,
+            'fiscal_year' => 2026,
+            'canton' => 'SO',
+        ]);
+
+        $this->actAsOrg()->get("/accounting/tax-declarations/{$declaration->getRouteKey()}")->assertOk();
+        $this->actAsOrg()->post("/accounting/tax-declarations/{$declaration->getRouteKey()}/finalize")->assertRedirect();
+
+        $this->postSale('2026-03-01', '9999.00');
+        app(LedgerService::class)->flushCache($this->org->id);
+
+        $this->actAsOrg()->get("/accounting/tax-declarations/{$declaration->getRouteKey()}")->assertOk();
+
+        $this->assertSame(4000.0, (float) $declaration->refresh()->data['revenue'], 'A finalised return is not rewritten under the reader.');
+    }
+
     /**
      * @return array<string, float>
      */
     private function summaryFor(int $fiscalYear): array
     {
-        $declaration = TaxDeclaration::create([
+        // firstOrCreate so a test may read the summary more than once: one
+        // declaration per year and canton is all the schema allows.
+        $declaration = TaxDeclaration::firstOrCreate([
             'organization_id' => $this->org->id,
             'fiscal_year' => $fiscalYear,
             'canton' => 'SO',
@@ -95,6 +180,49 @@ class TaxDeclarationSummaryTest extends TestCase
         $this->actAsOrg()->get("/accounting/tax-declarations/{$declaration->getRouteKey()}")->assertOk();
 
         return $declaration->refresh()->data;
+    }
+
+    /**
+     * A VAT entry on its own posting, the way the invoicing and expense services
+     * record one when a booking carries VAT.
+     */
+    private function recordVat(
+        string $date,
+        VatEntryType $type,
+        string $base,
+        string $vat,
+        string $rateCode = 'NORMAL',
+        string $rate = '8.10',
+    ): void {
+        $vatRate = VatRate::firstOrCreate(
+            ['organization_id' => $this->org->id, 'code' => $rateCode],
+            ['name' => $rateCode, 'rate' => $rate],
+        );
+
+        $entry = JournalEntry::where('organization_id', $this->org->id)
+            ->where('date', $date)
+            ->orderByDesc('id')
+            ->first();
+
+        if ($entry === null) {
+            $this->postJournalEntry($date, [
+                $this->journalLine($this->account('1020'), $base, '0.00'),
+                $this->journalLine($this->account('3000'), '0.00', $base),
+            ], 'VAT-'.$type->value.'-'.$date);
+
+            $entry = JournalEntry::where('organization_id', $this->org->id)
+                ->where('date', $date)
+                ->orderByDesc('id')
+                ->firstOrFail();
+        }
+
+        VatEntry::create([
+            'journal_entry_id' => $entry->id,
+            'vat_rate_id' => $vatRate->id,
+            'base_amount' => $base,
+            'vat_amount' => $vat,
+            'type' => $type,
+        ]);
     }
 
     private function closeTheYear(string $closingDate): void

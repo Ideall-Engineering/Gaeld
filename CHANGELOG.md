@@ -75,6 +75,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot drift between them.
 
 ### Fixed
+- **VAT on a tax return is the settlement, not a guess.** The figure came from
+  one line — 8.1% of revenue — which named output tax at the standard rate and
+  nothing else: it gave no account of input tax, so it overstated what was
+  payable by whatever had been reclaimed and could never show a credit; it
+  charged the standard rate on turnover taxed at 2.6% or 3.8% and on turnover not
+  taxed at all; and it presented a liability to organizations that are not
+  registered. The return now reads the Swiss settlement Gäld already computes
+  from the VAT recorded on each posting, so it agrees with the VAT report by
+  construction: tax owed, deductible input tax, and the amount payable or the
+  credit. An organization that records no VAT is shown none rather than a
+  worked-out looking 0.00.
+- **Tax return rows are labelled in the reader's language.** They were named by
+  capitalising the internal key, so a row read "Vat Payable Estimate" in German,
+  French and Italian alike. Rows finalised under the old keys still read, and are
+  marked as the superseded estimate.
 - **A closed year no longer reports itself as nothing traded.** The year-end
   closing empties every revenue and expense account by design, and both the
   profit and loss statement and the figures behind a tax return were counting it
