@@ -12,6 +12,35 @@ Das Modul bleibt eine dünne, versionierte Transportschicht: Es validiert und au
 
 Die Umsetzung beginnt mit Modulgerüst, Kompatibilitätsgrenze sowie einem verbindlichen Sicherheits- und Vertragsfundament. Danach folgen Stammdaten, Tagesbuchhaltung, Bankabstimmung, Reports, Abschluss, Payroll und optionale Fachmodule. Jede Etappe ist separat testbar, ausrollbar und rückrollbar. Kern- und Moduländerungen laufen dabei in zwei getrennten Lieferströmen.
 
+## Aktueller Umfang: Budget-API abschliessen (ab 2026-09-14)
+
+**Entscheid vom 2026-09-14**: Die Arbeit an dieser Spezifikation beschränkt
+sich vorerst auf die Budget-Erweiterung. Sie soll in sich geschlossen
+funktionieren — setzen, lesen, auswerten, löschen — und nicht auf eine
+spätere Etappe warten müssen. Die Etappen 1 und 3–9 sind damit **geparkt**,
+nicht verworfen: ihre Beschreibungen weiter unten bleiben als Zielbild
+stehen, aber es wird nichts daraus gebaut, bis dieser Entscheid geändert
+wird.
+
+Das ist möglich, weil Budgets an keiner offenen Vorarbeit hängen. Weder die
+zurückgestellten Etappe-0-Punkte (T014, T017) noch eine der Nacharbeiten aus
+dem Korrektur-Paket berühren sie: ein Budget ist direkt organisationsgebunden,
+der Upsert löst die Parallelitätsfrage von selbst, und die Korrektur-Themen
+liegen in einer anderen Domäne.
+
+**Was „geschlossen" heisst** — der Abnahmetor steht in
+[tasks-budgets.md](tasks-budgets.md):
+
+- Sollwerte je Konto und Geschäftsjahr per API setzen, lesen, ändern, löschen. **Erledigt.**
+- Den Soll-Ist-Vergleich per API lesen, mit Abweichung absolut und in Prozent. **Offen**, Phase 5.
+- Eine Budgetänderung wirkt sich sofort auf Berichte aus, statt bis zu 30 Minuten im Cache hängenzubleiben. **Offen**, Phase 5 — heute ein Fehler auch in der Weboberfläche.
+- Web und API lesen und schreiben dieselbe Quelle, nachgewiesen an einer laufenden Anwendung. **Erledigt** für die Pflege, für den Vergleich noch offen.
+
+**Ausdrücklich nicht im Umfang**: Sammel-Upsert für ein ganzes Jahr (pro Konto
+ein Aufruf genügt), Budget-Webhooks, Budgetversionen oder -szenarien,
+`updated_since`-Synchronisation und jeder weitere Bericht ausser dem
+Soll-Ist-Vergleich auf Budgets.
+
 ## Umsetzungsstand (Stand 2026-09-14)
 
 Dieser Abschnitt hält fest, was vom Plan tatsächlich geliefert ist. Der
@@ -24,14 +53,14 @@ Zielbild unverändert.
 |---|---|
 | 0 – Modul-, Sicherheits- und Vertragsfundament | **Abgeschlossen**, Gate erfüllt; zwei bewusste Rückstellungen (siehe unten) |
 | 1 – Read-Modell und Stammdaten | offen, noch kein `tasks.md` |
-| 2 – Tagesbuchhaltung | **teilweise**: Fokuspaket *Geführte Journal-Korrektur* vollständig geliefert (Kern, Web, API); Rechnungs- und Ausgabenworkflow offen |
-| 3 – Banking und Abstimmung | offen |
-| 4 – Reports und Exporte | offen |
-| 5 – MWST und Periodenabschluss | offen |
-| 6 – Anlagen, Jahresabschluss, Archiv | offen |
-| 7 – Payroll | offen |
-| 8 – Optionale Fachmodule (Budgets, Kostenstellen, Fremdwährung, Steuerdeklarationen, Konsolidierung) | **teilweise**: Fokuspaket **Budgets** vorgezogen und geliefert, siehe [tasks-budgets.md](tasks-budgets.md). Kostenstellen, Fremdwährung, Steuerdeklarationen und Konsolidierung offen |
-| 9 – Pilot, Härtung, Upstream-Kompatibilität | offen |
+| 2 – Tagesbuchhaltung | **teilweise**, Rest geparkt: Fokuspaket *Geführte Journal-Korrektur* vollständig geliefert (Kern, Web, API); Rechnungs- und Ausgabenworkflow offen |
+| 3 – Banking und Abstimmung | **geparkt** |
+| 4 – Reports und Exporte | **geparkt** |
+| 5 – MWST und Periodenabschluss | **geparkt** |
+| 6 – Anlagen, Jahresabschluss, Archiv | **geparkt** |
+| 7 – Payroll | **geparkt** |
+| 8 – Optionale Fachmodule (Budgets, Kostenstellen, Fremdwährung, Steuerdeklarationen, Konsolidierung) | **teilweise**: Fokuspaket **Budgets** vorgezogen und geliefert, siehe [tasks-budgets.md](tasks-budgets.md). Kostenstellen, Fremdwährung, Steuerdeklarationen und Konsolidierung geparkt |
+| 9 – Pilot, Härtung, Upstream-Kompatibilität | **geparkt** |
 
 **Geliefert (Etappe 0)**: `plugins/accountant-api` mit Manifest, Service
 Provider, Routen, Migrationen, Übersetzungen und Tests; der von
@@ -66,9 +95,14 @@ seither im Betrieb verwendet.
 - `LogOrgTokenActivity` fehlt in der Routengruppe der Korrektur-Endpunkte; Aufrufe mit Organisationstoken werden dort nicht protokolliert (gefunden beim Budget-Paket, siehe tasks-budgets.md).
 - `ApiIdempotencyService::reserve()` bildet den Idempotenzschlüssel ohne die konkreten Pfadparameter. Für Kernrouten heute folgenlos, weil deren Parameter implizite Modellbindungen sind; für Modulrouten mit reinen String-Parametern wäre der automatische Rückfall falsch. Vor Etappe 3 zu entscheiden, zusammen mit T017.
 
-**Nächste Schritte**: Etappe 1 (Read-Modell und Stammdaten) bleibt der
-strukturell richtige nächste Block — sie ist die Voraussetzung dafür, dass ein
-API-Client IDs und Konfigurationswerte selbst entdeckt, statt sie aus der
+**Nächster Schritt**: Phase 5 in [tasks-budgets.md](tasks-budgets.md) —
+Soll-Ist-Endpunkt und Cache-Invalidierung. Danach ist die Budget-API
+geschlossen und die Arbeit an dieser Spezifikation ruht bis zu einem neuen
+Umfangsentscheid.
+
+Sobald wieder aufgenommen wird, bleibt Etappe 1 (Read-Modell und Stammdaten)
+der strukturell richtige nächste Block — sie ist die Voraussetzung dafür, dass
+ein API-Client IDs und Konfigurationswerte selbst entdeckt, statt sie aus der
 Weboberfläche abzuschreiben.
 
 Unabhängig davon ist das **Fokuspaket Budgets** aus Etappe 8 vorgezogen und

@@ -128,12 +128,53 @@ müsste das Modul sie duplizieren — genau die Drift, die plan.md ausschliesst.
 
 ---
 
+## Phase 5: Abschluss — Soll-Ist und Cache (Umfangsentscheid 2026-09-14)
+
+**Purpose**: Die Pflege allein macht die Budget-API noch nicht nützlich. Ein
+Client kann Sollwerte setzen, aber nicht lesen, wozu sie da sind — der
+Soll-Ist-Vergleich existiert ausschliesslich in der Weboberfläche. Diese
+Phase schliesst die Lücke und behebt einen Cache-Fehler, der heute auch das
+Web betrifft.
+
+**Bewusst ausserhalb**: Sammel-Upsert, Budget-Webhooks, Budgetversionen,
+`updated_since`, jeder weitere Bericht. Die Ausnahme von der Regel „Reports
+erst Etappe 4" gilt eng für den Budget-Soll-Ist und für nichts sonst.
+
+### Track A — Kern
+
+- [ ] T122 **Budgetänderung muss Berichte sofort sichtbar machen.** Weder `BudgetController` noch die Actions noch ein Observer leeren heute etwas; `LedgerService::flushCache()` tut das nur für Buchungen. `ReportingService::profitAndLoss()` cacht 30 Minuten unter dem Tag `org:{id}:reports`, also zeigt die Budgetspalte nach einer Änderung bis zu eine halbe Stunde lang alte Werte — **in der Weboberfläche genauso wie künftig über die API**. `UpsertBudgetAction` und `DeleteBudgetAction` leeren die Tags `reports` und `dashboard` der Organisation. Weil Web und API seit T101–T103 dieselben Actions rufen, deckt eine Korrektur beide Wege ab. Den Ledger-Tag **nicht** mitleeren: ein Budget berührt kein Hauptbuch.
+- [ ] T123 [P] Test dazu in `tests/Feature/Accounting/BudgetFlowTest.php`: Erfolgsrechnung abrufen (füllt den Cache), Budget setzen, erneut abrufen — die Budgetspalte zeigt sofort den neuen Wert. Ohne T122 schlägt der Test fehl.
+
+### Track B — Modul
+
+- [ ] T124 [P] Vertragstest `plugins/accountant-api/tests/Feature/BudgetVarianceTest.php`: Zeilen je Ertrags- und Aufwandskonto mit Ist, Soll, Abweichung und Abweichung in Prozent; Konten ohne Sollwert erscheinen mit `null` statt zu fehlen; ein Jahr ganz ohne Budgets liefert leere Zeilen und `200`, nicht `404`; Teilperiode über `from`/`to` rechnet das Soll anteilig (`monthly_amount × Monate`); fremde Organisation sieht nichts; ein Token ohne `accounting.view` ist abgewiesen; abgeschaltetes `feature:budgets` sperrt auch diesen Pfad.
+- [ ] T125 `BudgetBridge` um `variance()` erweitern — ruft `ReportingService::profitAndLoss()` und projiziert daraus ausschliesslich die budgetbezogenen Felder (`budget_amount`, `budget_variance`, `budget_variance_percentage`) plus Kontocode, Name und Ist-Saldo. Kein eigener Rechenweg: die Zahlen müssen mit der Weboberfläche identisch sein, also wird dieselbe Quelle benutzt. `ReportingService` liegt in `App\Domains\Reporting` — dieser Namensraum steht **nicht** auf der Sperrliste des Grenztests, der Import gehört trotzdem in den Bridge und nicht in den Controller.
+- [ ] T126 `plugins/accountant-api/src/Resources/BudgetVarianceResource.php` und `.../Requests/BudgetVarianceRequest.php` — `fiscal_year` erforderlich, `from`/`to` optional und, wenn gesetzt, im selben Jahr. Ohne `from`/`to` gilt das volle Kalenderjahr, passend dazu, dass `enrichWithBudget()` das Geschäftsjahr aus dem Jahr des Startdatums ableitet.
+- [ ] T127 `GET /api/v1/budgets/variance` in `plugins/accountant-api/routes/api.php`, Name `api.accountant-api.budgets.variance`. **Vor** der Route `/budgets/{account_code}/{fiscal_year}` eintragen, sonst schluckt deren Platzhalter den Pfad; `whereNumber('fiscal_year')` verhindert das zwar heute schon, die Reihenfolge macht es unabhängig davon eindeutig. Controller-Methode `variance` ergänzen.
+- [ ] T128 `contract.json` um die Route erweitern; `ModuleContractReconciliationTest` muss grün bleiben.
+
+### Abschluss
+
+- [ ] T129 Gezielte Testläufe wie in T117, zusätzlich `tests/Feature/Reporting`, weil T122 den Cache einer geteilten Kernkomponente anfasst. Pint, PHPStan.
+- [ ] T130 README und `plan.md` nachziehen; im README ausdrücklich festhalten, dass der Soll-Ist-Endpunkt keine eigene Rechnung führt, sondern `ReportingService` projiziert.
+- [ ] T131 Live-Nachweis wie T121: Budget setzen, Abweichung lesen, gegen die Erfolgsrechnung der Weboberfläche vergleichen, Wegwerfdaten löschen.
+
+**Abnahmetor — hiermit gilt die Budget-API als geschlossen**: Ein Client setzt
+für ein Geschäftsjahr Sollwerte, liest den Soll-Ist-Vergleich mit Abweichung
+absolut und in Prozent, und erhält nach einer Änderung sofort die neuen Zahlen.
+Die Werte stimmen mit der Erfolgsrechnung der Weboberfläche für dieselbe
+Periode überein. Danach ruht die Arbeit an dieser Spezifikation bis zu einem
+neuen Umfangsentscheid.
+
+---
+
 ## Dependencies & Execution Order
 
 - **Phase 1 (Track A)**: ohne Vorbedingung. T101/T102 vor T103. T104 und T105 sind unabhängig voneinander und von T101–T103.
 - **Phase 2 (Track B)**: hängt an nichts, kann sofort geschrieben werden; die Tests sind bis Phase 3 rot.
 - **Phase 3 (Track B)**: hängt an Phase 1 (T101, T102 für den Bridge, T104 für die Idempotenz) und an Etappe 0, die bereits steht.
 - **Phase 4**: hängt an Phase 3.
+- **Phase 5**: T122/T123 (Track A) hängen an nichts und sind für sich auslieferbar — die Cache-Korrektur nützt der Weboberfläche auch ohne Endpunkt. T124–T128 (Track B) hängen an Phase 3. T122 sollte vor T131 liegen, sonst misst der Live-Nachweis einen veralteten Cache.
 - T115 blockiert jeden Tokenzugriff und sollte vor dem ersten grünen Lauf von T108 sitzen.
 
 ### Vorgeschlagene Reihenfolge
