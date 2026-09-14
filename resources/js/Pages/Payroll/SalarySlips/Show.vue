@@ -191,7 +191,7 @@ const totalEmployer = computed(() => props.slip.deductions?.total_employer ?? '0
       <!-- Actions -->
       <div class="flex flex-wrap gap-3">
         <Button
-          v-if="canManage && slip.status !== 'posted'"
+          v-if="canManage && slip.status === 'draft'"
           size="sm"
           :disabled="postForm.processing"
           @click="postToLedger"
@@ -218,6 +218,9 @@ const totalEmployer = computed(() => props.slip.deductions?.total_employer ?? '0
         <Button variant="outline" size="sm" @click="downloadPdf">
           {{ t('download_pdf') }}
         </Button>
+        <p v-if="slip.status === 'external'" class="flex items-center text-sm text-[hsl(var(--muted-foreground))]">
+          {{ t('payroll_booked_externally_hint') }}
+        </p>
         <p v-if="slip.status === 'posted'" class="flex items-center text-sm text-green-700 dark:text-green-400">
           {{ t('slip_posted_to_ledger') }}
           <span v-if="canManage && slip.journal_entry_id" class="ml-2">

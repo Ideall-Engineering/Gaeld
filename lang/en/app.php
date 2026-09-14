@@ -2791,4 +2791,5 @@ return [
     'thirteenth_compensation' => 'Share of 13th salary',
     'hourly_rate_required' => 'An hourly wage needs an hourly rate.',
     'total_deductions' => 'Total deductions',
+    'slip_status_external' => 'Booked externally',
 ];

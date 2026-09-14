@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Crypt;
  * @property int $period_month
  * @property int $period_year
  * @property Carbon|null $posting_date
+ * @property bool $booked_externally
  * @property string $gross_salary
  * @property string $net_salary
  * @property string|null $journal_entry_id
@@ -53,6 +54,7 @@ class SalarySlip extends Model
         'period_month',
         'period_year',
         'posting_date',
+        'booked_externally',
         'gross_salary',
         'net_salary',
         'journal_entry_id',
@@ -73,6 +75,7 @@ class SalarySlip extends Model
             'period_month' => 'integer',
             'period_year' => 'integer',
             'posting_date' => 'date',
+            'booked_externally' => 'boolean',
             'gross_salary' => 'decimal:2',
             'net_salary' => 'decimal:2',
             'deductions' => 'array',
@@ -107,8 +110,21 @@ class SalarySlip extends Model
         return $this->posted_at !== null;
     }
 
+    /**
+     * A month that was booked by hand: it counts for the salary certificate
+     * and must never reach the ledger.
+     */
+    public function isBookedExternally(): bool
+    {
+        return (bool) $this->booked_externally;
+    }
+
     public function getStatusAttribute(): string
     {
+        if ($this->isBookedExternally()) {
+            return 'external';
+        }
+
         return $this->isPosted() ? 'posted' : 'draft';
     }
 

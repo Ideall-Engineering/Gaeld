@@ -93,6 +93,7 @@ class PayrollRunController extends Controller
             'year' => ['required', 'integer', 'min:2000'],
             'post' => ['boolean'],
             'posting_date' => PayrollAdjustmentRules::postingDate($request),
+            'booked_externally' => ['boolean'],
             'employee_ids' => ['nullable', 'array', 'max:500'],
             'employee_ids.*' => [
                 'uuid',
@@ -110,6 +111,7 @@ class PayrollRunController extends Controller
             $validated['employee_ids'] ?? [],
             $validated['adjustments'] ?? [],
             $validated['posting_date'] ?? null,
+            (bool) ($validated['booked_externally'] ?? false),
         );
 
         if ($request->wantsJson()) {

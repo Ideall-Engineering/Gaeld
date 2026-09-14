@@ -2737,4 +2737,5 @@ return [
     'thirteenth_compensation' => 'Part du 13e salaire',
     'hourly_rate_required' => 'Un salaire horaire nécessite un taux horaire.',
     'total_deductions' => 'Total des déductions',
+    'slip_status_external' => 'Comptabilisé en externe',
 ];

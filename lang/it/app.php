@@ -2733,4 +2733,5 @@ return [
     'thirteenth_compensation' => 'Quota 13esima',
     'hourly_rate_required' => 'Un salario orario richiede una tariffa oraria.',
     'total_deductions' => 'Totale deduzioni',
+    'slip_status_external' => 'Registrato esternamente',
 ];

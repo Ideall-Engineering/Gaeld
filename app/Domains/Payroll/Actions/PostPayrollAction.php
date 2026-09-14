@@ -9,6 +9,7 @@ use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Contracts\SourceTaxServiceInterface;
+use App\Domains\Payroll\Exceptions\ExternallyBookedSlipException;
 use App\Domains\Payroll\Exceptions\PostingDateOutsidePeriodException;
 use App\Domains\Payroll\Exceptions\UnmappedDeductionException;
 use App\Domains\Payroll\Models\DeductionRate;
@@ -49,6 +50,12 @@ class PostPayrollAction
 
     public function execute(SalarySlip $slip): SalarySlip
     {
+        if ($slip->isBookedExternally()) {
+            throw new ExternallyBookedSlipException(
+                'This salary slip records a month booked outside the payroll module and cannot be posted.'
+            );
+        }
+
         $this->ensureSourceTaxApplied($slip);
 
         $deductions = $slip->deductions;

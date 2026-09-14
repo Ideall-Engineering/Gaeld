@@ -44,7 +44,11 @@ final class GenerateSalaryCertificateAction
             ->where('employee_id', $employee->id)
             ->where('organization_id', $employee->organization_id)
             ->where('period_year', $year)
-            ->whereNotNull('posted_at')
+            // A month booked outside the module counts as much as a posted one:
+            // the certificate states what was paid, not what this module booked.
+            ->where(fn ($query) => $query
+                ->whereNotNull('posted_at')
+                ->orWhere('booked_externally', true))
             ->orderBy('period_month')
             ->get();
 

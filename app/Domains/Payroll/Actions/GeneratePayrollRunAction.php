@@ -23,9 +23,10 @@ class GeneratePayrollRunAction
      * @param  array<int, string>  $employeeIds  Optional subset of employee UUIDs to process. Empty array = all active employees.
      * @param  array<int, array{employee_id: string, unpaid_leave_days?: int|string, reimbursement_amount?: string|int|float}>  $adjustments
      * @param  string|null  $postingDate  Y-m-d the run's entries are dated; null leaves it to the organization's payday.
+     * @param  bool  $bookedExternally  Record the month without ever posting it — for months already booked by hand.
      * @return Collection<int, SalarySlip>
      */
-    public function execute(string $orgId, int $month, int $year, bool $shouldPost = false, array $employeeIds = [], array $adjustments = [], ?string $postingDate = null): Collection
+    public function execute(string $orgId, int $month, int $year, bool $shouldPost = false, array $employeeIds = [], array $adjustments = [], ?string $postingDate = null, bool $bookedExternally = false): Collection
     {
         $employees = $this->employees($orgId, $month, $year, $employeeIds);
         $adjustmentsByEmployee = collect($adjustments)->keyBy('employee_id');
@@ -42,7 +43,7 @@ class GeneratePayrollRunAction
             }
 
             $adjustment = $adjustmentsByEmployee->get($employee->id, []);
-            $slip = DB::transaction(function () use ($employee, $month, $year, $shouldPost, $adjustment, $postingDate): SalarySlip {
+            $slip = DB::transaction(function () use ($employee, $month, $year, $shouldPost, $adjustment, $postingDate, $bookedExternally): SalarySlip {
                 $slip = $this->calculator->calculate(
                     $employee,
                     $month,
@@ -55,9 +56,10 @@ class GeneratePayrollRunAction
                     $slip->posting_date = Carbon::parse($postingDate);
                 }
 
+                $slip->booked_externally = $bookedExternally;
                 $slip->save();
 
-                if ($shouldPost) {
+                if ($shouldPost && ! $bookedExternally) {
                     $this->postAction->execute($slip);
                 }
 

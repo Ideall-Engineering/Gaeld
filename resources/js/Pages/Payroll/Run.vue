@@ -51,6 +51,9 @@ const year = ref(
 // the payroll month: a date in an already settled quarter costs a further VAT
 // settlement version to undo.
 const postingDate = ref('')
+// A month that was already booked by hand: calculate and record it so the
+// salary certificate covers the whole year, but never post it.
+const bookedExternally = ref(false)
 const postingDateBounds = computed(() => {
   const periodYear = Number.parseInt(year.value, 10)
   const periodMonth = Number.parseInt(month.value, 10)
@@ -259,6 +262,7 @@ async function generateSlips() {
         month: month.value,
         year: year.value,
         posting_date: postingDate.value || null,
+        booked_externally: bookedExternally.value,
         adjustments: adjustmentPayload(),
       }),
     })
@@ -365,6 +369,14 @@ async function postSlips() {
           </label>
         </div>
         <p class="-mt-3 text-xs text-[hsl(var(--muted-foreground))]">{{ t('payroll_posting_date_hint') }}</p>
+
+        <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-[hsl(var(--border))] p-3">
+          <input v-model="bookedExternally" type="checkbox" class="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" />
+          <span>
+            <span class="block text-sm font-medium">{{ t('payroll_booked_externally') }}</span>
+            <span class="block text-xs text-[hsl(var(--muted-foreground))]">{{ t('payroll_booked_externally_hint') }}</span>
+          </span>
+        </label>
 
         <div>
           <div class="mb-3 flex items-center justify-between">
@@ -497,8 +509,16 @@ async function postSlips() {
         <p class="text-sm text-[hsl(var(--muted-foreground))]">
           {{ t('payroll_generated_count', { count: generatedSlipIds.length }) }}
         </p>
+        <p v-if="bookedExternally" class="text-sm text-[hsl(var(--muted-foreground))]">
+          {{ t('payroll_booked_externally_hint') }}
+        </p>
         <div class="flex gap-3">
-          <Button :disabled="posting || isYearClosed" :title="isYearClosed ? t('fiscal_year_closed_action_disabled') : undefined" @click="postSlips">
+          <Button
+            v-if="!bookedExternally"
+            :disabled="posting || isYearClosed"
+            :title="isYearClosed ? t('fiscal_year_closed_action_disabled') : undefined"
+            @click="postSlips"
+          >
             {{ posting ? t('posting') + '…' : t('payroll_step_post') }}
           </Button>
           <Button variant="outline" as="a" href="/payroll/salary-slips">

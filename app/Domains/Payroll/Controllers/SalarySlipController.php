@@ -14,10 +14,10 @@ use App\Domains\Payroll\Services\PayrollCalculator;
 use App\Http\Controllers\Controller;
 use App\Support\FeatureFlag;
 use App\Support\PdfExportService;
-use Illuminate\Support\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
@@ -110,6 +110,7 @@ class SalarySlipController extends Controller
             'unpaid_leave_days' => PayrollAdjustmentRules::unpaidLeaveDays($request),
             'reimbursement_amount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0'],
             'posting_date' => PayrollAdjustmentRules::postingDate($request),
+            'booked_externally' => ['boolean'],
         ]);
 
         $employee = Employee::query()->whereKey($validated['employee_id'])->firstOrFail();
@@ -125,6 +126,7 @@ class SalarySlipController extends Controller
             $slip->posting_date = Carbon::parse((string) $validated['posting_date']);
         }
 
+        $slip->booked_externally = (bool) ($validated['booked_externally'] ?? false);
         $slip->save();
 
         return redirect()->route('payroll.salarySlips.show', $slip)
@@ -142,6 +144,14 @@ class SalarySlipController extends Controller
             }
 
             return redirect()->back()->with('error', __('app.salary_slip_already_posted'));
+        }
+
+        if ($slip->isBookedExternally()) {
+            if ($request->wantsJson()) {
+                return new JsonResponse(['message' => __('app.payroll_booked_externally_not_postable')], 422);
+            }
+
+            return redirect()->back()->with('error', __('app.payroll_booked_externally_not_postable'));
         }
 
         $validated = $request->validate([

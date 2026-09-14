@@ -2729,4 +2729,5 @@ return [
     'thirteenth_compensation' => 'Anteil 13. Monatslohn',
     'hourly_rate_required' => 'Für einen Stundenlohn wird ein Stundenansatz benötigt.',
     'total_deductions' => 'Total Abzüge',
+    'slip_status_external' => 'Extern verbucht',
 ];
