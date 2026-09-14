@@ -144,6 +144,36 @@ class BudgetFlowTest extends TestCase
         $response->assertRedirect();
     }
 
+    public function test_budget_routes_are_closed_when_the_feature_is_disabled(): void
+    {
+        config()->set('features.budgets', false);
+
+        $budget = Budget::create([
+            'organization_id' => $this->org->id,
+            'account_id' => $this->revenueAccount->id,
+            'fiscal_year' => 2026,
+            'monthly_amount' => '5000.00',
+        ]);
+
+        $this->actingAs($this->user)->withSession(['current_organization_id' => $this->org->id]);
+
+        $this->get(route('accounting.budgets'))->assertForbidden();
+
+        $this->post(route('accounting.budgets.store'), [
+            'account_id' => $this->expenseAccount->id,
+            'fiscal_year' => 2026,
+            'monthly_amount' => '1200.00',
+        ])->assertForbidden();
+
+        $this->patch(route('accounting.budgets.update', $budget), [
+            'monthly_amount' => '99.00',
+        ])->assertForbidden();
+
+        $this->delete(route('accounting.budgets.destroy', $budget))->assertForbidden();
+
+        $this->assertDatabaseHas('budgets', ['id' => $budget->id, 'monthly_amount' => '5000.00']);
+    }
+
     public function test_budget_scope_for_year(): void
     {
         Budget::create([

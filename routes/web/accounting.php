@@ -36,10 +36,15 @@ Route::post('/accounting/year-end-closing/reopen', [YearEndClosingController::cl
 Route::get('/accounting/social-charges', [SocialChargesController::class, 'index'])->name('accounting.social-charges');
 Route::post('/accounting/social-charges/calculate', [SocialChargesController::class, 'calculate'])->name('accounting.social-charges.calculate');
 Route::post('/accounting/social-charges/post', [SocialChargesController::class, 'post'])->name('accounting.social-charges.post');
-Route::get('/accounting/budgets', [BudgetController::class, 'index'])->name('accounting.budgets');
-Route::post('/accounting/budgets', [BudgetController::class, 'store'])->name('accounting.budgets.store');
-Route::patch('/accounting/budgets/{budget}', [BudgetController::class, 'update'])->name('accounting.budgets.update');
-Route::delete('/accounting/budgets/{budget}', [BudgetController::class, 'destroy'])->name('accounting.budgets.destroy');
+
+// Budgets (feature-gated)
+Route::middleware('feature:budgets')->group(function () {
+    Route::get('/accounting/budgets', [BudgetController::class, 'index'])->name('accounting.budgets');
+    Route::post('/accounting/budgets', [BudgetController::class, 'store'])->name('accounting.budgets.store');
+    Route::patch('/accounting/budgets/{budget}', [BudgetController::class, 'update'])->name('accounting.budgets.update');
+    Route::delete('/accounting/budgets/{budget}', [BudgetController::class, 'destroy'])->name('accounting.budgets.destroy');
+});
+
 Route::get('/accounting/export', [AccountingExportController::class, 'index'])->name('accounting.export');
 Route::post('/accounting/export', [AccountingExportController::class, 'generate'])->name('accounting.export.generate');
 Route::get('/accounting/export/download', [AccountingExportController::class, 'download'])->name('accounting.export.download')->middleware('signed');
