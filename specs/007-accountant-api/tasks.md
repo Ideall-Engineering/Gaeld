@@ -15,7 +15,9 @@ description: "Gäld task list for Etappe 0 (module foundation) and the Etappe 2 
 package inside Etappe 2 — not the full Etappe 1–9 roadmap in plan.md. Do not
 build read-model/master-data (Etappe 1), invoice/expense workflow additions
 (rest of Etappe 2), banking (Etappe 3), or later etappen under this task list;
-they get their own `tasks.md` revision when prioritized. Reuse `LedgerService`,
+they get their own task list when prioritized — the first of those is
+[tasks-budgets.md](tasks-budgets.md) (Fokuspaket Budgets, aus Etappe 8
+vorgezogen), das bei T101 weiterzählt statt diese Datei zu überschreiben. Reuse `LedgerService`,
 `LedgerQueryService`, `JournalEntryPolicy`, `StoreJournalEntryRequest`,
 `JournalEntryData`/`JournalLineData`, and the existing `app/Domains/Api`
 Sanctum/idempotency base. Do not add a second journal-entry write path, a

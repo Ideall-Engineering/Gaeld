@@ -1,6 +1,6 @@
 # Implementation Plan: Vollständige Buchhalter-API
 
-**Branch**: `deployment/v3.8.6-ideall` | **Feature ID**: `007-accountant-api` | **Date**: 2026-09-10 | **Spec**: [spec.md](spec.md)
+**Branch**: `deployment` | **Feature ID**: `007-accountant-api` | **Date**: 2026-09-10 | **Stand**: 2026-09-14 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/007-accountant-api/spec.md`
 
@@ -11,6 +11,74 @@ Die bestehende `/api/v1` wird etappenweise zu einem vollständigen Arbeitskanal 
 Das Modul bleibt eine dünne, versionierte Transportschicht: Es validiert und autorisiert, ruft dieselben Domain-Actions und Query-Services wie die Weboberfläche über zentralisierte Core-Bridge-Adapter auf und transformiert Ergebnisse mit modul-eigenen API-Resources. Fachlogik und fachliche Daten bleiben im Kern. Wenn ein benötigter Anwendungsfall im Kern noch nur in einem Webcontroller steckt, wird zuerst eine kleine generische Domain-Action oder ein anderer stabiler Core-Seam geschaffen. Diese Kernänderung wird getrennt vom Modulcommit gehalten und soll upstream-fähig sein.
 
 Die Umsetzung beginnt mit Modulgerüst, Kompatibilitätsgrenze sowie einem verbindlichen Sicherheits- und Vertragsfundament. Danach folgen Stammdaten, Tagesbuchhaltung, Bankabstimmung, Reports, Abschluss, Payroll und optionale Fachmodule. Jede Etappe ist separat testbar, ausrollbar und rückrollbar. Kern- und Moduländerungen laufen dabei in zwei getrennten Lieferströmen.
+
+## Umsetzungsstand (Stand 2026-09-14)
+
+Dieser Abschnitt hält fest, was vom Plan tatsächlich geliefert ist. Der
+vollständige Task-Verlauf mit allen Abweichungen steht in
+[tasks.md](tasks.md); jene Datei deckt bewusst nur Etappe 0 und das
+Korrektur-Fokuspaket ab. Die Etappenbeschreibungen weiter unten bleiben als
+Zielbild unverändert.
+
+| Etappe | Stand |
+|---|---|
+| 0 – Modul-, Sicherheits- und Vertragsfundament | **Abgeschlossen**, Gate erfüllt; zwei bewusste Rückstellungen (siehe unten) |
+| 1 – Read-Modell und Stammdaten | offen, noch kein `tasks.md` |
+| 2 – Tagesbuchhaltung | **teilweise**: Fokuspaket *Geführte Journal-Korrektur* vollständig geliefert (Kern, Web, API); Rechnungs- und Ausgabenworkflow offen |
+| 3 – Banking und Abstimmung | offen |
+| 4 – Reports und Exporte | offen |
+| 5 – MWST und Periodenabschluss | offen |
+| 6 – Anlagen, Jahresabschluss, Archiv | offen |
+| 7 – Payroll | offen |
+| 8 – Optionale Fachmodule (Budgets, Kostenstellen, Fremdwährung, Steuerdeklarationen, Konsolidierung) | **teilweise**: Fokuspaket **Budgets** vorgezogen und geliefert, siehe [tasks-budgets.md](tasks-budgets.md). Kostenstellen, Fremdwährung, Steuerdeklarationen und Konsolidierung offen |
+| 9 – Pilot, Härtung, Upstream-Kompatibilität | offen |
+
+**Geliefert (Etappe 0)**: `plugins/accountant-api` mit Manifest, Service
+Provider, Routen, Migrationen, Übersetzungen und Tests; der von
+`EditionCompatibility` unabhängige `PluginContractVersion`; fail-closed
+Manifestprüfung; Allow-List `PLUGINS_ALLOWED`; `RouteCollisionGuard`;
+Architektur-Grenztest; die registrierbaren Seams `AbilityCatalog` und
+`WebhookEventCatalog`; gehärtete Idempotenz gegen Prozessabbruch;
+Request-Kontext (Quelle, Token, Correlation- und Idempotency-Key) im
+Activity-Log; Modulvertrag `contract.json` samt Abgleichstest; Boot-/Smoke-Matrix.
+
+**Geliefert (Fokuspaket Etappe 2)**: `journal_corrections` und
+`journal_entries.reversal_of_entry_id` als Track-A-Kernmigrationen;
+Eligibility-Service sowie die Actions Prepare/Post/Cancel; `correct`-Ability in
+`JournalEntryPolicy`; Ereignis `journal_entry.corrected` inklusive
+Webhook-Auslieferung; die fünf Endpunkte unter `/api/v1/journal-entries/{id}/corrections`
+und `/api/v1/journal-corrections/{id}`; der Korrekturdialog in der Journalansicht
+in allen vier Sprachen. Der Ablauf ist Ende zu Ende gegen eine laufende
+Anwendung geprüft — manuelle, importierte und API-erzeugte Buchungen — und wird
+seither im Betrieb verwendet.
+
+**Bewusst zurückgestellt, nicht vergessen**:
+
+- T014 – tenant-sichere verschachtelte Bindings: ohne Konsument nicht gebaut, wird für Etappe 3 (Banking) gebraucht.
+- T017 – optimistische Parallelitätskontrolle (`409`/`412`): bewusst nicht nur für zwei Endpunkte eingeführt; vor Etappe 3 als Vertragsentscheid nachzuholen.
+
+**Offene Nacharbeiten aus dem Fokuspaket**:
+
+- Backfill von `journal_events.payload` für eindeutig verknüpfbare Alt-Stornos (aus T029) — Voraussetzung, bevor Etappe 5/6 auf die strukturierte Reversal-Beziehung baut.
+- Unit-Tests für den Ausschluss bank-, lohn- und anlagenverknüpfter Buchungen; die Logik existiert, die Factories fehlten (T023).
+- Datumsvorschlag für `correction_date`; heute reine Pflichteingabe (T024/T031).
+- Webhook-Auslieferung auch für `journal_entry.posted` und `.reversed`; bestehende Lücke, nur `.corrected` ist verdrahtet (T051).
+- `LogOrgTokenActivity` fehlt in der Routengruppe der Korrektur-Endpunkte; Aufrufe mit Organisationstoken werden dort nicht protokolliert (gefunden beim Budget-Paket, siehe tasks-budgets.md).
+- `ApiIdempotencyService::reserve()` bildet den Idempotenzschlüssel ohne die konkreten Pfadparameter. Für Kernrouten heute folgenlos, weil deren Parameter implizite Modellbindungen sind; für Modulrouten mit reinen String-Parametern wäre der automatische Rückfall falsch. Vor Etappe 3 zu entscheiden, zusammen mit T017.
+
+**Nächste Schritte**: Etappe 1 (Read-Modell und Stammdaten) bleibt der
+strukturell richtige nächste Block — sie ist die Voraussetzung dafür, dass ein
+API-Client IDs und Konfigurationswerte selbst entdeckt, statt sie aus der
+Weboberfläche abzuschreiben.
+
+Unabhängig davon ist das **Fokuspaket Budgets** aus Etappe 8 vorgezogen und
+seit 2026-09-14 geliefert, geplant und protokolliert in
+[tasks-budgets.md](tasks-budgets.md). Es hängt an keiner der Etappen
+1–7: `/api/v1/accounts` existiert lesend, `fiscal_year` ist eine schlichte
+Jahreszahl, ein Budget hängt direkt an der Organisation, und die Adressierung
+über den natürlichen Schlüssel `(account_code, fiscal_year)` vermeidet jede
+neue Migration. Gleiches Vorgehen wie beim Korrektur-Fokuspaket, das aus
+Etappe 2 vorgezogen wurde, während Etappe 1 offen blieb.
 
 ## Technical Context
 
@@ -149,10 +217,10 @@ Die zehn Arbeitspakete werden aus historischen Gründen als Etappen 0–9 nummer
 - Ability- und Webhook-Kataloge als registrierbare Core-Seams ausprägen, statt `TokenPermissionMap` oder Enums für jede Modulfunktion direkt zu ändern.
 - Zielrollen und feingranulare Ability-Matrix für Buchhalter, Owner und technische Organisationstokens festlegen.
 - Tokenprüfung so gestalten, dass Token-Scope, Benutzerrecht, Organisation und Objektzustand als Schnittmenge gelten; Wildcard-Tokens dürfen Domain-Invarianten nicht umgehen.
-- Tenant-sichere verschachtelte Bindings/Resolver für indirekt zugeordnete Modelle wie Banktransaktionen und Matches.
+- Tenant-sichere verschachtelte Bindings/Resolver für indirekt zugeordnete Modelle wie Banktransaktionen und Matches. — **Bewusst zurückgestellt** (T014); erst mit dem ersten echten Konsumenten in Etappe 3 zu bauen.
 - Einheitliche Response-, Fehler-, Pagination-, Filter-, Geld-, Datums- und UUID-Konventionen definieren.
 - Idempotenz gegen Prozessabbruch nach Domain-Commit härten und für alle finanziellen Mutationen verpflichtend machen.
-- Optimistische Parallelitätskontrolle für gleichzeitige API-/UI-Bearbeitung und `409`/`412`-Semantik definieren.
+- Optimistische Parallelitätskontrolle für gleichzeitige API-/UI-Bearbeitung und `409`/`412`-Semantik definieren. — **Bewusst zurückgestellt** (T017); heute implementiert kein einziger `/api/v1`-Schreibpfad dies, und nur die zwei Korrektur-Endpunkte anders zu machen hätte den Vertrag uneinheitlich gemacht. Vor Etappe 3 zu entscheiden.
 - Request-Kontext für Akteur, Token, Quelle, Correlation- und Idempotency-Key im Activity-Log.
 - Persistentes Modul-Auftragsmodell und zuverlässige After-Commit-Webhooks vorbereiten; Modulmigrationen erhalten ein eindeutiges Präfix und keine fachlichen Schattenkopien.
 - Modul-eigenes Vertragsdokument definieren und reproduzierbar mit dem bestehenden `api-contract.json` zu einem kollisionsfreien Gesamtvertrag prüfen.
