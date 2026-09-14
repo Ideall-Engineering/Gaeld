@@ -249,7 +249,7 @@ class LedgerQueryService
      * dashboard's month view: posted entries, structural ones left out — so the
      * total here is the figure the dashboard showed, not a near miss.
      *
-     * @return array{from: string, to: string, basis: string, openingBalance: numeric-string|null, total: numeric-string, operationalTotal: numeric-string, structuralTotal: numeric-string, hasStructuralEntries: bool, closingBalance: numeric-string|null, lines: list<array{entry_id: string, date: string, reference: string|null, description: string|null, debit: numeric-string, credit: numeric-string, amount: numeric-string, balance: numeric-string|null, isStructural: bool, counterAccounts: list<string>}>}
+     * @return array{from: string, to: string, basis: string, openingBalance: numeric-string|null, total: numeric-string, closingBalance: numeric-string|null, lines: list<array{entry_id: string, date: string, reference: string|null, description: string|null, debit: numeric-string, credit: numeric-string, amount: numeric-string, balance: numeric-string|null, counterAccounts: list<string>}>}
      */
     public function accountStatementForMonth(Account $account, int $year, int $month): array
     {
@@ -278,7 +278,7 @@ class LedgerQueryService
      * fiscal year gets none: a running balance carried across a closing entry
      * states something untrue, so only the period's own movement is reported.
      *
-     * @return array{from: string, to: string, basis: string, openingBalance: numeric-string|null, total: numeric-string, operationalTotal: numeric-string, structuralTotal: numeric-string, hasStructuralEntries: bool, closingBalance: numeric-string|null, lines: list<array{entry_id: string, date: string, reference: string|null, description: string|null, debit: numeric-string, credit: numeric-string, amount: numeric-string, balance: numeric-string|null, isStructural: bool, counterAccounts: list<string>}>}
+     * @return array{from: string, to: string, basis: string, openingBalance: numeric-string|null, total: numeric-string, closingBalance: numeric-string|null, lines: list<array{entry_id: string, date: string, reference: string|null, description: string|null, debit: numeric-string, credit: numeric-string, amount: numeric-string, balance: numeric-string|null, counterAccounts: list<string>}>}
      */
     public function accountStatementForPeriod(Account $account, Carbon $from, Carbon $to, StatementBasis $basis): array
     {
@@ -300,7 +300,6 @@ class LedgerQueryService
                 'journal_entries.date',
                 'journal_entries.reference',
                 'journal_entries.description AS entry_description',
-                'journal_entries.type AS entry_type',
             ]);
 
         $counterAccounts = $this->counterAccounts($account, array_values(array_unique(
@@ -309,8 +308,6 @@ class LedgerQueryService
 
         $balance = $openingBalance;
         $total = '0.00';
-        $operationalTotal = '0.00';
-        $structuralTotal = '0.00';
         $lines = [];
 
         foreach ($rows as $row) {
@@ -320,16 +317,9 @@ class LedgerQueryService
             $credit = (string) $row->credit;
 
             $amount = $this->signedAmount($account->type, $debit, $credit);
-            $isStructural = in_array($row->entry_type, self::STRUCTURAL_ENTRY_TYPES, true);
 
             $balance = $balance === null ? null : bcadd($balance, $amount, 2);
             $total = bcadd($total, $amount, 2);
-
-            if ($isStructural) {
-                $structuralTotal = bcadd($structuralTotal, $amount, 2);
-            } else {
-                $operationalTotal = bcadd($operationalTotal, $amount, 2);
-            }
 
             $lines[] = [
                 'entry_id' => (string) $row->journal_entry_id,
@@ -342,7 +332,6 @@ class LedgerQueryService
                 'credit' => $credit,
                 'amount' => $amount,
                 'balance' => $balance,
-                'isStructural' => $isStructural,
                 'counterAccounts' => $counterAccounts[(string) $row->journal_entry_id] ?? [],
             ];
         }
@@ -353,9 +342,6 @@ class LedgerQueryService
             'basis' => $basis->value,
             'openingBalance' => $openingBalance,
             'total' => $total,
-            'operationalTotal' => $operationalTotal,
-            'structuralTotal' => $structuralTotal,
-            'hasStructuralEntries' => $this->anyLineIsStructural($lines),
             'closingBalance' => $balance,
             'lines' => $lines,
         ];
@@ -392,20 +378,6 @@ class LedgerQueryService
         $openingCredit = (string) $opening->total_credit;
 
         return $this->signedAmount($account->type, $openingDebit, $openingCredit);
-    }
-
-    /**
-     * @param  list<array{isStructural: bool, ...}>  $lines
-     */
-    private function anyLineIsStructural(array $lines): bool
-    {
-        foreach ($lines as $line) {
-            if ($line['isStructural']) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

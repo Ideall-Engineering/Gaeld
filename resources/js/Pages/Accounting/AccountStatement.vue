@@ -42,11 +42,6 @@ const periodLabel = computed(() => {
   return `${formatDate(props.period.from)} – ${formatDate(props.period.to)}`
 })
 
-// The closing entry empties every revenue and expense account, so a period that
-// contains one reads as a zero. Naming the two parts is what keeps that from
-// looking like a miscalculation.
-const showsStructuralSplit = computed(() => props.statement.hasStructuralEntries)
-
 // Only meaningful inside a single fiscal year; the backend sends null otherwise.
 const carriesBalance = computed(() => props.statement.openingBalance !== null)
 
@@ -120,24 +115,12 @@ const columns = computed(() => [
           <div>
             <p class="text-gray-500 dark:text-gray-400">{{ isMonthMode ? t('statement_month_total') : t('statement_period_total') }}</p>
             <p class="mt-0.5 font-medium tabular-nums">{{ formatCurrency(statement.total) }}</p>
-            <template v-if="showsStructuralSplit">
-              <p class="mt-1 text-xs text-gray-500 tabular-nums dark:text-gray-400">
-                {{ t('statement_of_which_operational') }}: {{ formatCurrency(statement.operationalTotal) }}
-              </p>
-              <p class="text-xs text-gray-500 tabular-nums dark:text-gray-400">
-                {{ t('statement_of_which_structural') }}: {{ formatCurrency(statement.structuralTotal) }}
-              </p>
-            </template>
           </div>
           <div v-if="carriesBalance">
             <p class="text-gray-500 dark:text-gray-400">{{ t('statement_closing_balance') }}</p>
             <p class="mt-0.5 text-base font-bold tabular-nums">{{ formatCurrency(statement.closingBalance) }}</p>
           </div>
         </div>
-
-        <p v-if="showsStructuralSplit" class="mb-4 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-800/50 dark:text-gray-300">
-          {{ t('statement_structural_hint') }}
-        </p>
 
         <DataTable :columns="columns" :rows="statement.lines">
           <template #cell-description="{ row }">
@@ -147,12 +130,6 @@ const columns = computed(() => [
             >
               {{ row.description || '—' }}
             </Link>
-            <span
-              v-if="row.isStructural"
-              class="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-            >
-              {{ t('statement_structural_badge') }}
-            </span>
           </template>
 
           <template #cell-counterAccounts="{ value }">

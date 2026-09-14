@@ -101,47 +101,26 @@ class ProfitAndLossDrilldownTest extends TestCase
         $this->assertSame('4000.00', bcadd((string) $sheet['equity']['total'], '0', 2));
     }
 
-    /**
-     * The ledger basis keeps its own behaviour. No report reaches a statement
-     * this way today — both entry points ask for the operational basis — but
-     * the mode is public on the service, and a statement computed on it says
-     * plainly which part of its total came from a closing rather than leaving
-     * a reader to guess.
-     */
-    public function test_a_statement_on_the_ledger_basis_names_what_a_closing_did(): void
+    public function test_the_basis_decides_whether_a_closing_is_counted(): void
     {
         $this->postSale('2026-02-11', '4000.00');
         $this->closeTheYear('2026-12-31', ['3000' => '4000.00']);
 
-        $statement = app(LedgerQueryService::class)->accountStatementForPeriod(
-            $this->account('3000'),
-            Carbon::parse(self::FROM),
-            Carbon::parse(self::TO),
-            StatementBasis::Ledger,
-        );
+        $ledger = app(LedgerQueryService::class);
+        $account = $this->account('3000');
+        $from = Carbon::parse(self::FROM);
+        $to = Carbon::parse(self::TO);
 
-        $this->assertSame('0.00', $statement['total'], 'The closing entry cancels the year out.');
-        $this->assertSame('4000.00', $statement['operationalTotal'], 'What was actually earned stays visible.');
-        $this->assertSame('-4000.00', $statement['structuralTotal'], 'And what cancelled it is named separately.');
-        $this->assertTrue($statement['hasStructuralEntries']);
-        $this->assertContains(true, array_column($statement['lines'], 'isStructural'), 'The closing line is marked.');
-    }
+        $onLedger = $ledger->accountStatementForPeriod($account, $from, $to, StatementBasis::Ledger);
+        $onOperational = $ledger->accountStatementForPeriod($account, $from, $to, StatementBasis::Operational);
 
-    public function test_the_dashboard_basis_still_leaves_the_closing_out(): void
-    {
-        $this->postSale('2026-02-11', '4000.00');
-        $this->closeTheYear('2026-02-28', ['3000' => '4000.00']);
-
-        $statement = app(LedgerQueryService::class)->accountStatementForPeriod(
-            $this->account('3000'),
-            Carbon::parse('2026-02-01'),
-            Carbon::parse('2026-02-28'),
-            StatementBasis::Operational,
-        );
-
-        $this->assertSame('4000.00', $statement['total'], 'A closing entry is not a month of trading.');
-        $this->assertFalse($statement['hasStructuralEntries']);
-        $this->assertNotContains(true, array_column($statement['lines'], 'isStructural'));
+        // One account, one period, two answers. That is the whole reason a report
+        // names the basis it reports on instead of leaving it to be assumed, and
+        // why the statement is asked for the report's own.
+        $this->assertSame('0.00', $onLedger['total'], 'Counting the closing in cancels the year out.');
+        $this->assertSame('4000.00', $onOperational['total'], 'Leaving it out reports what the year traded.');
+        $this->assertCount(2, $onLedger['lines']);
+        $this->assertCount(1, $onOperational['lines'], 'The closing line is not merely unmarked, it is absent.');
     }
 
     public function test_the_report_carries_the_uuid_each_row_is_followed_by(): void
