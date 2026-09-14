@@ -47,6 +47,27 @@ const { formatCurrency } = useFormatters()
 
 const hasBudget = computed(() => !!props.report.budgets && Object.keys(props.report.budgets).length > 0)
 
+/**
+ * Following a figure to the postings behind it. The period travels with the
+ * link, and `source=pnl` tells the statement to count on this report's basis —
+ * closing entries included — so its total is the figure that was clicked.
+ *
+ * A row without a uuid stays unlinked rather than pointing nowhere: a cached
+ * report from before this feature has none, and so does the balance sheet's
+ * synthetic result row.
+ */
+function accountLink(row) {
+  if (!row.uuid) return null
+
+  const params = new URLSearchParams({ from: props.report.period.from, to: props.report.period.to, source: 'pnl' })
+
+  return `/accounting/accounts/${row.uuid}/statement?${params}`
+}
+
+const canDrillDown = computed(() =>
+  [...(props.report.revenue ?? []), ...(props.report.expenses ?? [])].some(row => !!row.uuid),
+)
+
 const accountColumns = computed(() => {
   const cols = [
     { key: 'code', label: t('code') },
@@ -142,6 +163,7 @@ function mergeComparison(rows, compRows, isExpense = false) {
             v-if="report.revenue.length"
             :columns="accountColumns"
             :rows="mergeComparison(report.revenue, report.comparison?.revenue, false)"
+            :row-link="canDrillDown ? accountLink : null"
           />
           <p v-else class="text-sm text-muted-foreground">{{ t('no_revenue_entries') }}</p>
           <div class="mt-4 flex flex-col gap-1 border-t pt-3 text-sm font-semibold sm:flex-row sm:justify-between">
@@ -163,6 +185,7 @@ function mergeComparison(rows, compRows, isExpense = false) {
             v-if="report.expenses.length"
             :columns="accountColumns"
             :rows="mergeComparison(report.expenses, report.comparison?.expenses, true)"
+            :row-link="canDrillDown ? accountLink : null"
           />
           <p v-else class="text-sm text-muted-foreground">{{ t('no_expense_entries') }}</p>
           <div class="mt-4 flex flex-col gap-1 border-t pt-3 text-sm font-semibold sm:flex-row sm:justify-between">

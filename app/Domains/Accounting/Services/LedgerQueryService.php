@@ -3,10 +3,10 @@
 namespace App\Domains\Accounting\Services;
 
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Enums\StatementBasis;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
-use App\Domains\Accounting\Models\TransactionLine;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -31,6 +31,11 @@ class LedgerQueryService
      * Liability, equity, and revenue accounts return credit-normal (credits − debits).
      * Only posted entries are included.
      *
+     * Computed on {@see StatementBasis::Ledger} over the same query the account
+     * statement uses, so a statement opened from a report that rests on this
+     * method adds up to the figure that was clicked. Reports built on other
+     * bases must pass theirs down to the statement.
+     *
      * Results are cached per account + date range (tag: org:{orgId}:ledger).
      *
      * @param  int  $accountId  The account's primary key
@@ -44,20 +49,17 @@ class LedgerQueryService
         $cacheKey = "account_balance:{$accountId}:{$fromDate}:{$toDate}";
         $orgTag = "org:{$account->organization_id}:ledger";
 
-        return Cache::tags([$orgTag])->remember($cacheKey, now()->addHour(), function () use ($accountId, $account, $fromDate, $toDate) {
-            $query = TransactionLine::where('account_id', $accountId)
-                ->whereHas('journalEntry', function ($q) use ($fromDate, $toDate) {
-                    $q->where('is_posted', true)
-                        ->when($fromDate, fn ($q, $date) => $q->where('date', '>=', $date))
-                        ->when($toDate, fn ($q, $date) => $q->where('date', '<=', $date));
-                });
+        return Cache::tags([$orgTag])->remember($cacheKey, now()->addHour(), function () use ($account, $fromDate, $toDate) {
+            $totals = $this->accountLines($account, $fromDate, $toDate, StatementBasis::Ledger)
+                ->selectRaw('COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')
+                ->first();
 
-            $debits = (string) (clone $query)->sum('debit');
-            $credits = (string) (clone $query)->sum('credit');
+            /** @var numeric-string $debits */
+            $debits = (string) $totals->total_debit;
+            /** @var numeric-string $credits */
+            $credits = (string) $totals->total_credit;
 
-            return $this->isDebitNormalAccount($account->type)
-                ? bcsub($debits, $credits, 2)
-                : bcsub($credits, $debits, 2);
+            return $this->signedAmount($account->type, $debits, $credits);
         });
     }
 
@@ -236,36 +238,45 @@ class LedgerQueryService
      * dashboard's month view: posted entries, structural ones left out — so the
      * total here is the figure the dashboard showed, not a near miss.
      *
-     * The opening balance is what the account carried into the month. For a
-     * revenue or expense account that means since the start of its fiscal year,
-     * because the year-end closing empties it; for a balance sheet account it
-     * means everything booked before the month.
-     *
-     * @return array{from: string, to: string, openingBalance: numeric-string, total: numeric-string, closingBalance: numeric-string, lines: list<array{entry_id: string, date: string, reference: string|null, description: string|null, debit: numeric-string, credit: numeric-string, amount: numeric-string, balance: numeric-string, counterAccounts: list<string>}>}
+     * @return array{from: string, to: string, basis: string, openingBalance: numeric-string|null, total: numeric-string, operationalTotal: numeric-string, structuralTotal: numeric-string, hasStructuralEntries: bool, closingBalance: numeric-string|null, lines: list<array{entry_id: string, date: string, reference: string|null, description: string|null, debit: numeric-string, credit: numeric-string, amount: numeric-string, balance: numeric-string|null, isStructural: bool, counterAccounts: list<string>}>}
      */
     public function accountStatementForMonth(Account $account, int $year, int $month): array
     {
         $from = Carbon::create($year, $month, 1)->startOfMonth();
-        $to = $from->copy()->endOfMonth();
 
-        $carriesOverYearEnd = ! in_array($account->type, [AccountType::Revenue, AccountType::Expense], true);
+        return $this->accountStatementForPeriod(
+            $account,
+            $from,
+            $from->copy()->endOfMonth(),
+            StatementBasis::Operational,
+        );
+    }
 
-        $openingFrom = $carriesOverYearEnd
-            ? null
-            : $this->fiscalYearStart($account->organization_id, $from)->toDateString();
+    /**
+     * One account's movements inside a period, on the basis the caller reports on.
+     *
+     * The basis is not a detail: a report that rests on {@see StatementBasis::Ledger}
+     * counts the year-end closing into its figures, so a statement explaining one
+     * of those figures has to count it too. Passing the report's own basis is what
+     * makes `total` equal the figure the reader clicked.
+     *
+     * The opening balance is what the account carried into the period. For a
+     * revenue or expense account that means since the start of its fiscal year,
+     * because the year-end closing empties it; for a balance sheet account it
+     * means everything booked before the period. A period spanning more than one
+     * fiscal year gets none: a running balance carried across a closing entry
+     * states something untrue, so only the period's own movement is reported.
+     *
+     * @return array{from: string, to: string, basis: string, openingBalance: numeric-string|null, total: numeric-string, operationalTotal: numeric-string, structuralTotal: numeric-string, hasStructuralEntries: bool, closingBalance: numeric-string|null, lines: list<array{entry_id: string, date: string, reference: string|null, description: string|null, debit: numeric-string, credit: numeric-string, amount: numeric-string, balance: numeric-string|null, isStructural: bool, counterAccounts: list<string>}>}
+     */
+    public function accountStatementForPeriod(Account $account, Carbon $from, Carbon $to, StatementBasis $basis): array
+    {
+        $from = $from->copy()->startOfDay();
+        $to = $to->copy()->startOfDay();
 
-        $opening = $this->accountLines($account, $openingFrom, $from->copy()->subDay()->toDateString())
-            ->selectRaw('COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')
-            ->first();
+        $openingBalance = $this->statementOpeningBalance($account, $from, $to, $basis);
 
-        /** @var numeric-string $openingDebit */
-        $openingDebit = (string) $opening->total_debit;
-        /** @var numeric-string $openingCredit */
-        $openingCredit = (string) $opening->total_credit;
-
-        $openingBalance = $this->signedAmount($account->type, $openingDebit, $openingCredit);
-
-        $rows = $this->accountLines($account, $from->toDateString(), $to->toDateString())
+        $rows = $this->accountLines($account, $from->toDateString(), $to->toDateString(), $basis)
             ->orderBy('journal_entries.date')
             ->orderBy('journal_entries.reference')
             ->orderBy('transaction_lines.id')
@@ -278,6 +289,7 @@ class LedgerQueryService
                 'journal_entries.date',
                 'journal_entries.reference',
                 'journal_entries.description AS entry_description',
+                'journal_entries.type AS entry_type',
             ]);
 
         $counterAccounts = $this->counterAccounts($account, array_values(array_unique(
@@ -286,6 +298,8 @@ class LedgerQueryService
 
         $balance = $openingBalance;
         $total = '0.00';
+        $operationalTotal = '0.00';
+        $structuralTotal = '0.00';
         $lines = [];
 
         foreach ($rows as $row) {
@@ -295,8 +309,16 @@ class LedgerQueryService
             $credit = (string) $row->credit;
 
             $amount = $this->signedAmount($account->type, $debit, $credit);
-            $balance = bcadd($balance, $amount, 2);
+            $isStructural = in_array($row->entry_type, self::STRUCTURAL_ENTRY_TYPES, true);
+
+            $balance = $balance === null ? null : bcadd($balance, $amount, 2);
             $total = bcadd($total, $amount, 2);
+
+            if ($isStructural) {
+                $structuralTotal = bcadd($structuralTotal, $amount, 2);
+            } else {
+                $operationalTotal = bcadd($operationalTotal, $amount, 2);
+            }
 
             $lines[] = [
                 'entry_id' => (string) $row->journal_entry_id,
@@ -309,6 +331,7 @@ class LedgerQueryService
                 'credit' => $credit,
                 'amount' => $amount,
                 'balance' => $balance,
+                'isStructural' => $isStructural,
                 'counterAccounts' => $counterAccounts[(string) $row->journal_entry_id] ?? [],
             ];
         }
@@ -316,26 +339,81 @@ class LedgerQueryService
         return [
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
+            'basis' => $basis->value,
             'openingBalance' => $openingBalance,
             'total' => $total,
+            'operationalTotal' => $operationalTotal,
+            'structuralTotal' => $structuralTotal,
+            'hasStructuralEntries' => $this->anyLineIsStructural($lines),
             'closingBalance' => $balance,
             'lines' => $lines,
         ];
     }
 
     /**
-     * Posted, non-structural lines of one account, optionally bounded by date.
+     * What the account carried into the period, or null when the period spans
+     * more than one fiscal year and no single carried figure is truthful.
+     *
+     * @return numeric-string|null
      */
-    private function accountLines(Account $account, ?string $fromDate, ?string $toDate): QueryBuilder
+    private function statementOpeningBalance(Account $account, Carbon $from, Carbon $to, StatementBasis $basis): ?string
+    {
+        $fiscalYearStart = $this->fiscalYearStart($account->organization_id, $from);
+
+        if (! $fiscalYearStart->equalTo($this->fiscalYearStart($account->organization_id, $to))) {
+            return null;
+        }
+
+        $carriesOverYearEnd = ! in_array($account->type, [AccountType::Revenue, AccountType::Expense], true);
+
+        $opening = $this->accountLines(
+            $account,
+            $carriesOverYearEnd ? null : $fiscalYearStart->toDateString(),
+            $from->copy()->subDay()->toDateString(),
+            $basis,
+        )
+            ->selectRaw('COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')
+            ->first();
+
+        /** @var numeric-string $openingDebit */
+        $openingDebit = (string) $opening->total_debit;
+        /** @var numeric-string $openingCredit */
+        $openingCredit = (string) $opening->total_credit;
+
+        return $this->signedAmount($account->type, $openingDebit, $openingCredit);
+    }
+
+    /**
+     * @param  list<array{isStructural: bool, ...}>  $lines
+     */
+    private function anyLineIsStructural(array $lines): bool
+    {
+        foreach ($lines as $line) {
+            if ($line['isStructural']) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Posted lines of one account on the given basis, optionally bounded by date.
+     *
+     * The single place the basis turns into a filter, so a balance and the
+     * statement that explains it cannot drift apart.
+     */
+    private function accountLines(Account $account, ?string $fromDate, ?string $toDate, StatementBasis $basis): QueryBuilder
     {
         return DB::table('transaction_lines')
             ->join('journal_entries', 'journal_entries.id', '=', 'transaction_lines.journal_entry_id')
             ->where('transaction_lines.account_id', $account->id)
             ->where('journal_entries.organization_id', $account->organization_id)
             ->where('journal_entries.is_posted', true)
-            ->where(fn ($query) => $query
-                ->whereNull('journal_entries.type')
-                ->orWhereNotIn('journal_entries.type', self::STRUCTURAL_ENTRY_TYPES))
+            ->when($basis->excludesStructuralEntries(), fn ($query) => $query
+                ->where(fn ($inner) => $inner
+                    ->whereNull('journal_entries.type')
+                    ->orWhereNotIn('journal_entries.type', self::STRUCTURAL_ENTRY_TYPES)))
             ->when($fromDate, fn ($query, $date) => $query->where('journal_entries.date', '>=', $date))
             ->when($toDate, fn ($query, $date) => $query->where('journal_entries.date', '<=', $date));
     }

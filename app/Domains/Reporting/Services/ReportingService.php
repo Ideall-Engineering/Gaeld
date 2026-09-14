@@ -42,7 +42,10 @@ class ReportingService
         ?string $compareFrom = null,
         ?string $compareTo = null,
     ): array {
-        $cacheKey = "pnl:{$organizationId}:{$fromDate}:{$toDate}";
+        // v2 since the account rows carry a uuid: a key left unchanged would
+        // serve rows without one for the rest of the cache window, and every
+        // drill-down link on them would point nowhere.
+        $cacheKey = "pnl:v2:{$organizationId}:{$fromDate}:{$toDate}";
         if ($compareFrom && $compareTo) {
             $cacheKey .= ":vs:{$compareFrom}:{$compareTo}";
         }
@@ -89,7 +92,7 @@ class ReportingService
      */
     public function balanceSheet(string $organizationId, string $asOfDate, ?string $compareAsOfDate = null): array
     {
-        $cacheKey = "bs:{$organizationId}:{$asOfDate}";
+        $cacheKey = "bs:v2:{$organizationId}:{$asOfDate}";
         if ($compareAsOfDate) {
             $cacheKey .= ":vs:{$compareAsOfDate}";
         }
@@ -248,6 +251,10 @@ class ReportingService
             ->where('is_active', true)
             ->get()
             ->map(fn (Account $account) => [
+                // The uuid is what lets a reader follow a figure to the postings
+                // it is made of; the exports pick their columns by name and stay
+                // as they were.
+                'uuid' => $account->uuid,
                 'code' => $account->code,
                 'name' => $account->name,
                 'balance' => $this->ledgerService->accountBalance($account->id, $fromDate, $toDate),

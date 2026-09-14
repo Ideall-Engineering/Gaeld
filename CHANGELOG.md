@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Follow a figure in the profit and loss statement:** clicking an account
+  there opens its statement for the report's own period — every posted movement
+  with its counter account, and a way back to the report rather than to a
+  default view. The statement now computes on the basis the report it was opened
+  from reports on, so its total is the figure that was clicked and not a near
+  miss: the dashboard's month view still leaves year-end closings out, while the
+  profit and loss statement counts them in because its own figures do. Where a
+  closing entry falls inside the period, the statement names both parts — what
+  was traded and what the closing cancelled — so a zeroed account explains
+  itself instead of looking like a miscalculation.
 - **Draft invoice preview:** see what an invoice will look like before it is
   finalised and booked — on the invoice screen, in the list, and over the API at
   `GET /api/v1/invoices/{invoice}/pdf/preview`. The document is stamped as a
