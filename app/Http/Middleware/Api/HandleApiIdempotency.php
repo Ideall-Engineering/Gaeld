@@ -79,12 +79,22 @@ class HandleApiIdempotency
         }
     }
 
+    /**
+     * Routes whose controller reserves and completes idempotency itself,
+     * tied to the actual domain result rather than to the HTTP response.
+     *
+     * The accountant-api prefix is deliberately narrow: only the module's
+     * journal-correction routes manage their own reservation (they require
+     * the header outright, unlike plain journal-entry actions). A blanket
+     * `api.accountant-api.` prefix would silently opt every future module
+     * endpoint out of idempotency handling without anything replacing it.
+     */
     private function isHandledByDomainController(Request $request): bool
     {
         $routeName = (string) ($request->route()?->getName() ?? '');
 
         return str_starts_with($routeName, 'api.journal-entries.')
-            || str_starts_with($routeName, 'api.accountant-api.')
+            || str_starts_with($routeName, 'api.accountant-api.journal-')
             || $routeName === 'api.journal-entries.store'
             || $routeName === 'api.bank-accounts.import-camt053'
             || in_array($routeName, [
