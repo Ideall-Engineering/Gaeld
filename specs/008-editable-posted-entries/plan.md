@@ -28,7 +28,12 @@ Die Sperre verbuchter Buchungen wandert vom Verbuchen zu den fachlichen Ereignis
 | `Accounting/Actions/DeletePostedJournalEntryAction.php` | Ablauf siehe unten |
 | `Accounting/Services/VatEntryWriter.php` | aus `LedgerService::createVatEntries` und `isVatReversalLine` herausgelöst, damit Verbuchen und Ändern dieselbe Logik nutzen |
 | `Accounting/Events/JournalEntryAmended.php`, `JournalEntryDeleted.php` | Ereignisse für `journal_events` und Webhooks |
-| `Accounting/Observers/LocksArchivedTransactionLine.php` | sperrt Zeilen, deren Buchung `archived_at` trägt |
+| `Support/Observers/LocksArchivedTransactionLine.php` | sperrt Zeilen, deren Buchung `archived_at` trägt |
+| `Accounting/Services/JournalEntryRevisionRecorder.php` | schreibt den vollständigen Stand vor einer Änderung |
+| `Accounting/Policies/JournalEntryRevisionPolicy.php` | Versionen nur lesen |
+| `Api/Controllers/JournalEntryRevisionApiController.php` | Versionen je Buchung und über alle Buchungen |
+| `resources/js/Components/Accounting/JournalLinesEditor.vue`, `JournalEntryFormModal.vue`, `JournalEntryHistory.vue` | Zeilen mit MWST, gemeinsames Formular, Verlauf |
+| `resources/js/Pages/Accounting/JournalEntryChanges.vue` | Änderungsübersicht |
 
 ### Geändert
 
@@ -42,7 +47,7 @@ Die Sperre verbuchter Buchungen wandert vom Verbuchen zu den fachlichen Ereignis
 | `LedgerService` | nutzt `VatEntryWriter`; `guardClosedFiscalYear` (:509) wird öffentlich oder in den Zustandsdienst verlegt; Referenzprüfung (:343) berücksichtigt reservierte Referenzen |
 | `LegalArchivingService::archiveDocument` (:42-107) | Zeilen in die Prüfsumme aufnehmen |
 | `YearEndClosingAction::getUnsettledVatPeriods` (:226-257) | stornierte Abrechnungen gelten als nicht abgerechnet |
-| `Permission`, `Role` | `AccountingAmendPosted` für Owner, Admin, Accountant |
+| `Permission`, `Role`, `TokenPermissionMap` | `AccountingAmendPosted` für Owner, Admin, Accountant; auch als Token-Recht |
 | `WebhookEvent` | `journal_entry.updated`, `journal_entry.deleted` |
 | `JournalEntries.vue`, `JournalEntryShow.vue` | Bearbeiten/Löschen für verbuchte Buchungen, Sperr-Hinweis, Verlauf, Filter |
 | `lang/{de,en,fr,it}/app.php` | `help_journal_text` (:757), `confirm_post_journal_entry` (:2588), `cannot_edit_posted_entry` (:2586) je Modus; neue Schlüssel |
@@ -81,7 +86,7 @@ In einer Transaktion:
 7. `revision` hochzählen.
 8. Nach dem Commit: `flushCache`, `JournalEntryAmended` (schreibt `journal_events`, löst Webhook aus).
 
-Ändert sich auf einer Zeile eines Bankkontos (ein Konto, auf das `bank_accounts.account_id` verweist) der Betrag, liefert die Vorprüfung eine Warnung; die Oberfläche verlangt eine Bestätigung, die API ein Feld `acknowledge_bank_amount_change: true`.
+Ändert sich auf einer Zeile eines Bankkontos (ein Konto, auf das `bank_accounts.account_id` verweist) der Betrag oder wird ein Bankbetrag auf ein anderes Datum verschoben, liefert die Vorprüfung eine Warnung; die Oberfläche verlangt eine Bestätigung, die API ein Feld `acknowledge_bank_amount_change: true`.
 
 ### Löschen (`DeletePostedJournalEntryAction`)
 
@@ -115,11 +120,11 @@ Migration, Zustandsdienst, beide Actions, Policy, Controller, API, minimale Ober
 
 Sperr-Hinweis mit Grund und passender Aktion, Verlauf auf der Detailseite mit Vergleich zweier Stände, Änderungsübersicht der letzten 30 Tage (inklusive gelöschter Buchungen), API `GET /journal-entries/{id}/revisions`.
 
-**Abnahme**: User Story 3 und 4.
+**Abnahme**: User Story 3 und 4. Umgesetzt mit Link und Anzahl über der Journalliste statt einer Dashboard-Kachel.
 
 ### Etappe 3: Korrekturweg entlasten
 
-Korrekturdatum schlägt das erste offene Datum vor; eine verbuchte Ersatzbuchung darf erneut korrigiert werden (Eindeutigkeit auf `replacement_journal_entry_id` lockern, Kette über `original_journal_entry_id`); Filter „Storno-Paare ausblenden“.
+Korrekturdatum schlägt das erste offene Datum vor; eine verbuchte Ersatzbuchung darf erneut korrigiert werden (die bestehenden Eindeutigkeitsregeln erlauben die Kette bereits, es fehlte nur der Knopf); Filter „Storno-Paare ausblenden“.
 
 **Abnahme**: User Story 6.
 
@@ -154,9 +159,10 @@ journal_entry_revisions (neu)
 
 | Methode | Pfad | Body | Antworten |
 |---|---|---|---|
-| `PATCH` | `/api/v1/journal-entries/{id}` | `date`, `reference`, `description`, `lines[]` (Format wie `store`), `reason?`, `acknowledge_bank_amount_change?` | 200 mit Ressource; 409 `stale_revision`; 422 `entry_not_amendable` mit `edit_state`; 422 `bank_amount_change_unacknowledged` |
-| `DELETE` | `/api/v1/journal-entries/{id}` | `reason?` | 204; 409 `stale_revision`; 422 `entry_not_deletable` mit `edit_state` |
-| `GET` | `/api/v1/journal-entries/{id}/revisions` | | 200, Liste der Stände (Etappe 2) |
+| `PATCH` | `/api/v1/journal-entries/{id}` | `date`, `reference`, `description`, `lines[]` (Format wie `store`), `reason?`, `acknowledge_bank_amount_change?` | 200 mit Ressource; 409 `stale_revision` mit `current_revision`; 422 `entry_not_editable` mit `edit_state`; 422 `bank_amount_change_unacknowledged`; 428 `revision_required` |
+| `DELETE` | `/api/v1/journal-entries/{id}` | `reason?` | 204; 409 `stale_revision`; 422 `entry_not_editable` mit `edit_state`; 428 `revision_required` |
+| `GET` | `/api/v1/journal-entries/{id}/revisions` | | 200, Stände der Buchung, älteste zuerst |
+| `GET` | `/api/v1/journal-entry-revisions` | `kind?`, `journal_entry_id?`, `since?` | 200, Stände über alle Buchungen, neueste zuerst; einziger Weg zum letzten Stand einer gelöschten Buchung |
 
 Header: `Idempotency-Key` (Pflicht für `PATCH` und `DELETE` verbuchter Buchungen), `If-Match: <revision>` (Pflicht). Die Ressource enthält neu `revision` und `edit_state`. Webhooks `journal_entry.updated` und `journal_entry.deleted` mit alter und neuer Version.
 

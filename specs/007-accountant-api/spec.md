@@ -136,7 +136,7 @@ Sofern die Module aktiviert sind, verwaltet der Buchhalter Personal und Lohnläu
 - **API-Zugang**: Einer Person und Organisation zugeordnete Berechtigung mit begrenztem Funktionsumfang und Ablaufdatum.
 - **Buchhaltungsstammdaten**: Geschäftsjahr, Konto, MWST-Satz, Kategorie, Kontakt, Bankkonto und optionale Dimensionswerte.
 - **Geschäftsbeleg**: Rechnung, Gutschrift oder Ausgabe mit Dateien, Status und verbundener Journalbuchung.
-- **Journalbuchung**: Unveränderlich gebuchter Geschäftsfall oder bearbeitbarer Entwurf mit ausgeglichenen Soll-/Haben-Zeilen.
+- **Journalbuchung**: Unveränderlich gebuchter Geschäftsfall oder bearbeitbarer Entwurf mit ausgeglichenen Soll-/Haben-Zeilen. Seit [008](../008-editable-posted-entries/spec.md) kann eine Organisation verbuchte Buchungen in offenen Perioden direkt ändern lassen; ohne diese Einstellung gilt die Unveränderlichkeit weiter.
 - **Bankbewegung und Abstimmung**: Importierte Zahlung und ihre fachlich nachvollziehbare Zuordnung.
 - **Bericht und Exportauftrag**: Periodische Auswertung beziehungsweise nachverfolgbarer Auftrag mit Ergebnisdatei.
 - **Abschluss**: MWST- oder Geschäftsjahresabschluss mit Sperrstatus, Abschlussbuchung und Archivnachweis.

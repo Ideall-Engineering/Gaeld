@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-16
 
-**Status**: Draft
+**Status**: Umgesetzt auf `feature/editable-posted-entries`, noch nicht in Produktion
 
 **Input**: Wer bucht, soll einen eben erkannten Fehler in einer verbuchten Buchung direkt beheben können, solange die Periode nicht durch eine MWST-Abrechnung oder einen Jahresabschluss festgehalten ist. Heute ist jede verbuchte Buchung sofort unveränderlich, und jeder Tippfehler erzeugt ein Storno und eine Ersatzbuchung. Die Sperre soll künftig an fachlichen Ereignissen hängen statt am Verbuchen. Jede Änderung bleibt lückenlos nachvollziehbar.
 
@@ -64,7 +64,7 @@ Wer eine Buchung öffnet, sieht sofort, ob sie änderbar ist, und falls nicht, w
 
 ### User Story 4: Verlauf nachvollziehen (Priority: P2)
 
-Zu jeder geänderten Buchung lassen sich alle früheren Stände mit Zeitpunkt, Person, Quelle und Begründung ansehen und vergleichen. Eine Übersicht zeigt die zuletzt geänderten und gelöschten Buchungen.
+Zu jeder geänderten Buchung lassen sich alle früheren Stände mit Zeitpunkt, Person, Quelle und Begründung ansehen und vergleichen. Eine Übersicht zeigt die in den letzten 30 Tagen geänderten und gelöschten Buchungen; die Journalliste verlinkt sie mit der Anzahl.
 
 **Why this priority**: Die Nachvollziehbarkeit ist die Bedingung dafür, dass verbuchte Buchungen überhaupt änderbar sein dürfen.
 
@@ -88,7 +88,7 @@ Für gesperrte Perioden bleibt der geführte Korrekturweg, wird aber einfacher: 
 ### Edge Cases
 
 * Das Datum wird aus einer offenen in eine abgerechnete MWST-Periode verschoben oder umgekehrt: abgelehnt, sobald altes **oder** neues Datum gesperrt ist.
-* Das Datum wird in ein abgeschlossenes oder nicht vorhandenes Geschäftsjahr verschoben: abgelehnt wie beim Verbuchen.
+* Das Datum wird in ein abgeschlossenes Geschäftsjahr verschoben: abgelehnt. Ein Datum ohne erfasstes Geschäftsjahr wird behandelt wie beim Verbuchen.
 * Eine Buchung ohne MWST-Zeilen liegt in einer abgerechneten Periode: gesperrt, obwohl heute nur MWST-Einträge den Sperrschutz auslösen.
 * Zwei Änderungen derselben Buchung gleichzeitig (Web und API): die zweite scheitert mit Versionskonflikt.
 * Eine Zeile auf einem Bankkonto ändert ihren Betrag: erlaubt, aber mit deutlicher Warnung, dass der Saldo vom Kontoauszug abweichen kann.
@@ -110,7 +110,7 @@ Für gesperrte Perioden bleibt der geführte Korrekturweg, wird aber einfacher: 
 * **FR-008**: Jede Buchung trägt eine Versionsnummer. Web und API lehnen Änderungen auf einer veralteten Version ab.
 * **FR-009**: Referenzen gelöschter Buchungen bleiben reserviert.
 * **FR-010**: Die API bietet `PATCH /api/v1/journal-entries/{id}` und erweitert `DELETE` auf verbuchte Buchungen, beide mit Idempotency-Key und `If-Match`.
-* **FR-011**: Ändern und Löschen verbuchter Buchungen verlangt die Berechtigung `AccountingAmendPosted`, die standardmässig nur Inhaber, Admin und Buchhalter haben.
+* **FR-011**: Ändern und Löschen verbuchter Buchungen verlangt die Berechtigung `AccountingAmendPosted` (`accounting.amend-posted`), die standardmässig nur Inhaber, Admin und Buchhalter haben. API-Tokens brauchen dieses Recht ausdrücklich.
 * **FR-012**: Archivierte Buchungszeilen sind auf Modellebene gegen Änderung und Löschung gesperrt, und die Archiv-Prüfsumme umfasst die Zeilen.
 * **FR-013**: Hilfe- und Bestätigungstexte beschreiben das Verhalten je Modus korrekt, in allen vier Sprachen.
 
