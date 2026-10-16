@@ -82,6 +82,12 @@ class JournalEntry extends Model
         return $this->hasMany(TransactionLine::class);
     }
 
+    /** @return HasMany<VatEntry, $this> */
+    public function vatEntries(): HasMany
+    {
+        return $this->hasMany(VatEntry::class);
+    }
+
     /** @return BelongsTo<User, $this> */
     public function vatPeriodLockedBy(): BelongsTo
     {

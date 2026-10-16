@@ -89,6 +89,49 @@ class LegalArchiveFiscalYearBoundaryTest extends TestCase
         $this->assertSame(2, LegalArchive::query()->where('document_type', 'journal_entry')->count());
     }
 
+    public function test_archived_journal_entry_payload_includes_its_lines(): void
+    {
+        Storage::fake('local');
+
+        $fiscalYear = FiscalYear::factory()->for($this->organization)->create([
+            'name' => '2024',
+            'start_date' => '2024-01-01',
+            'end_date' => '2024-12-31',
+            'status' => FiscalYearStatus::Operative,
+        ]);
+        $bank = Account::create([
+            'organization_id' => $this->organization->id,
+            'code' => '1020',
+            'name' => 'Bank',
+            'type' => AccountType::Asset->value,
+        ]);
+        $revenue = Account::create([
+            'organization_id' => $this->organization->id,
+            'code' => '3000',
+            'name' => 'Revenue',
+            'type' => AccountType::Revenue->value,
+        ]);
+        app(LedgerService::class)->postEntry($this->organization->id, new JournalEntryData(
+            date: '2024-03-01',
+            reference: 'ARCHIVE-LINES',
+            description: 'with lines',
+            lines: [
+                new JournalLineData(accountId: (string) $bank->id, debit: '123.45', credit: '0'),
+                new JournalLineData(accountId: (string) $revenue->id, debit: '0', credit: '123.45'),
+            ],
+        ));
+
+        app(LegalArchivingService::class)->archiveFiscalYear($this->organization->id, '2024', $fiscalYear->id);
+
+        $archive = LegalArchive::query()->where('document_type', 'journal_entry')->sole();
+        $payload = Storage::disk('local')->get($archive->storage_path);
+        $decoded = json_decode($payload, true);
+
+        $this->assertCount(2, $decoded['lines']);
+        $this->assertSame('123.45', (string) $decoded['lines'][0]['debit']);
+        $this->assertSame($archive->checksum_sha256, hash('sha256', $payload));
+    }
+
     public function test_archive_does_not_include_another_organization(): void
     {
         Storage::fake('local');
