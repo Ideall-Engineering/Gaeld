@@ -19,7 +19,6 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
-use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Organizations\Models\Organization;
 use App\Support\Money;
@@ -42,6 +41,7 @@ class LedgerService
 
     public function __construct(
         private LedgerQueryService $queryService,
+        private VatEntryWriter $vatEntryWriter,
     ) {}
 
     // ──────────────────────────────────────────────────────────────
@@ -261,6 +261,24 @@ class LedgerService
         return $this->resolveVatRateIds($organizationId, $lines);
     }
 
+    /**
+     * Whether posting on this date would hit a closed fiscal year.
+     *
+     * The same rule {@see postEntry()} and {@see postDraft()} enforce,
+     * exposed so that amending a posted entry can check both its old and
+     * its new date without duplicating the fiscal-year lookup.
+     */
+    public function isFiscalYearClosedOn(string $organizationId, string $date): bool
+    {
+        try {
+            $this->guardClosedFiscalYear($organizationId, $date);
+        } catch (FiscalYearClosedException) {
+            return true;
+        }
+
+        return false;
+    }
+
     // ──────────────────────────────────────────────────────────────
     //  Validation
     // ──────────────────────────────────────────────────────────────
@@ -415,47 +433,7 @@ class LedgerService
     /** @param array<string, int> $vatRateIds */
     private function createVatEntries(JournalEntry $journalEntry, TransactionLine $line, array $vatRateIds): void
     {
-        if ($line->vat_type === null || $line->vat_rate_id === null) {
-            return;
-        }
-
-        $vatType = $line->vat_type;
-        $baseAmount = Money::isZero((string) $line->debit)
-            ? (string) $line->credit
-            : (string) $line->debit;
-        $vatAmount = (string) ($line->vat_amount ?? '0.00');
-
-        if ($this->isVatReversalLine($line, $vatType)) {
-            $baseAmount = Money::negate($baseAmount);
-            $vatAmount = Money::negate(Money::absoluteAmount($vatAmount));
-        } else {
-            $vatAmount = Money::absoluteAmount($vatAmount);
-        }
-
-        $entryTypes = $vatType === VatEntryType::Acquisition
-            ? [VatEntryType::Acquisition, VatEntryType::Input]
-            : [$vatType];
-
-        foreach ($entryTypes as $entryType) {
-            VatEntry::create([
-                'journal_entry_id' => $journalEntry->id,
-                'vat_rate_id' => $vatRateIds[$line->vat_rate_id],
-                'base_amount' => $baseAmount,
-                'vat_amount' => $vatAmount,
-                'type' => $entryType,
-                'figure' => $line->vat_figure,
-            ]);
-        }
-    }
-
-    private function isVatReversalLine(TransactionLine $line, VatEntryType $vatType): bool
-    {
-        $isDebitLine = ! Money::isZero((string) $line->debit);
-
-        return match ($vatType) {
-            VatEntryType::Output => $isDebitLine,
-            VatEntryType::Input, VatEntryType::InputInvestment, VatEntryType::Acquisition => ! $isDebitLine,
-        };
+        $this->vatEntryWriter->writeFor($journalEntry, $line, $vatRateIds);
     }
 
     private function isJournalReferenceConflict(QueryException $exception): bool

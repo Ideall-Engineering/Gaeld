@@ -4,6 +4,7 @@ namespace App\Domains\Accounting\Policies;
 
 use App\Domains\Accounting\Actions\PrepareJournalCorrectionAction;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Services\JournalEntryEditStateService;
 use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Users\Models\User;
 use App\Support\Policies\BasePolicy;
@@ -85,5 +86,25 @@ class JournalEntryPolicy extends BasePolicy
         return $this->belongsToOrganization($user, $entry)
             && $user->hasPermissionTo(Permission::AccountingEdit)
             && $entry->is_posted;
+    }
+
+    /**
+     * Whether a posted entry may be changed in place.
+     *
+     * The period, ownership and organization mode are decided by
+     * {@see JournalEntryEditStateService}; this only adds who may do it.
+     */
+    public function amend(User $user, JournalEntry $entry): bool
+    {
+        return $this->belongsToOrganization($user, $entry)
+            && $user->hasPermissionTo(Permission::AccountingAmendPosted)
+            && $entry->is_posted
+            && app(JournalEntryEditStateService::class)->stateFor($entry)->isAmendable();
+    }
+
+    /** Whether a posted entry may be deleted; same rules as {@see amend()}. */
+    public function deletePosted(User $user, JournalEntry $entry): bool
+    {
+        return $this->amend($user, $entry);
     }
 }

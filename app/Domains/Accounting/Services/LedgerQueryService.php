@@ -3,10 +3,12 @@
 namespace App\Domains\Accounting\Services;
 
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Enums\JournalEntryRevisionKind;
 use App\Domains\Accounting\Enums\StatementBasis;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Models\JournalEntryRevision;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -634,11 +636,29 @@ class LedgerQueryService
     }
 
     /**
-     * Check if ANY entry (draft or posted) with this reference exists
+     * Check if ANY entry (draft or posted) with this reference exists, or
+     * existed and was deleted after posting.
      */
     public function isDuplicateReferenceAny(string $organizationId, string $reference): bool
     {
         return JournalEntry::where('organization_id', $organizationId)
+            ->where('reference', $reference)
+            ->exists()
+            || $this->isReservedReference($organizationId, $reference);
+    }
+
+    /**
+     * Whether the reference belonged to a posted entry that was deleted.
+     *
+     * Such a reference stays reserved: it already appeared in reports and
+     * exports, and reusing it would make two different entries answer to
+     * the same number in the books.
+     */
+    public function isReservedReference(string $organizationId, string $reference): bool
+    {
+        return JournalEntryRevision::withoutGlobalScopes()
+            ->where('organization_id', $organizationId)
+            ->where('kind', JournalEntryRevisionKind::Deleted)
             ->where('reference', $reference)
             ->exists();
     }

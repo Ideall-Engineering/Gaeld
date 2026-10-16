@@ -2,6 +2,7 @@
 
 namespace App\Domains\Organizations\Models;
 
+use App\Domains\Accounting\Enums\PostedEntryEditMode;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Banking\Models\BankAccount;
@@ -39,6 +40,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $fiscal_year_start
  * @property array<int, int>|null $closed_fiscal_years
  * @property array<string, bool>|null $enabled_modules
+ * @property PostedEntryEditMode $posted_entry_edit_mode
  * @property string|null $locale
  * @property BusinessType|null $business_type
  * @property string $setup_mode
@@ -83,10 +85,16 @@ class Organization extends Model
         'invoice_email_subject',
         'invoice_email_body',
         'enabled_modules',
+        'posted_entry_edit_mode',
         'setup_mode',
         'founded_at',
         'suspended_at',
         'suspended_reason',
+    ];
+
+    /** @var array<string, mixed> */
+    protected $attributes = [
+        'posted_entry_edit_mode' => 'strict',
     ];
 
     protected function casts(): array
@@ -97,6 +105,7 @@ class Organization extends Model
             'payroll_payday' => 'integer',
             'closed_fiscal_years' => 'array',
             'enabled_modules' => 'array',
+            'posted_entry_edit_mode' => PostedEntryEditMode::class,
             'business_type' => BusinessType::class,
             'founded_at' => 'date',
             'suspended_at' => 'datetime',

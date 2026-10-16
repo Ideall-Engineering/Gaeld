@@ -142,6 +142,7 @@ enum Role: string
             Permission::AccountingEdit,
             Permission::AccountingDelete,
             Permission::AccountingCloseYear,
+            Permission::AccountingAmendPosted,
 
             // Banking (view + import/reconcile, no create/edit/delete)
             Permission::BankingView,

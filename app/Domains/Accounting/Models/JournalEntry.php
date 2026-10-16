@@ -28,6 +28,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $reference
  * @property string|null $description
  * @property bool $is_posted
+ * @property int $revision
  * @property string|null $reversal_of_entry_id
  * @property string|null $type
  * @property Carbon|null $vat_period_start
@@ -56,6 +57,12 @@ class JournalEntry extends Model
         'vat_period_locked_at',
         'vat_period_locked_by_user_id',
         'archived_at',
+        'revision',
+    ];
+
+    /** @var array<string, mixed> */
+    protected $attributes = [
+        'revision' => 1,
     ];
 
     protected function casts(): array
@@ -67,6 +74,7 @@ class JournalEntry extends Model
             'vat_period_end' => 'date',
             'vat_period_locked_at' => 'datetime',
             'archived_at' => 'datetime',
+            'revision' => 'integer',
         ];
     }
 
@@ -80,6 +88,16 @@ class JournalEntry extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(TransactionLine::class);
+    }
+
+    /**
+     * Prior states of this entry, oldest first.
+     *
+     * @return HasMany<JournalEntryRevision, $this>
+     */
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(JournalEntryRevision::class)->orderBy('revision');
     }
 
     /** @return HasMany<VatEntry, $this> */

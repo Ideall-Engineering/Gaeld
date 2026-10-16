@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Console\Commands\BackfillOrganizationDocumentStorageCommand;
 use App\Domains\Accounting\Events\JournalEntryCorrected;
 use App\Domains\Accounting\Jobs\ExportChartOfAccountsJob;
+use App\Domains\Accounting\Listeners\DispatchJournalEntryChangedWebhook;
 use App\Domains\Accounting\Listeners\DispatchJournalEntryCorrectedWebhook;
 use App\Domains\Accounting\Listeners\JournalEventSubscriber;
 use App\Domains\Accounting\Models\Account;
@@ -199,6 +200,7 @@ class AppServiceProvider extends ServiceProvider
         Event::subscribe(AuthAuditSubscriber::class);
         Event::subscribe(JournalEventSubscriber::class);
         Event::listen(JournalEntryCorrected::class, DispatchJournalEntryCorrectedWebhook::class);
+        Event::subscribe(DispatchJournalEntryChangedWebhook::class);
         Event::listen(MemberRemoved::class, RevokeOrganizationTokens::class);
         Event::listen(BankStatementImported::class, QueueBankRuleSuggestions::class);
         Event::listen(LongWaitDetected::class, SendHorizonTelegramAlert::class);

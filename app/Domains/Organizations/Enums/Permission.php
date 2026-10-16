@@ -12,6 +12,7 @@ enum Permission: string
     case AccountingDelete = 'accounting.delete';
     case AccountingCloseYear = 'accounting.close-year';
     case AccountingReopenYear = 'accounting.reopen-year';
+    case AccountingAmendPosted = 'accounting.amend-posted';
 
     // Banking
     case BankingView = 'banking.view';

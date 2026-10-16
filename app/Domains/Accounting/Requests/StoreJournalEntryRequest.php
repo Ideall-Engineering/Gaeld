@@ -2,6 +2,7 @@
 
 namespace App\Domains\Accounting\Requests;
 
+use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Illuminate\Foundation\Http\FormRequest;
@@ -13,10 +14,11 @@ class StoreJournalEntryRequest extends FormRequest
     {
         $journalEntry = $this->route('journalEntry');
 
-        return $this->user()?->can(
-            $journalEntry instanceof JournalEntry ? 'update' : 'create',
-            $journalEntry instanceof JournalEntry ? $journalEntry : JournalEntry::class,
-        ) ?? false;
+        if (! $journalEntry instanceof JournalEntry) {
+            return $this->user()?->can('create', JournalEntry::class) ?? false;
+        }
+
+        return $this->user()?->can($journalEntry->is_posted ? 'amend' : 'update', $journalEntry) ?? false;
     }
 
     /** @return array<string, mixed> */
@@ -40,6 +42,20 @@ class StoreJournalEntryRequest extends FormRequest
             'lines.*.debit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
             'lines.*.credit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
             'lines.*.description' => ['nullable', 'string', 'max:500'],
+            // VAT travels with the line so editing an entry never drops it.
+            'lines.*.vat_type' => ['nullable', Rule::enum(VatEntryType::class)],
+            'lines.*.vat_rate_id' => [
+                'nullable',
+                'required_with:lines.*.vat_type',
+                'uuid',
+                Rule::exists('vat_rates', 'uuid')->where('organization_id', $orgId),
+            ],
+            'lines.*.vat_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999999.99'],
+            'lines.*.vat_figure' => ['nullable', 'string', 'max:10'],
+            // Only read when a posted entry is amended in place.
+            'revision' => ['nullable', 'integer', 'min:1'],
+            'change_reason' => ['nullable', 'string', 'max:1000'],
+            'acknowledge_bank_amount_change' => ['sometimes', 'boolean'],
         ];
     }
 }

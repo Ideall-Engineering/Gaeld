@@ -2,19 +2,24 @@
 
 namespace App\Domains\Accounting\Controllers;
 
+use App\Domains\Accounting\Actions\AmendPostedJournalEntryAction;
 use App\Domains\Accounting\Actions\CancelJournalCorrectionAction;
+use App\Domains\Accounting\Actions\DeletePostedJournalEntryAction;
 use App\Domains\Accounting\Actions\PostJournalCorrectionAction;
 use App\Domains\Accounting\Actions\PrepareJournalCorrectionAction;
 use App\Domains\Accounting\Actions\UpdateJournalDraftAction;
+use App\Domains\Accounting\DTOs\JournalEntryChangeContext;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Enums\JournalCorrectionSource;
+use App\Domains\Accounting\Exceptions\BankAmountChangeUnacknowledgedException;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalCorrection;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Requests\StoreJournalEntryRequest;
+use App\Domains\Accounting\Services\JournalEntryEditStateService;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Organizations\Enums\Permission;
@@ -105,7 +110,11 @@ class AccountingController extends Controller
             })
             ->get(['id', 'status', 'original_journal_entry_id', 'reversal_journal_entry_id', 'replacement_journal_entry_id']);
 
-        $entries->through(function (JournalEntry $entry) use ($corrections) {
+        $user = $request->user();
+        $editState = app(JournalEntryEditStateService::class);
+        $mayAmend = $user?->hasPermissionTo(Permission::AccountingAmendPosted) ?? false;
+
+        $entries->through(function (JournalEntry $entry) use ($corrections, $editState, $mayAmend) {
             $correction = $corrections->first(fn (JournalCorrection $c) => in_array($entry->id, [
                 $c->original_journal_entry_id, $c->reversal_journal_entry_id, $c->replacement_journal_entry_id,
             ], true));
@@ -123,6 +132,7 @@ class AccountingController extends Controller
                 'correction_role' => $role,
                 'correction_id' => $correction?->id,
                 'correction_status' => $correction?->status?->value,
+                ...$this->editStateFor($entry, $editState, $mayAmend),
             ];
         });
 
@@ -135,8 +145,6 @@ class AccountingController extends Controller
                 'name' => $a->display_name,
                 'type' => $a->type->value,
             ]);
-
-        $user = $request->user();
 
         return Inertia::render('Accounting/JournalEntries', [
             'entries' => $entries,
@@ -156,6 +164,24 @@ class AccountingController extends Controller
                 'delete' => $user?->hasPermissionTo(Permission::AccountingDelete) ?? false,
             ],
         ]);
+    }
+
+    /**
+     * The in-place edit state the journal list and detail page show for a
+     * posted entry: whether it can be amended, and if not, why.
+     *
+     * @return array{edit_state: string, edit_state_label: string, can_amend: bool, suggests_correction: bool}
+     */
+    private function editStateFor(JournalEntry $entry, JournalEntryEditStateService $editState, bool $mayAmend): array
+    {
+        $state = $editState->stateFor($entry);
+
+        return [
+            'edit_state' => $state->value,
+            'edit_state_label' => $state->label(),
+            'can_amend' => $mayAmend && $state->isAmendable(),
+            'suggests_correction' => $state->suggestsCorrection(),
+        ];
     }
 
     /**
@@ -386,22 +412,8 @@ class AccountingController extends Controller
     ): RedirectResponse {
         $this->authorize('create', JournalEntry::class);
 
-        $validated = $request->validated();
         $isPosted = (bool) $request->boolean('is_posted', true);
-
-        $lines = array_map(fn (array $line) => new JournalLineData(
-            accountId: (string) $line['account_id'],
-            debit: (string) ($line['debit'] ?? '0'),
-            credit: (string) ($line['credit'] ?? '0'),
-            description: $line['description'] ?? null,
-        ), $validated['lines']);
-
-        $entryData = new JournalEntryData(
-            date: $validated['date'],
-            reference: $validated['reference'] ?? null,
-            description: $validated['description'] ?? null,
-            lines: $lines,
-        );
+        $entryData = $this->journalEntryDataFrom($request->validated());
 
         try {
             $isPosted
@@ -419,38 +431,59 @@ class AccountingController extends Controller
         StoreJournalEntryRequest $request,
         JournalEntry $journalEntry,
         UpdateJournalDraftAction $updateJournalDraft,
+        AmendPostedJournalEntryAction $amendPostedEntry,
     ): RedirectResponse {
-        $this->authorize('update', $journalEntry);
-
-        if ($journalEntry->is_posted) {
-            return redirect()->route('accounting.journal')
-                ->with('error', __('app.cannot_edit_posted_entry'));
-        }
+        $this->authorize($journalEntry->is_posted ? 'amend' : 'update', $journalEntry);
 
         $validated = $request->validated();
-
-        $lines = array_map(fn (array $line) => new JournalLineData(
-            accountId: (string) $line['account_id'],
-            debit: (string) ($line['debit'] ?? '0'),
-            credit: (string) ($line['credit'] ?? '0'),
-            description: $line['description'] ?? null,
-        ), $validated['lines']);
-
-        $entryData = new JournalEntryData(
-            date: $validated['date'],
-            reference: $validated['reference'] ?? null,
-            description: $validated['description'] ?? null,
-            lines: $lines,
-        );
+        $entryData = $this->journalEntryDataFrom($validated);
 
         try {
-            $updateJournalDraft->execute($journalEntry, $entryData);
+            if ($journalEntry->is_posted) {
+                $amendPostedEntry->execute($journalEntry, $entryData, new JournalEntryChangeContext(
+                    expectedRevision: (int) ($validated['revision'] ?? $journalEntry->revision),
+                    source: JournalCorrectionSource::Web,
+                    userId: $request->user()?->id,
+                    reason: $validated['change_reason'] ?? null,
+                    acknowledgeBankAmountChange: $request->boolean('acknowledge_bank_amount_change'),
+                ));
+            } else {
+                $updateJournalDraft->execute($journalEntry, $entryData);
+            }
+        } catch (BankAmountChangeUnacknowledgedException $e) {
+            // Asked back as a field error so the form can show the
+            // confirmation next to the amounts instead of a toast.
+            return back()->withErrors(['acknowledge_bank_amount_change' => $e->getMessage()]);
         } catch (DomainException $e) {
             return $this->backWithError($e);
         }
 
         return redirect()->route('accounting.journal')
-            ->with('success', __('app.journal_entry_updated'));
+            ->with('success', __($journalEntry->is_posted ? 'app.journal_entry_amended' : 'app.journal_entry_updated'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function journalEntryDataFrom(array $validated): JournalEntryData
+    {
+        $lines = array_map(fn (array $line) => new JournalLineData(
+            accountId: (string) $line['account_id'],
+            debit: (string) ($line['debit'] ?? '0'),
+            credit: (string) ($line['credit'] ?? '0'),
+            description: $line['description'] ?? null,
+            vatRateId: ($line['vat_type'] ?? null) !== null ? ($line['vat_rate_id'] ?? null) : null,
+            vatAmount: ($line['vat_type'] ?? null) !== null && isset($line['vat_amount']) ? (string) $line['vat_amount'] : null,
+            vatType: $line['vat_type'] ?? null,
+            vatFigure: ($line['vat_type'] ?? null) !== null ? ($line['vat_figure'] ?? null) : null,
+        ), $validated['lines']);
+
+        return new JournalEntryData(
+            date: $validated['date'],
+            reference: $validated['reference'] ?? null,
+            description: $validated['description'] ?? null,
+            lines: $lines,
+        );
     }
 
     public function postJournalEntry(JournalEntry $journalEntry, LedgerService $ledger): RedirectResponse
@@ -481,19 +514,36 @@ class AccountingController extends Controller
             ->with('success', __('app.journal_entry_reversed'));
     }
 
-    public function destroyJournalEntry(JournalEntry $journalEntry, LedgerService $ledger): RedirectResponse
-    {
-        $this->authorize('delete', $journalEntry);
+    public function destroyJournalEntry(
+        Request $request,
+        JournalEntry $journalEntry,
+        DeletePostedJournalEntryAction $deletePostedEntry,
+    ): RedirectResponse {
+        $this->authorize($journalEntry->is_posted ? 'deletePosted' : 'delete', $journalEntry);
+
+        $validated = $request->validate([
+            'revision' => ['nullable', 'integer', 'min:1'],
+            'change_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
 
         try {
-            $journalEntry->lines()->delete();
-            $journalEntry->delete();
+            if ($journalEntry->is_posted) {
+                $deletePostedEntry->execute($journalEntry, new JournalEntryChangeContext(
+                    expectedRevision: (int) ($validated['revision'] ?? $journalEntry->revision),
+                    source: JournalCorrectionSource::Web,
+                    userId: $request->user()?->id,
+                    reason: $validated['change_reason'] ?? null,
+                ));
+            } else {
+                $journalEntry->lines()->delete();
+                $journalEntry->delete();
+            }
         } catch (DomainException $e) {
             return $this->backWithError($e);
         }
 
         return redirect()->route('accounting.journal')
-            ->with('success', __('app.journal_entry_deleted'));
+            ->with('success', __($journalEntry->is_posted ? 'app.journal_entry_posted_deleted' : 'app.journal_entry_deleted'));
     }
 
     public function trialBalance(Request $request, LedgerQueryService $ledgerService, CurrentOrganization $currentOrg): Response

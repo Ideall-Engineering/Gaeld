@@ -4,6 +4,7 @@ namespace App\Domains\Accounting\Listeners;
 
 use App\Domains\Accounting\Events\JournalDraftCreated;
 use App\Domains\Accounting\Events\JournalDraftPosted;
+use App\Domains\Accounting\Events\JournalEntryAmended;
 use App\Domains\Accounting\Events\JournalEntryPosted;
 use App\Domains\Accounting\Events\JournalEntryReversed;
 use App\Domains\Accounting\Models\JournalEntry;
@@ -44,12 +45,28 @@ class JournalEventSubscriber
         ]);
     }
 
+    public function handleAmended(JournalEntryAmended $event): void
+    {
+        $journalEntry = JournalEntry::withoutGlobalScopes()->find($event->journalEntryId);
+        if ($journalEntry === null) {
+            return;
+        }
+
+        $this->store($journalEntry, 'amended', [
+            'reference' => $journalEntry->reference,
+            'previous_revision' => $event->previousRevision,
+            'revision' => $event->revision,
+            'revision_id' => $event->revisionId,
+        ]);
+    }
+
     public function subscribe(Dispatcher $events): void
     {
         $events->listen(JournalEntryPosted::class, [self::class, 'handlePosted']);
         $events->listen(JournalDraftCreated::class, [self::class, 'handleDraftCreated']);
         $events->listen(JournalDraftPosted::class, [self::class, 'handleDraftPosted']);
         $events->listen(JournalEntryReversed::class, [self::class, 'handleReversed']);
+        $events->listen(JournalEntryAmended::class, [self::class, 'handleAmended']);
     }
 
     /** @param array<string, mixed> $payload */

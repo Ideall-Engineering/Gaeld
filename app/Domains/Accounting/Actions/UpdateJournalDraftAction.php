@@ -9,6 +9,7 @@ use App\Domains\Accounting\Exceptions\LockedReversalDraftException;
 use App\Domains\Accounting\Models\JournalCorrection;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use Illuminate\Support\Facades\DB;
 
@@ -28,6 +29,7 @@ class UpdateJournalDraftAction
 {
     public function __construct(
         private LedgerService $ledgerService,
+        private LedgerQueryService $ledgerQuery,
     ) {}
 
     /**
@@ -94,7 +96,8 @@ class UpdateJournalDraftAction
             ->where('organization_id', $draft->organization_id)
             ->where('reference', $reference)
             ->whereKeyNot($draft->id)
-            ->exists();
+            ->exists()
+            || $this->ledgerQuery->isReservedReference($draft->organization_id, $reference);
 
         if ($exists) {
             throw new DuplicateReferenceException(
