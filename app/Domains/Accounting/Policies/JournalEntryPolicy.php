@@ -96,10 +96,22 @@ class JournalEntryPolicy extends BasePolicy
      */
     public function amend(User $user, JournalEntry $entry): bool
     {
-        return $this->belongsToOrganization($user, $entry)
-            && $user->hasPermissionTo(Permission::AccountingAmendPosted)
+        return $this->attemptAmend($user, $entry)
             && $entry->is_posted
             && app(JournalEntryEditStateService::class)->stateFor($entry)->isAmendable();
+    }
+
+    /**
+     * Whether the user may try to amend or delete this posted entry at all.
+     *
+     * The API authorizes with this and leaves the entry's edit state to the
+     * action, which answers a locked entry with a stable error code and the
+     * reason instead of a bare 403.
+     */
+    public function attemptAmend(User $user, JournalEntry $entry): bool
+    {
+        return $this->belongsToOrganization($user, $entry)
+            && $user->hasPermissionTo(Permission::AccountingAmendPosted);
     }
 
     /** Whether a posted entry may be deleted; same rules as {@see amend()}. */

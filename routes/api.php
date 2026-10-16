@@ -11,6 +11,7 @@ use App\Domains\Api\Controllers\InvoiceApiController;
 use App\Domains\Api\Controllers\InvoicePdfApiController;
 use App\Domains\Api\Controllers\InvoicePdfPreviewApiController;
 use App\Domains\Api\Controllers\JournalEntryApiController;
+use App\Domains\Api\Controllers\JournalEntryRevisionApiController;
 use App\Domains\Api\Controllers\OrgTokenController;
 use App\Domains\Api\Controllers\WebhookApiController;
 use App\Http\Middleware\Api\HandleApiIdempotency;
@@ -107,9 +108,12 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
     Route::get('/journal-entries', [JournalEntryApiController::class, 'index'])->name('api.journal-entries.index');
     Route::get('/journal-entries/{journalEntry}', [JournalEntryApiController::class, 'show'])->name('api.journal-entries.show');
     Route::post('/journal-entries', [JournalEntryApiController::class, 'store'])->name('api.journal-entries.store');
+    Route::patch('/journal-entries/{journalEntry}', [JournalEntryApiController::class, 'update'])->name('api.journal-entries.update');
     Route::post('/journal-entries/{journalEntry}/post', [JournalEntryApiController::class, 'post'])->name('api.journal-entries.post');
     Route::post('/journal-entries/{journalEntry}/reverse', [JournalEntryApiController::class, 'reverse'])->name('api.journal-entries.reverse');
     Route::delete('/journal-entries/{journalEntry}', [JournalEntryApiController::class, 'destroy'])->name('api.journal-entries.destroy');
+    Route::get('/journal-entries/{journalEntry}/revisions', [JournalEntryRevisionApiController::class, 'forEntry'])->name('api.journal-entries.revisions');
+    Route::get('/journal-entry-revisions', [JournalEntryRevisionApiController::class, 'index'])->name('api.journal-entry-revisions.index');
 
     // Accounts (read-only)
     Route::get('/accounts', [AccountApiController::class, 'index'])->name('api.accounts.index');

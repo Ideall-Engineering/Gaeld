@@ -2,10 +2,18 @@
 
 namespace App\Domains\Api\Controllers;
 
+use App\Domains\Accounting\Actions\AmendPostedJournalEntryAction;
+use App\Domains\Accounting\Actions\DeletePostedJournalEntryAction;
+use App\Domains\Accounting\DTOs\JournalEntryChangeContext;
+use App\Domains\Accounting\Enums\JournalCorrectionSource;
+use App\Domains\Accounting\Enums\JournalEntryEditState;
 use App\Domains\Accounting\Exceptions\AlreadyPostedException;
+use App\Domains\Accounting\Exceptions\BankAmountChangeUnacknowledgedException;
 use App\Domains\Accounting\Exceptions\DuplicateReferenceException;
 use App\Domains\Accounting\Exceptions\FiscalYearClosedException;
 use App\Domains\Accounting\Exceptions\InvalidEntryDataException;
+use App\Domains\Accounting\Exceptions\JournalEntryNotEditableException;
+use App\Domains\Accounting\Exceptions\StaleJournalEntryRevisionException;
 use App\Domains\Accounting\Exceptions\UnbalancedEntryException;
 use App\Domains\Accounting\Exceptions\UnknownVatCodeException;
 use App\Domains\Accounting\Models\JournalEntry;
@@ -14,6 +22,7 @@ use App\Domains\Api\Exceptions\ApiIdempotencyConflictException;
 use App\Domains\Api\Requests\JournalEntryActionApiRequest;
 use App\Domains\Api\Requests\JournalEntryIndexApiRequest;
 use App\Domains\Api\Requests\StoreJournalEntryApiRequest;
+use App\Domains\Api\Requests\UpdateJournalEntryApiRequest;
 use App\Domains\Api\Resources\JournalEntryResource;
 use App\Domains\Api\Services\ApiIdempotencyService;
 use App\Domains\Api\Services\JournalEntryApiMapper;
@@ -128,6 +137,61 @@ class JournalEntryApiController extends Controller
     }
 
     /**
+     * Amend posted journal entry
+     *
+     * Changes a posted journal entry in place while its period is open and
+     * the organization allows it. The previous state is kept as a revision.
+     * Requires `If-Match` with the entry's current `revision` and an
+     * `Idempotency-Key`. Drafts are not changed through this endpoint.
+     *
+     * @urlParam journalEntry string required The journal entry UUID. Example: 9c8f1b2a-3d4e-5f67-8901-abcdef123456
+     */
+    public function update(
+        UpdateJournalEntryApiRequest $request,
+        JournalEntry $journalEntry,
+        CurrentOrganization $currentOrganization,
+        JournalEntryApiMapper $mapper,
+        AmendPostedJournalEntryAction $amend,
+        ApiIdempotencyService $idempotency,
+    ): JsonResponse {
+        $this->ensureOrganization($journalEntry, $currentOrganization->id());
+
+        $expectedRevision = $this->expectedRevision($request);
+        if ($expectedRevision === null) {
+            return $this->revisionRequired();
+        }
+
+        return $this->executeMutation(
+            $request,
+            $currentOrganization->id(),
+            null,
+            $idempotency,
+            function () use ($request, $journalEntry, $currentOrganization, $mapper, $amend, $expectedRevision): JsonResponse {
+                if (! $journalEntry->is_posted) {
+                    throw new JournalEntryNotEditableException(JournalEntryEditState::Draft);
+                }
+
+                $validated = $request->validated();
+                $data = $mapper->toData($validated, $currentOrganization->id());
+
+                $entry = $amend->execute($journalEntry, $data, new JournalEntryChangeContext(
+                    expectedRevision: $expectedRevision,
+                    source: JournalCorrectionSource::Api,
+                    userId: $request->user()?->id,
+                    reason: $validated['reason'] ?? null,
+                    tokenId: $this->tokenId($request),
+                    idempotencyKey: $this->idempotencyKey($request),
+                    acknowledgeBankAmountChange: (bool) ($validated['acknowledge_bank_amount_change'] ?? false),
+                ));
+
+                return (new JournalEntryResource($entry->load('lines.account')))
+                    ->response()
+                    ->setStatusCode(200);
+            },
+        );
+    }
+
+    /**
      * Post journal entry
      *
      * Posts a draft journal entry to the accounting ledger.
@@ -207,7 +271,10 @@ class JournalEntryApiController extends Controller
     /**
      * Delete journal entry
      *
-     * Permanently deletes a draft journal entry.
+     * Permanently deletes a draft journal entry. A posted entry can be
+     * deleted too while its period is open and the organization allows it;
+     * that needs `If-Match` with its `revision`, and its last state is kept
+     * as a revision.
      *
      * @urlParam journalEntry string required The journal entry UUID. Example: 9c8f1b2a-3d4e-5f67-8901-abcdef123456
      */
@@ -217,17 +284,49 @@ class JournalEntryApiController extends Controller
         CurrentOrganization $currentOrganization,
         LedgerService $ledger,
         ApiIdempotencyService $idempotency,
+        DeletePostedJournalEntryAction $deletePosted,
     ): JsonResponse {
         $this->ensureOrganization($journalEntry, $currentOrganization->id());
-        $this->authorize('delete', $journalEntry);
+
+        if (! $journalEntry->is_posted) {
+            $this->authorize('delete', $journalEntry);
+
+            return $this->executeMutation(
+                $request,
+                $currentOrganization->id(),
+                'DELETE-'.(string) $journalEntry->id,
+                $idempotency,
+                function () use ($journalEntry, $ledger): JsonResponse {
+                    $ledger->deleteDraft($journalEntry);
+
+                    return response()->json(null, 204);
+                },
+            );
+        }
+
+        $this->authorize('attemptAmend', $journalEntry);
+
+        $expectedRevision = $this->expectedRevision($request);
+        if ($expectedRevision === null) {
+            return $this->revisionRequired();
+        }
+
+        $reason = $request->validate(['reason' => ['nullable', 'string', 'max:1000']])['reason'] ?? null;
 
         return $this->executeMutation(
             $request,
             $currentOrganization->id(),
-            'DELETE-'.(string) $journalEntry->id,
+            null,
             $idempotency,
-            function () use ($journalEntry, $ledger): JsonResponse {
-                $ledger->deleteDraft($journalEntry);
+            function () use ($request, $journalEntry, $deletePosted, $expectedRevision, $reason): JsonResponse {
+                $deletePosted->execute($journalEntry, new JournalEntryChangeContext(
+                    expectedRevision: $expectedRevision,
+                    source: JournalCorrectionSource::Api,
+                    userId: $request->user()?->id,
+                    reason: $reason,
+                    tokenId: $this->tokenId($request),
+                    idempotencyKey: $this->idempotencyKey($request),
+                ));
 
                 return response()->json(null, 204);
             },
@@ -271,6 +370,40 @@ class JournalEntryApiController extends Controller
         }
     }
 
+    /**
+     * The revision the client based its change on, from `If-Match`.
+     * Accepts `3`, `"3"` and `W/"3"`.
+     */
+    private function expectedRevision(Request $request): ?int
+    {
+        $header = trim((string) $request->header('If-Match'));
+        $value = trim(preg_replace('/^W\//', '', $header) ?? '', '"');
+
+        return ctype_digit($value) ? (int) $value : null;
+    }
+
+    private function revisionRequired(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Send the entry\'s current revision in the If-Match header.',
+            'code' => 'revision_required',
+        ], 428);
+    }
+
+    private function tokenId(Request $request): ?int
+    {
+        $token = $request->user()?->currentAccessToken();
+
+        return is_object($token) && isset($token->id) ? (int) $token->id : null;
+    }
+
+    private function idempotencyKey(Request $request): ?string
+    {
+        $key = trim((string) $request->header('Idempotency-Key'));
+
+        return $key === '' ? null : $key;
+    }
+
     private function ensureOrganization(JournalEntry $journalEntry, string $organizationId): void
     {
         abort_unless($journalEntry->organization_id === $organizationId, 404);
@@ -289,6 +422,9 @@ class JournalEntryApiController extends Controller
     {
         $code = match (true) {
             $exception instanceof ApiIdempotencyConflictException => 'idempotency_conflict',
+            $exception instanceof StaleJournalEntryRevisionException => 'stale_revision',
+            $exception instanceof JournalEntryNotEditableException => 'entry_not_editable',
+            $exception instanceof BankAmountChangeUnacknowledgedException => 'bank_amount_change_unacknowledged',
             $exception instanceof AlreadyPostedException => 'concurrent_transition',
             $exception instanceof DuplicateReferenceException => 'duplicate_reference',
             $exception instanceof FiscalYearClosedException => 'fiscal_year_closed',
@@ -305,9 +441,22 @@ class JournalEntryApiController extends Controller
             default => $exception->getMessage(),
         };
 
-        return response()->json([
-            'message' => $message,
-            'code' => $code,
-        ], in_array($code, ['duplicate_reference', 'idempotency_conflict', 'concurrent_transition'], true) ? 409 : 422);
+        $body = ['message' => $message, 'code' => $code];
+
+        if ($exception instanceof JournalEntryNotEditableException) {
+            $body['edit_state'] = $exception->state->value;
+            if ($exception->targetDate !== null) {
+                $body['target_date'] = $exception->targetDate;
+            }
+        }
+
+        if ($exception instanceof StaleJournalEntryRevisionException) {
+            $body['current_revision'] = $exception->currentRevision;
+        }
+
+        return response()->json(
+            $body,
+            in_array($code, ['duplicate_reference', 'idempotency_conflict', 'concurrent_transition', 'stale_revision'], true) ? 409 : 422,
+        );
     }
 }

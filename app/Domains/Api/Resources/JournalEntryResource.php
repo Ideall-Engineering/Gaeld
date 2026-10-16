@@ -3,6 +3,7 @@
 namespace App\Domains\Api\Resources;
 
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Services\JournalEntryEditStateService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,6 +23,9 @@ class JournalEntryResource extends JsonResource
             'status' => $this->is_posted ? 'posted' : 'draft',
             'is_posted' => $this->is_posted,
             'source' => $this->type ?? 'manual',
+            // Send back as `If-Match` when amending or deleting a posted entry.
+            'revision' => $this->revision,
+            'edit_state' => $this->editStateService($request)->stateFor($this->resource)->value,
             'debit_total' => $this->totalDebit(),
             'credit_total' => $this->totalCredit(),
             // Insertion order — debit before credit, as the entry was written.
@@ -33,5 +37,21 @@ class JournalEntryResource extends JsonResource
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * One service per request, so a collection shares its memoised period
+     * and organization lookups instead of repeating them per entry.
+     */
+    private function editStateService(Request $request): JournalEntryEditStateService
+    {
+        $service = $request->attributes->get(JournalEntryEditStateService::class);
+
+        if (! $service instanceof JournalEntryEditStateService) {
+            $service = app(JournalEntryEditStateService::class);
+            $request->attributes->set(JournalEntryEditStateService::class, $service);
+        }
+
+        return $service;
     }
 }

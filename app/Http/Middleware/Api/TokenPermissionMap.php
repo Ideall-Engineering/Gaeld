@@ -4,6 +4,7 @@ namespace App\Http\Middleware\Api;
 
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Models\JournalEntryRevision;
 use App\Domains\Api\Contracts\AbilityCatalog;
 use App\Domains\Api\Models\Webhook;
 use App\Domains\Banking\Models\BankAccount;
@@ -167,6 +168,13 @@ final class TokenPermissionMap
                 'reverse' => Permission::AccountingEdit,
                 'update' => Permission::AccountingEdit,
                 'delete' => Permission::AccountingDelete,
+                'attemptAmend' => Permission::AccountingAmendPosted,
+                'amend' => Permission::AccountingAmendPosted,
+                'deletePosted' => Permission::AccountingAmendPosted,
+            ],
+            JournalEntryRevision::class => [
+                'viewAny' => Permission::AccountingView,
+                'view' => Permission::AccountingView,
             ],
             BankAccount::class => [
                 'viewAny' => Permission::BankingView,
