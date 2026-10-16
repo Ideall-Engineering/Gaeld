@@ -194,6 +194,96 @@ class YearEndClosingActionTest extends TestCase
         $action->execute($this->organization, $validated, $this->user);
     }
 
+    public function test_a_reversed_vat_settlement_does_not_count_as_settled(): void
+    {
+        $fiscalYear = $this->createQ2VatActivityYear();
+        $this->createSettlement('VAT-SETTLEMENT-2025-04-01-2025-06-30', reversed: true);
+
+        $validated = $this->validated(year: 2025, reference: 'YE-REVERSED-VAT');
+        $validated['fiscal_year_id'] = $fiscalYear->id;
+        $validated['closing_date'] = '2025-12-31';
+
+        try {
+            app(YearEndClosingAction::class)->execute($this->organization, $validated, $this->user);
+            $this->fail('Expected the reversed VAT settlement to block closing.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('Q2 2025', $exception->getMessage());
+        }
+
+        $this->assertSame(FiscalYearStatus::Operative, $fiscalYear->refresh()->status);
+    }
+
+    public function test_a_re_settlement_after_a_reversal_counts_as_settled(): void
+    {
+        $fiscalYear = $this->createQ2VatActivityYear();
+        $this->createSettlement('VAT-SETTLEMENT-2025-04-01-2025-06-30', reversed: true);
+        $this->createSettlement('VAT-SETTLEMENT-2025-04-01-2025-06-30-v2', reversed: false);
+
+        $validated = $this->validated(year: 2025, reference: 'YE-RESETTLED-VAT');
+        $validated['fiscal_year_id'] = $fiscalYear->id;
+        $validated['closing_date'] = '2025-12-31';
+
+        try {
+            app(YearEndClosingAction::class)->execute($this->organization, $validated, $this->user);
+        } catch (\RuntimeException $exception) {
+            $this->assertStringNotContainsString('Q2 2025', $exception->getMessage());
+        }
+
+        $this->addToAssertionCount(1);
+    }
+
+    private function createQ2VatActivityYear(): FiscalYear
+    {
+        $fiscalYear = FiscalYear::factory()->for($this->organization)->create([
+            'name' => '2025',
+            'start_date' => '2025-01-01',
+            'end_date' => '2025-12-31',
+            'status' => FiscalYearStatus::Operative,
+        ]);
+
+        $bank = Account::where('organization_id', $this->organization->id)->where('code', '1020')->first();
+        $revenue = Account::where('organization_id', $this->organization->id)->where('code', '3000')->first();
+        $this->postJournalEntry('2025-05-01', [
+            $this->journalLine($bank, '100.00', '0', 'VAT activity'),
+            $this->journalLine($revenue, '0', '100.00', 'VAT activity'),
+        ], 'VAT-ACTIVITY-Q2-2025');
+        $entry = JournalEntry::where('organization_id', $this->organization->id)
+            ->where('reference', 'VAT-ACTIVITY-Q2-2025')
+            ->firstOrFail();
+
+        VatEntry::create([
+            'journal_entry_id' => $entry->id,
+            'vat_rate_id' => VatRate::factory()->for($this->organization)->create()->id,
+            'base_amount' => '100.00',
+            'vat_amount' => '8.10',
+            'type' => VatEntryType::Output,
+        ]);
+
+        return $fiscalYear;
+    }
+
+    private function createSettlement(string $reference, bool $reversed): void
+    {
+        JournalEntry::create([
+            'organization_id' => $this->organization->id,
+            'date' => '2025-06-30',
+            'reference' => $reference,
+            'description' => 'VAT settlement',
+            'type' => 'vat_settlement',
+            'is_posted' => true,
+        ]);
+
+        if ($reversed) {
+            JournalEntry::create([
+                'organization_id' => $this->organization->id,
+                'date' => '2025-07-15',
+                'reference' => "REV-{$reference}",
+                'description' => 'VAT settlement reversal',
+                'is_posted' => true,
+            ]);
+        }
+    }
+
     public function test_long_fiscal_year_blocks_on_an_unsettled_overlapping_vat_period(): void
     {
         $fiscalYear = FiscalYear::factory()->for($this->organization)->create([

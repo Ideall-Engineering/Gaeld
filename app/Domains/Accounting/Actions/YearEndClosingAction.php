@@ -218,8 +218,8 @@ class YearEndClosingAction
     }
 
     /**
-     * Return quarter labels (e.g. "Q1", "Q2") for which no VAT settlement
-     * journal entry exists in the given year.
+     * Return quarter labels (e.g. "Q1", "Q2") with VAT activity but no
+     * active (unreversed) VAT settlement in the given year.
      *
      * @return string[]
      */
@@ -243,16 +243,41 @@ class YearEndClosingAction
                 continue;
             }
 
-            $exists = JournalEntry::where('organization_id', $orgId)
-                ->where('type', 'vat_settlement')
-                ->where('reference', "VAT-SETTLEMENT-{$from}-{$to}")
-                ->exists();
-
-            if (! $exists) {
+            if (! $this->hasActiveVatSettlement($orgId, "VAT-SETTLEMENT-{$from}-{$to}")) {
                 $unsettled[] = 'Q'.$quarterStart->quarter.' '.$quarterStart->year;
             }
         }
 
         return $unsettled;
+    }
+
+    /**
+     * A quarter counts as settled only while one of its settlement versions
+     * (the base reference or a `-vN` re-settlement) has no posted reversal.
+     * A reversed settlement unlocks the period for corrections, so closing
+     * the year before re-settling it would freeze uncorrected VAT figures.
+     */
+    private function hasActiveVatSettlement(string $orgId, string $baseReference): bool
+    {
+        $references = JournalEntry::where('organization_id', $orgId)
+            ->where('type', 'vat_settlement')
+            ->where(fn ($q) => $q
+                ->where('reference', $baseReference)
+                ->orWhere('reference', 'like', "{$baseReference}-v%")
+            )
+            ->pluck('reference');
+
+        foreach ($references as $reference) {
+            $reversed = JournalEntry::where('organization_id', $orgId)
+                ->where('reference', "REV-{$reference}")
+                ->where('is_posted', true)
+                ->exists();
+
+            if (! $reversed) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
