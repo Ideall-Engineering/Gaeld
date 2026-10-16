@@ -164,6 +164,25 @@ class JournalEntryEditStateTest extends TestCase
         $this->assertSame(JournalEntryEditState::SystemGenerated, $this->state($prefixed));
     }
 
+    public function test_an_asset_disposal_is_system_generated(): void
+    {
+        $this->assertSame(JournalEntryEditState::SystemGenerated, $this->state($this->postSimpleEntry(reference: 'DISP-123')));
+    }
+
+    public function test_an_entry_reversed_only_by_reference_is_correction_bound(): void
+    {
+        $entry = $this->postSimpleEntry(reference: 'JE-OLD');
+        JournalEntry::create([
+            'organization_id' => $this->organization->id,
+            'date' => '2026-08-11',
+            'reference' => 'REV-JE-OLD',
+            'description' => 'Legacy reversal without structured link',
+            'is_posted' => true,
+        ]);
+
+        $this->assertSame(JournalEntryEditState::CorrectionBound, $this->state($entry));
+    }
+
     public function test_a_lettered_line_locks_the_entry(): void
     {
         $entry = $this->postSimpleEntry();

@@ -2853,4 +2853,5 @@ return [
     'correction_date_suggested' => 'The suggestion is the first date outside a locked period.',
     'journal_line_vat' => 'VAT',
     'journal_line_vat_figure' => 'Figure',
+    'journal_reference_reserved_prefix' => 'References starting with :prefix are assigned by Gäld itself. Please choose another reference.',
 ];

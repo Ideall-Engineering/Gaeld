@@ -2799,4 +2799,5 @@ return [
     'correction_date_suggested' => 'La proposition est la première date hors d\'une période verrouillée.',
     'journal_line_vat' => 'TVA',
     'journal_line_vat_figure' => 'Chiffre',
+    'journal_reference_reserved_prefix' => 'Les références commençant par :prefix sont attribuées par Gäld. Veuillez en choisir une autre.',
 ];

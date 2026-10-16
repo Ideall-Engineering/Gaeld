@@ -4,6 +4,7 @@ namespace App\Domains\Api\Requests;
 
 use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Rules\NotSystemReference;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Support\Money;
 use Illuminate\Foundation\Http\FormRequest;
@@ -58,7 +59,12 @@ class StoreJournalEntryApiRequest extends FormRequest
 
         $rules = [
             'date' => ['required', 'date_format:Y-m-d'],
-            'reference' => ['nullable', 'string', 'max:100'],
+            'reference' => [
+                'nullable',
+                'string',
+                'max:100',
+                new NotSystemReference($this->route('journalEntry') instanceof JournalEntry ? $this->route('journalEntry')->reference : null),
+            ],
             'description' => ['nullable', 'string', 'max:1000'],
             'status' => ['required', Rule::in(['draft', 'posted'])],
             'lines' => ['required', 'array', 'max:100'],

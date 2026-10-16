@@ -10,6 +10,7 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalCorrection;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Rules\NotSystemReference;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Organizations\Models\Organization;
 use Illuminate\Support\Carbon;
@@ -28,11 +29,15 @@ use Illuminate\Support\Carbon;
  */
 class JournalEntryEditStateService
 {
-    /** References the system writes itself and that must not drift by hand. */
-    private const SYSTEM_REFERENCE_PREFIXES = [
+    /**
+     * References the system writes itself and that must not drift by hand.
+     * Users cannot enter them either ({@see NotSystemReference}).
+     */
+    public const SYSTEM_REFERENCE_PREFIXES = [
         'OPENING-',
         'REV-',
         'VAT-SETTLEMENT-',
+        'DISP-',
     ];
 
     /** Entry types that summarise or carry forward other entries. */
@@ -247,7 +252,12 @@ class JournalEntryEditStateService
         }
 
         $isReversed = JournalEntry::withoutGlobalScopes()
-            ->where('reversal_of_entry_id', $entry->id)
+            ->where('organization_id', $entry->organization_id)
+            ->where(fn ($query) => $query
+                ->where('reversal_of_entry_id', $entry->id)
+                // Older reversals are linked by their `REV-` reference only.
+                ->when($entry->reference !== null, fn ($inner) => $inner
+                    ->orWhere('reference', 'REV-'.$entry->reference)))
             ->exists();
 
         if ($isReversed) {

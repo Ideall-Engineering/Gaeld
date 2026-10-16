@@ -2791,4 +2791,5 @@ return [
     'correction_date_suggested' => 'Vorgeschlagen ist das erste Datum, das nicht in einer gesperrten Periode liegt.',
     'journal_line_vat' => 'MWST',
     'journal_line_vat_figure' => 'Ziffer',
+    'journal_reference_reserved_prefix' => 'Referenzen mit :prefix vergibt Gäld selbst. Bitte eine andere Referenz wählen.',
 ];

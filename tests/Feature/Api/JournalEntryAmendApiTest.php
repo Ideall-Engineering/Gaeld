@@ -80,6 +80,38 @@ class JournalEntryAmendApiTest extends SecurityTestCase
             ->assertJsonPath('current_revision', 2);
     }
 
+    public function test_reusing_an_idempotency_key_on_another_entry_conflicts(): void
+    {
+        $first = $this->postEntry('API-KEY-A');
+        $second = $this->postEntry('API-KEY-B');
+
+        $this->withToken($this->tokenA)
+            ->withHeaders(['If-Match' => '1', 'Idempotency-Key' => 'same-key'])
+            ->deleteJson("/api/v1/journal-entries/{$first->id}")
+            ->assertNoContent();
+
+        $this->withToken($this->tokenA)
+            ->withHeaders(['If-Match' => '1', 'Idempotency-Key' => 'same-key'])
+            ->deleteJson("/api/v1/journal-entries/{$second->id}")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'idempotency_conflict');
+
+        $this->assertDatabaseHas('journal_entries', ['id' => $second->id]);
+    }
+
+    public function test_a_system_reference_cannot_be_chosen_over_the_api(): void
+    {
+        $this->withToken($this->tokenA)->postJson('/api/v1/journal-entries', [
+            'date' => '2026-08-21',
+            'reference' => 'OPENING-2026',
+            'status' => 'posted',
+            'lines' => [
+                ['account_code' => '1020', 'debit' => '1.00', 'credit' => '0.00'],
+                ['account_code' => '3000', 'debit' => '0.00', 'credit' => '1.00'],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors('reference');
+    }
+
     public function test_if_match_is_required(): void
     {
         $entry = $this->postEntry('API-NO-MATCH');

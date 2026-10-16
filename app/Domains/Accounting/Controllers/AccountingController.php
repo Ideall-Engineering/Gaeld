@@ -23,6 +23,7 @@ use App\Domains\Accounting\Models\JournalEntryRevision;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Accounting\Requests\StoreJournalEntryRequest;
+use App\Domains\Accounting\Rules\NotSystemReference;
 use App\Domains\Accounting\Services\JournalEntryEditStateService;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
@@ -467,7 +468,7 @@ class AccountingController extends Controller
 
         $validated = $request->validate([
             'date' => ['required', 'date'],
-            'reference' => ['nullable', 'string', 'max:100'],
+            'reference' => ['nullable', 'string', 'max:100', new NotSystemReference($journalCorrection->replacement->reference)],
             'description' => ['nullable', 'string', 'max:1000'],
             'lines' => ['required', 'array', 'min:2'],
             'lines.*.account_id' => [
@@ -581,10 +582,16 @@ class AccountingController extends Controller
         $validated = $request->validated();
         $entryData = $this->journalEntryDataFrom($validated);
 
+        // A posted entry is only changed against the revision it was shown
+        // with; without one there is nothing to detect a concurrent change by.
+        if ($journalEntry->is_posted && ! isset($validated['revision'])) {
+            return $this->backWithError(__('app.journal_entry_stale_revision'));
+        }
+
         try {
             if ($journalEntry->is_posted) {
                 $amendPostedEntry->execute($journalEntry, $entryData, new JournalEntryChangeContext(
-                    expectedRevision: (int) ($validated['revision'] ?? $journalEntry->revision),
+                    expectedRevision: (int) $validated['revision'],
                     source: JournalCorrectionSource::Web,
                     userId: $request->user()?->id,
                     reason: $validated['change_reason'] ?? null,
@@ -675,10 +682,14 @@ class AccountingController extends Controller
             'change_reason' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        if ($journalEntry->is_posted && ! isset($validated['revision'])) {
+            return $this->backWithError(__('app.journal_entry_stale_revision'));
+        }
+
         try {
             if ($journalEntry->is_posted) {
                 $deletePostedEntry->execute($journalEntry, new JournalEntryChangeContext(
-                    expectedRevision: (int) ($validated['revision'] ?? $journalEntry->revision),
+                    expectedRevision: (int) $validated['revision'],
                     source: JournalCorrectionSource::Web,
                     userId: $request->user()?->id,
                     reason: $validated['change_reason'] ?? null,

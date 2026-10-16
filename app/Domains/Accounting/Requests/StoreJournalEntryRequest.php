@@ -4,6 +4,7 @@ namespace App\Domains\Accounting\Requests;
 
 use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Rules\NotSystemReference;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -28,7 +29,12 @@ class StoreJournalEntryRequest extends FormRequest
 
         return [
             'date' => ['required', 'date'],
-            'reference' => ['nullable', 'string', 'max:100'],
+            'reference' => [
+                'nullable',
+                'string',
+                'max:100',
+                new NotSystemReference($this->route('journalEntry') instanceof JournalEntry ? $this->route('journalEntry')->reference : null),
+            ],
             'description' => ['nullable', 'string', 'max:1000'],
             'is_posted' => ['sometimes', 'boolean'],
             'lines' => ['required', 'array', 'min:2'],
@@ -69,7 +75,7 @@ class StoreJournalEntryRequest extends FormRequest
                 Rule::exists('vat_rates', 'uuid')->where('organization_id', $organizationId),
             ],
             'lines.*.vat_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999999.99'],
-            'lines.*.vat_figure' => ['nullable', 'string', 'max:10'],
+            'lines.*.vat_figure' => ['nullable', 'string', 'max:8'],
         ];
     }
 }

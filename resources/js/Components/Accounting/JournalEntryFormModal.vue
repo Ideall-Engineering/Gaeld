@@ -45,7 +45,9 @@ const title = computed(() => {
 })
 const needsBankConfirmation = computed(() => !!form.errors.acknowledge_bank_amount_change)
 
-watch(() => [props.open, props.entry], ([open]) => {
+// Keyed on the entry's id, not the object: a failed save reloads the page
+// props, and resetting the form then would throw away the user's edits.
+watch(() => [props.open, props.entry?.id], ([open]) => {
   if (!open) return
   form.clearErrors()
   const entry = props.entry

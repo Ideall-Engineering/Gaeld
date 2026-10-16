@@ -7,6 +7,7 @@ use App\Domains\Accounting\DTOs\JournalEntryChangeContext;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\JournalCorrectionSource;
+use App\Domains\Accounting\Enums\JournalEntryEditState;
 use App\Domains\Accounting\Enums\JournalEntryRevisionKind;
 use App\Domains\Accounting\Enums\PostedEntryEditMode;
 use App\Domains\Accounting\Enums\VatEntryType;
@@ -16,6 +17,7 @@ use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\JournalEntryRevision;
 use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Models\VatRate;
+use App\Domains\Accounting\Services\JournalEntryEditStateService;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Banking\Models\BankAccount;
@@ -231,6 +233,75 @@ class AmendPostedJournalEntryTest extends TestCase
         ])->assertSessionHas('error');
 
         $this->assertSame('2026-08-10', $entry->fresh()->date->toDateString());
+    }
+
+    public function test_a_hand_made_settlement_reversal_cannot_unlock_a_quarter(): void
+    {
+        $locked = $this->postSimpleEntry(date: '2026-05-10', reference: 'JE-Q2');
+        $settlement = $this->lockVatQuarter('2026-04-01', '2026-06-30');
+
+        $this->actAsOrg()->from('/accounting/journal-entries')->post('/accounting/journal-entries', [
+            'date' => '2026-08-10',
+            'reference' => 'REV-'.$settlement->reference,
+            'is_posted' => true,
+            'lines' => $this->webLines($this->expense, $this->bank, '1.00'),
+        ])->assertSessionHasErrors('reference');
+
+        $open = $this->postSimpleEntry(reference: 'JE-OPEN');
+        $this->actAsOrg()->from('/accounting/journal-entries')->put("/accounting/journal-entries/{$open->id}", [
+            'date' => '2026-08-10',
+            'reference' => 'rev-'.$settlement->reference,
+            'revision' => 1,
+            'lines' => $this->webLines($this->expense, $this->bank, '100.00'),
+        ])->assertSessionHasErrors('reference');
+
+        $this->assertSame(
+            JournalEntryEditState::VatLocked,
+            app(JournalEntryEditStateService::class)->stateFor($locked->fresh()),
+        );
+    }
+
+    public function test_a_plain_reversal_draft_keeps_its_reference_when_edited(): void
+    {
+        $this->organization->update(['posted_entry_edit_mode' => PostedEntryEditMode::Strict]);
+        $entry = $this->postSimpleEntry(reference: 'JE-REV-ME');
+        $draft = app(LedgerService::class)->reverseEntry($entry);
+
+        $this->actAsOrg()->put("/accounting/journal-entries/{$draft->id}", [
+            'date' => '2026-08-12',
+            'reference' => 'REV-JE-REV-ME',
+            'description' => 'Reversal, date fixed',
+            'lines' => $this->webLines($this->bank, $this->expense, '100.00'),
+        ])->assertRedirect('/accounting/journal-entries')->assertSessionHasNoErrors();
+    }
+
+    public function test_a_posted_entry_is_not_amended_without_a_revision(): void
+    {
+        $entry = $this->postSimpleEntry();
+
+        $this->actAsOrg()->from('/accounting/journal-entries')->put("/accounting/journal-entries/{$entry->id}", [
+            'date' => '2026-08-10',
+            'reference' => 'JE-1',
+            'lines' => $this->webLines($this->otherExpense, $this->bank, '100.00'),
+        ])->assertSessionHas('error');
+
+        $this->assertSame(1, $entry->fresh()->revision);
+    }
+
+    public function test_an_overlong_vat_figure_is_a_validation_error(): void
+    {
+        $rate = VatRate::factory()->for($this->organization)->create();
+        $entry = $this->postSimpleEntry();
+
+        $this->actAsOrg()->from('/accounting/journal-entries')->put("/accounting/journal-entries/{$entry->id}", [
+            'date' => '2026-08-10',
+            'reference' => 'JE-1',
+            'revision' => 1,
+            'lines' => [
+                ['account_id' => $this->expense->id, 'debit' => '100.00', 'credit' => '0', 'vat_type' => 'input', 'vat_rate_id' => $rate->uuid, 'vat_amount' => '7.49', 'vat_figure' => '123456789'],
+                ['account_id' => $this->bank->id, 'debit' => '0', 'credit' => '100.00'],
+            ],
+        ])->assertSessionHasErrors('lines.0.vat_figure');
     }
 
     public function test_strict_mode_still_refuses_amending(): void

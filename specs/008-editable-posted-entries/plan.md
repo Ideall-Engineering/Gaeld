@@ -208,6 +208,12 @@ Header: `Idempotency-Key` (Pflicht für `PATCH` und `DELETE` verbuchter Buchunge
 | Stille Änderung bereits weitergegebener Zahlen | Verlauf und Änderungsübersicht (Etappe 2) |
 | Abstand zum Original | Neue Logik in eigenen Klassen, Standard `strict`, Kern nur mit Weichen |
 
+## Bekannte Grenzen (nach Review)
+
+* **Gleichzeitiges Ändern und Abrechnen.** `PostVatSettlementAction` rechnet den MWST-Bericht ausserhalb einer Sperre. Eine Änderung, die genau zwischen Bericht und Abrechnung gespeichert wird, wäre in der Abrechnung nicht enthalten. Bei einer Organisation mit einer buchenden Person praktisch ausgeschlossen; sauber lösen liesse es sich mit einer gemeinsamen Sperre pro Organisation in Ändern, Löschen, Abrechnung und Jahresabschluss.
+* **Ereignisse gelöschter Buchungen.** `journal_events` löscht seine Zeilen mit der Buchung (bestehender Fremdschlüssel). Massgeblich für die Nachvollziehbarkeit ist die Versionstabelle, die erhalten bleibt.
+* **Systemreferenzen.** Referenzen mit `REV-`, `VAT-SETTLEMENT-`, `OPENING-` und `DISP-` lassen sich über Formular und API nicht mehr selbst vergeben (`NotSystemReference`), weil eine handgemachte `REV-VAT-SETTLEMENT-…` sonst ein abgerechnetes Quartal entsperren würde. Ältere, nur über die Referenz verknüpfte Stornos sperren ihr Original.
+
 ## Complexity Tracking
 
 | Abweichung | Begründung |

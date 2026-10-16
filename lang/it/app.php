@@ -2795,4 +2795,5 @@ return [
     'correction_date_suggested' => 'La proposta è la prima data fuori da un periodo bloccato.',
     'journal_line_vat' => 'IVA',
     'journal_line_vat_figure' => 'Cifra',
+    'journal_reference_reserved_prefix' => 'I riferimenti che iniziano con :prefix sono assegnati da Gäld. Sceglierne un altro.',
 ];
