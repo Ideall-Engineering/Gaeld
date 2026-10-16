@@ -7,10 +7,12 @@ use App\Domains\Accounting\Enums\JournalEntryEditState;
 use App\Domains\Accounting\Enums\PostedEntryEditMode;
 use App\Domains\Accounting\Exceptions\JournalEntryNotEditableException;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalCorrection;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Organizations\Models\Organization;
+use Illuminate\Support\Carbon;
 
 /**
  * Decides whether a posted journal entry may be amended or deleted in place.
@@ -125,6 +127,34 @@ class JournalEntryEditStateService
     }
 
     /**
+     * The first date on or after the given one that no settled VAT period or
+     * closed fiscal year covers: where a correction of a locked entry can be
+     * booked without reopening anything.
+     */
+    public function firstOpenDateOnOrAfter(string $organizationId, string $date): string
+    {
+        $candidate = Carbon::parse($date)->startOfDay();
+
+        // Each step jumps past one locked period, so a handful of steps
+        // covers any realistic run of settled quarters and closed years.
+        for ($step = 0; $step < 24; $step++) {
+            $state = $this->periodStateFor($organizationId, $candidate->toDateString());
+
+            if ($state === null) {
+                return $candidate->toDateString();
+            }
+
+            $lockEnd = $state === JournalEntryEditState::VatLocked
+                ? $this->vatLockEnd($organizationId, $candidate->toDateString())
+                : $this->fiscalYearEnd($organizationId, $candidate->toDateString());
+
+            $candidate = ($lockEnd ?? $candidate)->copy()->addDay();
+        }
+
+        return $candidate->toDateString();
+    }
+
+    /**
      * Whether any line of the given set books onto an account that is
      * linked to a bank account, so changing its amount would make the
      * ledger disagree with the bank statement.
@@ -184,6 +214,30 @@ class JournalEntryEditStateService
         }
 
         return null;
+    }
+
+    private function vatLockEnd(string $organizationId, string $date): ?Carbon
+    {
+        $end = JournalEntry::withoutGlobalScopes()
+            ->where('organization_id', $organizationId)
+            ->where('type', 'vat_settlement')
+            ->where('is_posted', true)
+            ->whereDate('vat_period_start', '<=', $date)
+            ->whereDate('vat_period_end', '>=', $date)
+            ->max('vat_period_end');
+
+        return $end === null ? null : Carbon::parse($end);
+    }
+
+    private function fiscalYearEnd(string $organizationId, string $date): Carbon
+    {
+        $fiscalYear = FiscalYear::query()
+            ->withoutGlobalScopes()
+            ->where('organization_id', $organizationId)
+            ->forDate($date)
+            ->first();
+
+        return $fiscalYear?->end_date?->copy() ?? Carbon::parse($date)->endOfYear();
     }
 
     private function isCorrectionBound(JournalEntry $entry): bool

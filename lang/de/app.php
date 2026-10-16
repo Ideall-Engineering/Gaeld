@@ -2769,7 +2769,7 @@ return [
     'journal_history_reason' => 'Begründung',
     'journal_history_no_reason' => 'Keine Begründung angegeben',
     'journal_history_unknown_user' => 'unbekannt',
-    'journal_history_changes' => 'Geändert gegenüber diesem Stand',
+    'journal_history_changes' => 'Vorher und nachher',
     'journal_history_no_changes' => 'Keine Unterschiede',
     'journal_history_lines' => 'Zeilen',
     'journal_history_show_lines' => 'Zeilen anzeigen',

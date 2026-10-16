@@ -13,11 +13,15 @@ use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Enums\JournalCorrectionSource;
+use App\Domains\Accounting\Enums\PostedEntryEditMode;
+use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Exceptions\BankAmountChangeUnacknowledgedException;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalCorrection;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Models\JournalEntryRevision;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Accounting\Requests\StoreJournalEntryRequest;
 use App\Domains\Accounting\Services\JournalEntryEditStateService;
 use App\Domains\Accounting\Services\LedgerQueryService;
@@ -92,6 +96,23 @@ class AccountingController extends Controller
             $query->whereHas('lines', fn ($q) => $q->where('account_id', $accountId));
         }
 
+        // Hides both halves of every reversal pair (storno and the entry it
+        // reverses) and the original and storno of each posted guided
+        // correction, which leaves the books as they read after the fix.
+        if ($request->input('filter.corrections') === 'hide') {
+            $query->whereNull('reversal_of_entry_id')
+                ->whereNotExists(fn ($q) => $q->selectRaw('1')
+                    ->from('journal_entries as reversals')
+                    ->whereColumn('reversals.reversal_of_entry_id', 'journal_entries.id')
+                    ->where('reversals.is_posted', true))
+                ->whereNotExists(fn ($q) => $q->selectRaw('1')
+                    ->from('journal_corrections')
+                    ->where('journal_corrections.status', 'posted')
+                    ->where(fn ($inner) => $inner
+                        ->whereColumn('journal_corrections.original_journal_entry_id', 'journal_entries.id')
+                        ->orWhereColumn('journal_corrections.reversal_journal_entry_id', 'journal_entries.id')));
+        }
+
         $entries = QueryBuilder::for($query, $request)
             ->allowedSorts(['date', 'reference', 'description', 'is_posted'], 'date', 'desc')
             ->allowedFilters(['is_posted'])
@@ -108,6 +129,8 @@ class AccountingController extends Controller
                     ->orWhereIn('reversal_journal_entry_id', $ids)
                     ->orWhereIn('replacement_journal_entry_id', $ids);
             })
+            ->latest()
+            ->orderByDesc('id')
             ->get(['id', 'status', 'original_journal_entry_id', 'reversal_journal_entry_id', 'replacement_journal_entry_id']);
 
         $user = $request->user();
@@ -149,6 +172,10 @@ class AccountingController extends Controller
         return Inertia::render('Accounting/JournalEntries', [
             'entries' => $entries,
             'accounts' => $accounts,
+            ...$this->journalFormProps($editState, (string) app(CurrentOrganization::class)->id()),
+            'recentChangesCount' => JournalEntryRevision::query()
+                ->where('created_at', '>=', now()->subDays(30))
+                ->count(),
             'query' => [
                 'sort' => $request->input('sort', 'date'),
                 'direction' => $request->input('direction', 'desc'),
@@ -156,21 +183,97 @@ class AccountingController extends Controller
                 'filter' => [
                     'is_posted' => $request->input('filter.is_posted', ''),
                     'account_id' => $request->input('filter.account_id', ''),
+                    'corrections' => $request->input('filter.corrections', ''),
                 ],
             ],
             'can' => [
                 'create' => $user?->can('create', JournalEntry::class) ?? false,
                 'edit' => $user?->hasPermissionTo(Permission::AccountingEdit) ?? false,
                 'delete' => $user?->hasPermissionTo(Permission::AccountingDelete) ?? false,
+                'amend' => $mayAmend,
             ],
         ]);
+    }
+
+    /**
+     * What the journal entry form needs beyond the accounts: the VAT rates a
+     * line can carry and whether posted entries are changeable at all.
+     *
+     * @return array<string, mixed>
+     */
+    private function journalFormProps(JournalEntryEditStateService $editState, string $organizationId): array
+    {
+        return [
+            'vatRates' => VatRate::query()
+                ->orderByDesc('is_active')
+                ->orderBy('code')
+                ->get(['uuid', 'code', 'name', 'rate', 'is_active'])
+                ->map(fn (VatRate $rate) => [
+                    'uuid' => $rate->uuid,
+                    'label' => trim("{$rate->code} {$rate->name}").' ('.rtrim(rtrim((string) $rate->rate, '0'), '.').' %)',
+                    'rate' => (string) $rate->rate,
+                    'is_active' => $rate->is_active,
+                ]),
+            'vatTypes' => array_map(fn (VatEntryType $type) => [
+                'value' => $type->value,
+                'label' => $type->label(),
+            ], VatEntryType::cases()),
+            'postedEntryEditMode' => $editState->isFlexible($organizationId)
+                ? PostedEntryEditMode::Flexible->value
+                : PostedEntryEditMode::Strict->value,
+        ];
+    }
+
+    /**
+     * A revision as the history views show it: who replaced the state, when,
+     * from where and why, plus the state itself with account labels.
+     *
+     * @return array<string, mixed>
+     */
+    private function presentRevision(JournalEntryRevision $revision): array
+    {
+        $snapshot = $revision->snapshot;
+        $accountIds = array_values(array_unique(array_map(
+            fn (array $line) => $line['account_id'] ?? null,
+            $snapshot['lines'] ?? [],
+        )));
+        $accounts = Account::query()->whereIn('id', array_filter($accountIds))->get(['id', 'code', 'name'])->keyBy('id');
+
+        return [
+            'id' => $revision->id,
+            'journal_entry_id' => $revision->journal_entry_id,
+            'revision' => $revision->revision,
+            'kind' => $revision->kind->value,
+            'reference' => $revision->reference,
+            'reason' => $revision->reason,
+            'source' => $revision->source->value,
+            'user' => $revision->user?->name,
+            'recorded_at' => $revision->created_at->toIso8601String(),
+            'entry' => [
+                'date' => isset($snapshot['entry']['date']) ? substr((string) $snapshot['entry']['date'], 0, 10) : null,
+                'reference' => $snapshot['entry']['reference'] ?? null,
+                'description' => $snapshot['entry']['description'] ?? null,
+            ],
+            'lines' => array_map(function (array $line) use ($accounts) {
+                $account = $accounts->get($line['account_id'] ?? null);
+
+                return [
+                    'account' => $account === null ? null : ['code' => $account->code, 'name' => $account->display_name],
+                    'debit' => (string) ($line['debit'] ?? '0'),
+                    'credit' => (string) ($line['credit'] ?? '0'),
+                    'description' => $line['description'] ?? null,
+                    'vat_type' => $line['vat_type'] ?? null,
+                    'vat_amount' => $line['vat_amount'] ?? null,
+                ];
+            }, $snapshot['lines'] ?? []),
+        ];
     }
 
     /**
      * The in-place edit state the journal list and detail page show for a
      * posted entry: whether it can be amended, and if not, why.
      *
-     * @return array{edit_state: string, edit_state_label: string, can_amend: bool, suggests_correction: bool}
+     * @return array{edit_state: string, edit_state_label: string, can_amend: bool, suggests_correction: bool, suggested_correction_date: string|null}
      */
     private function editStateFor(JournalEntry $entry, JournalEntryEditStateService $editState, bool $mayAmend): array
     {
@@ -181,6 +284,11 @@ class AccountingController extends Controller
             'edit_state_label' => $state->label(),
             'can_amend' => $mayAmend && $state->isAmendable(),
             'suggests_correction' => $state->suggestsCorrection(),
+            // Where a guided correction of this entry can land without
+            // touching a settled VAT period or a closed year.
+            'suggested_correction_date' => $entry->is_posted
+                ? $editState->firstOpenDateOnOrAfter($entry->organization_id, $entry->date->toDateString())
+                : null,
         ];
     }
 
@@ -224,6 +332,37 @@ class AccountingController extends Controller
         ];
     }
 
+    /**
+     * Posted entries changed or deleted in the last 30 days, newest first,
+     * so changes to figures that may already have been passed on are easy to
+     * review.
+     */
+    public function journalEntryChanges(Request $request): Response
+    {
+        $this->authorize('viewAny', JournalEntryRevision::class);
+
+        $revisions = JournalEntryRevision::query()
+            ->with('user:id,name')
+            ->where('created_at', '>=', now()->subDays(30))
+            ->orderByDesc('created_at')
+            ->paginate(config('accounting.pagination.default'))
+            ->withQueryString();
+
+        $existing = JournalEntry::query()
+            ->whereIn('id', $revisions->pluck('journal_entry_id'))
+            ->pluck('id')
+            ->flip();
+
+        $revisions->through(fn (JournalEntryRevision $revision) => [
+            ...$this->presentRevision($revision),
+            'entry_exists' => $existing->has($revision->journal_entry_id),
+        ]);
+
+        return Inertia::render('Accounting/JournalEntryChanges', [
+            'revisions' => $revisions,
+        ]);
+    }
+
     public function showJournalEntry(Request $request, JournalEntry $journalEntry): Response
     {
         $this->authorize('view', $journalEntry);
@@ -235,6 +374,10 @@ class AccountingController extends Controller
             ->orWhere('replacement_journal_entry_id', $journalEntry->id)
             ->orWhere('reversal_journal_entry_id', $journalEntry->id)
             ->with(['original.lines.account', 'reversal.lines.account', 'replacement.lines.account'])
+            // A replacement corrected again is both the replacement of one
+            // correction and the original of the next; the newer one wins.
+            ->latest()
+            ->orderByDesc('id')
             ->first();
 
         $correctionRole = match ($journalEntry->id) {
@@ -256,15 +399,26 @@ class AccountingController extends Controller
             ]);
 
         $user = $request->user();
+        $editState = app(JournalEntryEditStateService::class);
+        $mayAmend = $user?->hasPermissionTo(Permission::AccountingAmendPosted) ?? false;
 
         return Inertia::render('Accounting/JournalEntryShow', [
-            'entry' => $journalEntry,
+            'entry' => [
+                ...$journalEntry->toArray(),
+                ...$this->editStateFor($journalEntry, $editState, $mayAmend),
+            ],
             'correction' => $correction,
             'correctionRole' => $correctionRole,
             'accounts' => $accounts,
+            ...$this->journalFormProps($editState, $journalEntry->organization_id),
+            'revisions' => $journalEntry->revisions()
+                ->with('user:id,name')
+                ->get()
+                ->map(fn (JournalEntryRevision $revision) => $this->presentRevision($revision)),
             'can' => [
                 'correct' => $user?->can('correct', $journalEntry) ?? false,
                 'reverse' => $user?->can('reverse', $journalEntry) ?? false,
+                'amend' => $mayAmend,
             ],
         ]);
     }
@@ -326,21 +480,10 @@ class AccountingController extends Controller
             'lines.*.debit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
             'lines.*.credit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
             'lines.*.description' => ['nullable', 'string', 'max:500'],
+            ...StoreJournalEntryRequest::lineVatRules($orgId),
         ]);
 
-        $lines = array_map(fn (array $line) => new JournalLineData(
-            accountId: (string) $line['account_id'],
-            debit: (string) ($line['debit'] ?? '0'),
-            credit: (string) ($line['credit'] ?? '0'),
-            description: $line['description'] ?? null,
-        ), $validated['lines']);
-
-        $entryData = new JournalEntryData(
-            date: $validated['date'],
-            reference: $validated['reference'] ?? null,
-            description: $validated['description'] ?? null,
-            lines: $lines,
-        );
+        $entryData = $this->journalEntryDataFrom($validated);
 
         try {
             $updateJournalDraft->execute($journalCorrection->replacement, $entryData);
@@ -458,8 +601,14 @@ class AccountingController extends Controller
             return $this->backWithError($e);
         }
 
-        return redirect()->route('accounting.journal')
-            ->with('success', __($journalEntry->is_posted ? 'app.journal_entry_amended' : 'app.journal_entry_updated'));
+        // The detail page asks to come back to itself; only that one path
+        // is accepted, so the parameter cannot become an open redirect.
+        $returnTo = (string) $request->input('redirect_to', '');
+        $target = $returnTo === "/accounting/journal-entries/{$journalEntry->id}"
+            ? redirect($returnTo)
+            : redirect()->route('accounting.journal');
+
+        return $target->with('success', __($journalEntry->is_posted ? 'app.journal_entry_amended' : 'app.journal_entry_updated'));
     }
 
     /**

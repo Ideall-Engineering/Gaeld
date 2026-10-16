@@ -2773,7 +2773,7 @@ return [
     'journal_history_reason' => 'Motivo',
     'journal_history_no_reason' => 'Nessun motivo indicato',
     'journal_history_unknown_user' => 'sconosciuto',
-    'journal_history_changes' => 'Modificato rispetto a questo stato',
+    'journal_history_changes' => 'Prima e dopo',
     'journal_history_no_changes' => 'Nessuna differenza',
     'journal_history_lines' => 'Righe',
     'journal_history_show_lines' => 'Mostra righe',

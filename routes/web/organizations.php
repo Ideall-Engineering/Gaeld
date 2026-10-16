@@ -25,6 +25,7 @@ Route::post('/settings/fiscal-year-change-requests/{fiscalYearChangeRequest}/app
 Route::post('/settings/fiscal-year-change-requests/{fiscalYearChangeRequest}/reject', [OrganizationSettingsController::class, 'rejectFiscalYearChange'])->name('settings.fiscal-year-change.reject');
 Route::post('/settings/fiscal-year-change-requests/{fiscalYearChangeRequest}/apply', [OrganizationSettingsController::class, 'applyFiscalYearChange'])->name('settings.fiscal-year-change.apply');
 Route::put('/settings/invoice', [OrganizationSettingsController::class, 'updateInvoice'])->name('settings.invoice');
+Route::put('/settings/posted-entry-edit-mode', [OrganizationSettingsController::class, 'updatePostedEntryEditMode'])->name('settings.posted-entry-edit-mode');
 Route::post('/settings/invoice/logo', [OrganizationSettingsController::class, 'uploadLogo'])->name('settings.logo.upload');
 Route::delete('/settings/invoice/logo', [OrganizationSettingsController::class, 'deleteLogo'])->name('settings.logo.delete');
 Route::get('/settings/logo', [OrganizationSettingsController::class, 'serveLogo'])->name('settings.logo');

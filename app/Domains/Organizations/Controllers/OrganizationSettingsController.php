@@ -2,6 +2,7 @@
 
 namespace App\Domains\Organizations\Controllers;
 
+use App\Domains\Accounting\Enums\PostedEntryEditMode;
 use App\Domains\Accounting\Queries\VatRateQuery;
 use App\Domains\Expenses\Controllers\ExpenseCategoryController;
 use App\Domains\Expenses\Queries\ExpenseCategoryQuery;
@@ -30,6 +31,7 @@ use App\Support\Services\FileUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -223,6 +225,26 @@ class OrganizationSettingsController extends Controller
 
         return redirect()->route('settings')
             ->with('success', __('app.modules_updated'));
+    }
+
+    /**
+     * Switch posted journal entries between final and changeable while their
+     * period is open. The switch itself lands in the organization's audit
+     * log; entries changed meanwhile keep their revisions either way.
+     */
+    public function updatePostedEntryEditMode(Request $request, CurrentOrganization $currentOrg): RedirectResponse
+    {
+        $organization = $currentOrg->get();
+        $this->authorize('update', $organization);
+
+        $validated = $request->validate([
+            'posted_entry_edit_mode' => ['required', Rule::enum(PostedEntryEditMode::class)],
+        ]);
+
+        $organization->update(['posted_entry_edit_mode' => $validated['posted_entry_edit_mode']]);
+
+        return redirect()->route('settings')
+            ->with('success', __('app.posted_entry_edit_mode_updated'));
     }
 
     public function exportData(CurrentOrganization $currentOrg): RedirectResponse

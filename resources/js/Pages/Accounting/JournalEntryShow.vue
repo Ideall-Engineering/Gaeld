@@ -11,9 +11,11 @@ import Badge from '@/Components/UI/Badge.vue'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import ConfirmDialog from '@/Components/UI/ConfirmDialog.vue'
 import FormInput from '@/Components/UI/FormInput.vue'
-import FormSelect from '@/Components/UI/FormSelect.vue'
 import JournalCorrectionDialog from '@/Components/Accounting/JournalCorrectionDialog.vue'
-import { Plus, Replace, RotateCcw, Trash2 } from 'lucide-vue-next'
+import JournalEntryFormModal from '@/Components/Accounting/JournalEntryFormModal.vue'
+import JournalLinesEditor, { lineFromEntry, serializeLines } from '@/Components/Accounting/JournalLinesEditor.vue'
+import JournalEntryHistory from '@/Components/Accounting/JournalEntryHistory.vue'
+import { Lock, Pencil, Replace, RotateCcw, Trash2 } from 'lucide-vue-next'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 
@@ -22,7 +24,11 @@ const props = defineProps({
   correction: { type: Object, default: null },
   correctionRole: { type: String, default: null },
   accounts: { type: Array, default: () => [] },
-  can: { type: Object, default: () => ({ correct: false, reverse: false }) },
+  vatRates: { type: Array, default: () => [] },
+  vatTypes: { type: Array, default: () => [] },
+  postedEntryEditMode: { type: String, default: 'strict' },
+  revisions: { type: Array, default: () => [] },
+  can: { type: Object, default: () => ({ correct: false, reverse: false, amend: false }) },
 })
 
 const { t } = useTranslations()
@@ -31,18 +37,36 @@ const { formatCurrency, formatDate } = useFormatters()
 const totalDebit = computed(() => props.entry.lines?.reduce((total, line) => total + Number(line.debit || 0), 0) || 0)
 const totalCredit = computed(() => props.entry.lines?.reduce((total, line) => total + Number(line.credit || 0), 0) || 0)
 
-const accountOptions = computed(() => [
-  { value: '', label: t('select_placeholder') },
-  ...props.accounts.map(a => ({ value: String(a.id), label: `${a.code} — ${a.name}` })),
-])
+const isFlexible = computed(() => props.postedEntryEditMode === 'flexible')
+const showsLockHint = computed(
+  () => isFlexible.value && props.entry.is_posted && !props.entry.can_amend && props.entry.edit_state !== 'open',
+)
+const vatTypeLabels = computed(() => Object.fromEntries(props.vatTypes.map(type => [type.value, type.label])))
+
+// Amend or delete a posted entry in place
+const editing = ref(false)
+const confirmingDelete = ref(false)
+
+function doDelete() {
+  router.delete(`/accounting/journal-entries/${props.entry.id}`, {
+    data: { revision: props.entry.revision },
+    onFinish: () => { confirmingDelete.value = false },
+  })
+}
 
 const isCorrectedOriginal = computed(() => props.correctionRole === 'original')
 const isLockedReversal = computed(() => props.correctionRole === 'reversal')
 const isOpenReplacementDraft = computed(
   () => props.correctionRole === 'replacement' && props.correction?.status === 'draft',
 )
+// A posted replacement can be corrected again; its own correction then
+// starts from the replacement as the new original.
+const isPostedReplacement = computed(
+  () => props.correctionRole === 'replacement' && props.correction?.status === 'posted',
+)
 const canStartCorrection = computed(
-  () => props.can?.correct && !props.correctionRole && !props.entry.reversal_of_entry_id && props.entry.is_posted,
+  () => props.can?.correct && (!props.correctionRole || isPostedReplacement.value)
+    && !props.entry.reversal_of_entry_id && props.entry.is_posted && !props.entry.can_amend,
 )
 const canReverse = computed(
   () => props.can?.reverse && !props.correctionRole && !props.entry.reversal_of_entry_id && props.entry.is_posted,
@@ -56,41 +80,18 @@ const replacementForm = useForm({
   date: props.entry.date ? String(props.entry.date).split('T')[0].split(' ')[0] : '',
   reference: props.entry.reference || '',
   description: props.entry.description || '',
-  lines: (props.entry.lines || []).map(line => ({
-    account_id: String(line.account_id),
-    debit: String(line.debit || '0.00'),
-    credit: String(line.credit || '0.00'),
-    description: line.description || '',
-  })),
+  lines: (props.entry.lines || []).map(lineFromEntry),
 })
 
-function addReplacementLine() {
-  replacementForm.lines.push({ account_id: '', debit: '0.00', credit: '0.00', description: '' })
-}
-
-function removeReplacementLine(index) {
-  if (replacementForm.lines.length <= 2) return
-  replacementForm.lines.splice(index, 1)
-}
-
-function replacementLineError(index, field) {
-  return replacementForm.errors[`lines.${index}.${field}`]
-}
-
-const replacementTotalDebit = computed(() =>
-  replacementForm.lines.reduce((sum, l) => sum + (parseFloat(l.debit) || 0), 0)
-)
-const replacementTotalCredit = computed(() =>
-  replacementForm.lines.reduce((sum, l) => sum + (parseFloat(l.credit) || 0), 0)
-)
-const replacementBalanced = computed(
-  () => +(replacementTotalDebit.value - replacementTotalCredit.value).toFixed(2) === 0 && replacementTotalDebit.value > 0,
-)
+const replacementEditor = ref(null)
+const replacementBalanced = computed(() => !!replacementEditor.value?.isBalanced)
 
 function saveReplacement() {
-  replacementForm.put(`/accounting/journal-corrections/${props.correction.id}/replacement`, {
-    preserveScroll: true,
-  })
+  replacementForm
+    .transform(data => ({ ...data, lines: serializeLines(data.lines) }))
+    .put(`/accounting/journal-corrections/${props.correction.id}/replacement`, {
+      preserveScroll: true,
+    })
 }
 
 // Post / cancel the correction as a whole
@@ -176,6 +177,17 @@ const confirmingReverse = ref(false)
               <Badge :variant="entry.is_posted ? 'success' : 'warning'">
                 {{ entry.is_posted ? t('posted') : t('draft') }}
               </Badge>
+              <Badge v-if="entry.revision > 1" variant="outline">
+                {{ t('journal_entry_revision_badge', { revision: entry.revision }) }}
+              </Badge>
+              <Button v-if="entry.can_amend" size="sm" variant="outline" @click="editing = true">
+                <Pencil class="mr-1 h-4 w-4" />
+                {{ t('edit') }}
+              </Button>
+              <Button v-if="entry.can_amend" size="sm" variant="outline" @click="confirmingDelete = true">
+                <Trash2 class="mr-1 h-4 w-4 text-[hsl(var(--destructive))]" />
+                {{ t('delete') }}
+              </Button>
               <Button v-if="canStartCorrection" size="sm" variant="outline" @click="correctingEntry = entry">
                 <Replace class="mr-1 h-4 w-4" />
                 {{ t('correct') }}
@@ -188,6 +200,23 @@ const confirmingReverse = ref(false)
           </div>
         </CardHeader>
         <CardContent>
+          <p
+            v-if="showsLockHint"
+            class="mb-4 flex items-start gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] p-3 text-sm"
+          >
+            <Lock class="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]" />
+            <span>
+              {{ t('journal_entry_locked_hint', { reason: entry.edit_state_label }) }}
+              <button
+                v-if="canStartCorrection && entry.suggests_correction"
+                type="button"
+                class="ml-1 text-[hsl(var(--primary))] hover:underline"
+                @click="correctingEntry = entry"
+              >
+                {{ t('journal_entry_correct_instead') }}
+              </button>
+            </span>
+          </p>
           <dl class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
             <div>
               <dt class="text-[hsl(var(--muted-foreground))]">{{ t('date') }}</dt>
@@ -234,99 +263,15 @@ const confirmingReverse = ref(false)
                 />
               </div>
 
-              <div>
-                <div class="mb-2 flex items-center justify-between">
-                  <label class="text-sm font-medium">{{ t('entry_lines') }}</label>
-                  <Button type="button" size="sm" variant="outline" @click="addReplacementLine">
-                    <Plus class="mr-1 h-3 w-3" /> {{ t('add_line') }}
-                  </Button>
-                </div>
-                <div class="space-y-2">
-                  <div
-                    v-for="(line, index) in replacementForm.lines"
-                    :key="index"
-                    class="grid grid-cols-12 items-start gap-2"
-                  >
-                    <div class="col-span-12 sm:col-span-5">
-                      <FormSelect
-                        :id="`replacement_account_${index}`"
-                        v-model="line.account_id"
-                        :label="index === 0 ? t('account') : ''"
-                        :options="accountOptions"
-                        :error="replacementLineError(index, 'account_id')"
-                        required
-                      />
-                    </div>
-                    <div class="col-span-5 sm:col-span-2">
-                      <FormInput
-                        :id="`replacement_debit_${index}`"
-                        v-model="line.debit"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        :label="index === 0 ? t('debit') : ''"
-                        :error="replacementLineError(index, 'debit')"
-                      />
-                    </div>
-                    <div class="col-span-5 sm:col-span-2">
-                      <FormInput
-                        :id="`replacement_credit_${index}`"
-                        v-model="line.credit"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        :label="index === 0 ? t('credit') : ''"
-                        :error="replacementLineError(index, 'credit')"
-                      />
-                    </div>
-                    <div class="col-span-10 sm:col-span-2">
-                      <FormInput
-                        :id="`replacement_line_desc_${index}`"
-                        v-model="line.description"
-                        :label="index === 0 ? t('description') : ''"
-                        :error="replacementLineError(index, 'description')"
-                      />
-                    </div>
-                    <div class="col-span-2 sm:col-span-1 flex items-end pb-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        :disabled="replacementForm.lines.length <= 2"
-                        @click="removeReplacementLine(index)"
-                      >
-                        <Trash2 class="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] p-4">
-                <div class="grid grid-cols-3 gap-2 text-sm">
-                  <div>
-                    <div class="text-[hsl(var(--muted-foreground))]">{{ t('total_debit') }}</div>
-                    <div class="text-base font-semibold">{{ formatCurrency(replacementTotalDebit) }}</div>
-                  </div>
-                  <div>
-                    <div class="text-[hsl(var(--muted-foreground))]">{{ t('total_credit') }}</div>
-                    <div class="text-base font-semibold">{{ formatCurrency(replacementTotalCredit) }}</div>
-                  </div>
-                  <div>
-                    <div class="text-[hsl(var(--muted-foreground))]">{{ t('difference') }}</div>
-                    <div
-                      class="text-base font-semibold"
-                      :class="replacementBalanced ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--destructive))]'"
-                    >
-                      {{ formatCurrency(+(replacementTotalDebit - replacementTotalCredit).toFixed(2)) }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="replacementForm.errors.lines" class="text-xs text-[hsl(var(--destructive))]">
-                {{ replacementForm.errors.lines }}
-              </div>
+              <JournalLinesEditor
+                ref="replacementEditor"
+                :lines="replacementForm.lines"
+                :accounts="accounts"
+                :vat-rates="vatRates"
+                :vat-types="vatTypes"
+                :errors="replacementForm.errors"
+                id-prefix="replacement"
+              />
 
               <div class="flex flex-wrap justify-end gap-2 pt-2">
                 <Button type="button" variant="destructive" :disabled="replacementForm.processing" @click="confirmingCancelCorrection = true">
@@ -354,6 +299,7 @@ const confirmingReverse = ref(false)
                 <tr class="border-b border-[hsl(var(--border))] text-left text-[hsl(var(--muted-foreground))]">
                   <th class="pb-2 font-medium">{{ t('account') }}</th>
                   <th class="pb-2 font-medium">{{ t('description') }}</th>
+                  <th class="pb-2 font-medium">{{ t('journal_line_vat') }}</th>
                   <th class="pb-2 text-right font-medium">{{ t('debit') }}</th>
                   <th class="pb-2 text-right font-medium">{{ t('credit') }}</th>
                 </tr>
@@ -362,13 +308,17 @@ const confirmingReverse = ref(false)
                 <tr v-for="line in entry.lines" :key="line.id">
                   <td class="py-2">{{ line.account?.code }} — {{ line.account?.name }}</td>
                   <td class="py-2">{{ line.description || '—' }}</td>
+                  <td class="py-2">
+                    <span v-if="line.vat_type">{{ vatTypeLabels[line.vat_type] || line.vat_type }} · {{ formatCurrency(line.vat_amount) }}</span>
+                    <span v-else class="text-[hsl(var(--muted-foreground))]">—</span>
+                  </td>
                   <td class="py-2 text-right font-mono">{{ formatCurrency(line.debit) }}</td>
                   <td class="py-2 text-right font-mono">{{ formatCurrency(line.credit) }}</td>
                 </tr>
               </tbody>
               <tfoot>
                 <tr class="border-t-2 border-[hsl(var(--border))] font-bold">
-                  <td class="pt-3" colspan="2">{{ t('total') }}</td>
+                  <td class="pt-3" colspan="3">{{ t('total') }}</td>
                   <td class="pt-3 text-right font-mono">{{ formatCurrency(totalDebit) }}</td>
                   <td class="pt-3 text-right font-mono">{{ formatCurrency(totalCredit) }}</td>
                 </tr>
@@ -378,12 +328,38 @@ const confirmingReverse = ref(false)
         </CardContent>
       </Card>
 
+      <JournalEntryHistory
+        v-if="entry.is_posted && (revisions.length > 0 || isFlexible)"
+        :entry="entry"
+        :revisions="revisions"
+        :vat-types="vatTypes"
+      />
+
       <div>
         <Link href="/accounting/journal-entries">
           <Button variant="outline">{{ t('back') }}</Button>
         </Link>
       </div>
     </div>
+
+    <JournalEntryFormModal
+      :open="editing"
+      :entry="editing ? entry : null"
+      :accounts="accounts"
+      :vat-rates="vatRates"
+      :vat-types="vatTypes"
+      :redirect-to="`/accounting/journal-entries/${entry.id}`"
+      @close="editing = false"
+    />
+
+    <ConfirmDialog
+      :open="confirmingDelete"
+      :title="t('delete_journal_entry')"
+      :message="t('confirm_delete_posted_journal_entry')"
+      variant="destructive"
+      @confirm="doDelete"
+      @cancel="confirmingDelete = false"
+    />
 
     <JournalCorrectionDialog :entry="correctingEntry" @close="correctingEntry = null" />
 

@@ -1,4 +1,5 @@
 <script setup>
+import { computed, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import Modal from '@/Components/UI/Modal.vue'
 import Button from '@/Components/UI/Button.vue'
@@ -14,10 +15,20 @@ const emit = defineEmits(['close'])
 
 const { t } = useTranslations()
 
+const today = () => new Date().toISOString().split('T')[0]
+
 const form = useForm({
   reason: '',
-  correction_date: new Date().toISOString().split('T')[0],
+  correction_date: today(),
 })
+
+// The server suggests the first date outside a settled VAT period or a
+// closed year, so the correction does not need a period to be reopened.
+const suggestedDate = computed(() => props.entry?.suggested_correction_date || null)
+
+watch(() => props.entry, entry => {
+  if (entry) form.correction_date = suggestedDate.value || today()
+}, { immediate: true })
 
 function submit() {
   form.post(`/accounting/journal-entries/${props.entry.id}/corrections`, {
@@ -56,6 +67,12 @@ function close() {
           :error="form.errors.correction_date"
           required
         />
+        <p
+          v-if="suggestedDate && form.correction_date === suggestedDate"
+          class="-mt-2 text-xs text-[hsl(var(--muted-foreground))]"
+        >
+          {{ t('correction_date_suggested') }}
+        </p>
 
         <div class="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" @click="close">{{ t('cancel') }}</Button>

@@ -2831,7 +2831,7 @@ return [
     'journal_history_reason' => 'Reason',
     'journal_history_no_reason' => 'No reason given',
     'journal_history_unknown_user' => 'unknown',
-    'journal_history_changes' => 'Changed compared to this state',
+    'journal_history_changes' => 'Before and after',
     'journal_history_no_changes' => 'No differences',
     'journal_history_lines' => 'Lines',
     'journal_history_show_lines' => 'Show lines',

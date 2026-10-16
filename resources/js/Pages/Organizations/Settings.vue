@@ -215,6 +215,15 @@ function submitModules() {
   modulesForm.put('/settings/modules', { preserveScroll: true })
 }
 
+// --- Posted journal entries: final or changeable while the period is open ---
+const postedEntryModeForm = useForm({
+  posted_entry_edit_mode: props.organization.posted_entry_edit_mode || 'strict',
+})
+
+function submitPostedEntryMode() {
+  postedEntryModeForm.put('/settings/posted-entry-edit-mode', { preserveScroll: true })
+}
+
 // --- Expense categories ---
 const newCategoryName = ref('')
 const addingCategory = ref(false)
@@ -842,6 +851,37 @@ const businessTypeOptions = [
               </label>
               <div class="flex justify-end pt-2">
                 <Button type="submit" :disabled="modulesForm.processing">{{ t('save') }}</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card class="mt-6">
+          <CardHeader>
+            <CardTitle>{{ t('posted_entry_edit_mode_title') }}</CardTitle>
+            <CardDescription>{{ t('posted_entry_edit_mode_help') }}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form class="space-y-3" @submit.prevent="submitPostedEntryMode">
+              <label
+                v-for="mode in ['strict', 'flexible']"
+                :key="mode"
+                class="flex items-start gap-3 rounded-lg border border-[hsl(var(--border))] p-3 hover:bg-[hsl(var(--accent))]/50"
+              >
+                <input
+                  v-model="postedEntryModeForm.posted_entry_edit_mode"
+                  type="radio"
+                  name="posted_entry_edit_mode"
+                  :value="mode"
+                  class="mt-0.5 h-4 w-4 border-[hsl(var(--border))]"
+                />
+                <span class="text-sm font-medium">{{ t('posted_entry_edit_mode_' + mode) }}</span>
+              </label>
+              <p v-if="postedEntryModeForm.errors.posted_entry_edit_mode" class="text-xs text-[hsl(var(--destructive))]">
+                {{ postedEntryModeForm.errors.posted_entry_edit_mode }}
+              </p>
+              <div class="flex justify-end pt-2">
+                <Button type="submit" :disabled="postedEntryModeForm.processing">{{ t('save') }}</Button>
               </div>
             </form>
           </CardContent>
