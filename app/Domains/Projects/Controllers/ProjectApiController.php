@@ -4,6 +4,7 @@ namespace App\Domains\Projects\Controllers;
 
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Models\ProjectShare;
 use App\Domains\Projects\Requests\ProjectApiRequest;
 use App\Domains\Projects\Resources\ProjectResource;
 use App\Domains\Projects\Services\ProjectReportService;
@@ -11,6 +12,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * JSON API access to projects (spec 009, User Story 6).
@@ -74,6 +77,39 @@ class ProjectApiController extends Controller
         $project->update($request->projectAttributes());
 
         return new ProjectResource($project->fresh(['parent:id,code', 'contact:id,uuid']));
+    }
+
+    /**
+     * Set project shares
+     *
+     * How the project's value is shared among people in steering, in
+     * percent adding up to 100; an empty list clears it. Owners only.
+     *
+     * @urlParam project integer required The project id. Example: 12
+     */
+    public function shares(Request $request, Project $project, CurrentOrganization $currentOrg): JsonResponse
+    {
+        $this->ensureOrganization($project, $currentOrg);
+        $this->authorize('steer', Project::class);
+
+        $validated = $request->validate([
+            'shares' => ['present', 'array', 'max:10'],
+            'shares.*.employee_id' => ['required', 'uuid', 'distinct', Rule::exists('employees', 'id')->where('organization_id', $currentOrg->id())],
+            'shares.*.share' => ['required', 'numeric', 'gt:0', 'max:100'],
+        ]);
+        $total = array_sum(array_map(fn (array $s) => (float) $s['share'], $validated['shares']));
+        if ($validated['shares'] !== [] && abs($total - 100) > 0.0001) {
+            return response()->json(['message' => __('app.acquisition_shares_total'), 'code' => 'shares_total'], 422);
+        }
+
+        DB::transaction(function () use ($project, $validated): void {
+            ProjectShare::query()->where('cost_center_id', $project->id)->delete();
+            foreach ($validated['shares'] as $share) {
+                ProjectShare::create(['organization_id' => $project->organization_id, 'cost_center_id' => $project->id, ...$share]);
+            }
+        });
+
+        return response()->json(['data' => ProjectShare::query()->where('cost_center_id', $project->id)->get(['employee_id', 'share'])]);
     }
 
     /**

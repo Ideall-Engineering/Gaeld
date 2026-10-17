@@ -53,6 +53,11 @@ class BudgetGroupRequest extends FormRequest
             'plan_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999999.99'],
             'position' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            // Stage 5: who bears the block and who is credited for the work.
+            'people' => ['sometimes', 'array', 'max:10'],
+            'people.*.employee_id' => ['required', 'uuid', 'distinct', Rule::exists('employees', 'id')->where('organization_id', $orgId)],
+            'people.*.carry_share' => ['required', 'numeric', 'min:0', 'max:100'],
+            'people.*.credit_share' => ['required', 'numeric', 'min:0', 'max:100'],
             'account_ids' => ['array', 'max:100'],
             'account_ids.*' => [
                 'integer',

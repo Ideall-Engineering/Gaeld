@@ -67,6 +67,20 @@ class ProjectRequest extends FormRequest
             'expected_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999999.99'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'is_active' => ['sometimes', 'boolean'],
+            // Stage 5: how the project's value is shared; empty clears it.
+            'shares' => [
+                'sometimes',
+                'array',
+                'max:10',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $total = array_sum(array_map(fn ($s) => (float) ($s['share'] ?? 0), (array) $value));
+                    if ($value !== [] && abs($total - 100) > 0.0001) {
+                        $fail(__('app.acquisition_shares_total'));
+                    }
+                },
+            ],
+            'shares.*.employee_id' => ['required', 'uuid', 'distinct', Rule::exists('employees', 'id')->where('organization_id', $orgId)],
+            'shares.*.share' => ['required', 'numeric', 'gt:0', 'max:100'],
         ];
     }
 }

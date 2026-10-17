@@ -7,6 +7,7 @@ use App\Domains\Projects\Controllers\InvoiceProjectController;
 use App\Domains\Projects\Controllers\JournalAllocationController;
 use App\Domains\Projects\Controllers\ProjectController;
 use App\Domains\Projects\Controllers\ProjectReportController;
+use App\Domains\Projects\Controllers\SteeringController;
 use App\Domains\Projects\Controllers\UnallocatedLinesController;
 use App\Http\Middleware\EnsureProjectsModule;
 use Illuminate\Support\Facades\Route;
@@ -28,6 +29,10 @@ Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::post('/projects/acquisitions', [AcquisitionController::class, 'store'])->name('projects.acquisitions.store');
     Route::put('/projects/acquisitions/{acquisition}', [AcquisitionController::class, 'update'])->name('projects.acquisitions.update');
     Route::delete('/projects/acquisitions/{acquisition}', [AcquisitionController::class, 'destroy'])->name('projects.acquisitions.destroy');
+    Route::get('/projects/steering', [SteeringController::class, 'index'])->name('projects.steering');
+    Route::get('/projects/steering/export/{format}', [SteeringController::class, 'export'])->name('projects.steering.export');
+    Route::post('/projects/steering/items', [SteeringController::class, 'storeItem'])->name('projects.steering.items.store');
+    Route::delete('/projects/steering/items/{steeringItem}', [SteeringController::class, 'destroyItem'])->name('projects.steering.items.destroy');
     Route::get('/projects/unallocated', [UnallocatedLinesController::class, 'index'])->name('projects.unallocated');
     Route::post('/projects/unallocated', [UnallocatedLinesController::class, 'apply'])->name('projects.unallocated.apply');
     Route::get('/projects/allocation-reviews', [AllocationReviewController::class, 'index'])->name('projects.allocation-reviews.index');

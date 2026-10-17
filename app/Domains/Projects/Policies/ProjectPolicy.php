@@ -47,6 +47,16 @@ class ProjectPolicy extends BasePolicy
      * Change which projects and people journal lines belong to, whatever
      * state their entries are in.
      */
+    public function steer(User $user): bool
+    {
+        // Owners only: the steering page shows what each owner draws and
+        // sets how results are shared among them. organization.delete is
+        // the one permission no role but the owner holds.
+        return $this->hasCurrentOrganization($user)
+            && $user->hasPermissionTo(Permission::ProjectsView)
+            && $user->hasPermissionTo(Permission::OrganizationDelete);
+    }
+
     public function allocate(User $user): bool
     {
         return $this->hasCurrentOrganization($user)

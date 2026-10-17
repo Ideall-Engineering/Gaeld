@@ -18,6 +18,7 @@ use App\Domains\Projects\Controllers\AcquisitionApiController;
 use App\Domains\Projects\Controllers\BudgetGroupApiController;
 use App\Domains\Projects\Controllers\JournalAllocationApiController;
 use App\Domains\Projects\Controllers\ProjectApiController;
+use App\Domains\Projects\Controllers\SteeringController;
 use App\Http\Middleware\Api\HandleApiIdempotency;
 use App\Http\Middleware\EnsureProjectsModule;
 use App\Http\Middleware\LogOrgTokenActivity;
@@ -131,6 +132,9 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
         Route::get('/acquisitions', [AcquisitionApiController::class, 'index'])->name('api.acquisitions.index');
         Route::post('/acquisitions', [AcquisitionApiController::class, 'store'])->name('api.acquisitions.store');
         Route::get('/acquisitions/people', [AcquisitionApiController::class, 'people'])->name('api.acquisitions.people');
+        Route::put('/projects/{project}/shares', [ProjectApiController::class, 'shares'])->name('api.projects.shares');
+        Route::put('/budget-groups/{budgetGroup}/people', [BudgetGroupApiController::class, 'people'])->name('api.budget-groups.people');
+        Route::post('/steering-items', [SteeringController::class, 'storeItemApi'])->name('api.steering-items.store');
         Route::get('/budget-groups', [BudgetGroupApiController::class, 'index'])->name('api.budget-groups.index');
         Route::post('/budget-groups', [BudgetGroupApiController::class, 'store'])->name('api.budget-groups.store');
         Route::put('/journal-entries/{journalEntry}/allocations', [JournalAllocationApiController::class, 'update'])->name('api.journal-entries.allocations');

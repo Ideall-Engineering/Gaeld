@@ -10,6 +10,7 @@ use App\Domains\Projects\Models\AllocationReview;
 use App\Domains\Projects\Models\InvoiceProject;
 use App\Domains\Projects\Models\LineAllocation;
 use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Models\ProjectShare;
 use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Requests\ProjectRequest;
 use App\Domains\Projects\Services\ProjectOverviewService;
@@ -17,6 +18,7 @@ use App\Http\Controllers\Controller;
 use App\Support\CsvExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
@@ -34,7 +36,7 @@ class ProjectController extends Controller
         $year = $this->year($request);
 
         return Inertia::render('Projects/Index', [
-            'projects' => ProjectQuery::tree(),
+            'projects' => ProjectQuery::tree(withShares: $user?->can('steer', Project::class) ?? false),
             'overview' => $overview->overview($currentOrg->id(), "{$year}-01-01", "{$year}-12-31"),
             'year' => $year,
             'contacts' => Contact::query()->orderBy('name')->get(['id', 'name']),
@@ -45,6 +47,7 @@ class ProjectController extends Controller
             'can' => [
                 'manage' => $user?->can('create', Project::class) ?? false,
                 'allocate' => $user?->can('allocate', Project::class) ?? false,
+                'steer' => $user?->can('steer', Project::class) ?? false,
             ],
         ]);
     }
@@ -80,11 +83,13 @@ class ProjectController extends Controller
     {
         $this->authorize('create', Project::class);
 
-        Project::create([
-            ...$request->validated(),
+        $validated = $request->validated();
+        $project = Project::create([
+            ...collect($validated)->except('shares')->all(),
             'organization_id' => $currentOrg->id(),
             'is_active' => $request->boolean('is_active', true),
         ]);
+        $this->syncShares($request, $project, $validated);
 
         return back()->with('success', __('app.saved'));
     }
@@ -93,10 +98,12 @@ class ProjectController extends Controller
     {
         $this->authorize('update', $project);
 
+        $validated = $request->validated();
         $project->update([
-            ...$request->validated(),
+            ...collect($validated)->except('shares')->all(),
             'is_active' => $request->boolean('is_active', $project->is_active),
         ]);
+        $this->syncShares($request, $project, $validated);
 
         return back()->with('success', __('app.saved'));
     }
@@ -119,6 +126,31 @@ class ProjectController extends Controller
         $project->delete();
 
         return back()->with('success', __('app.deleted'));
+    }
+
+    /**
+     * Owners set how a project's value is shared (spec 009, stage 5); the
+     * field is ignored for everyone else.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function syncShares(Request $request, Project $project, array $validated): void
+    {
+        if (! array_key_exists('shares', $validated) || ! ($request->user()?->can('steer', Project::class) ?? false)) {
+            return;
+        }
+
+        DB::transaction(function () use ($project, $validated): void {
+            ProjectShare::query()->where('cost_center_id', $project->id)->delete();
+            foreach ($validated['shares'] as $share) {
+                ProjectShare::create([
+                    'organization_id' => $project->organization_id,
+                    'cost_center_id' => $project->id,
+                    'employee_id' => $share['employee_id'],
+                    'share' => $share['share'],
+                ]);
+            }
+        });
     }
 
     private function year(Request $request): int

@@ -35,6 +35,29 @@ class BudgetGroupApiController extends Controller
     }
 
     /**
+     * Set cost block keys
+     *
+     * Who bears the block and who is credited for the work, per person in
+     * percent. Owners only.
+     */
+    public function people(Request $request, BudgetGroup $budgetGroup, CurrentOrganization $currentOrg): JsonResponse
+    {
+        abort_unless($budgetGroup->organization_id === $currentOrg->id(), 404);
+        $this->authorize('steer', Project::class);
+
+        $validated = $request->validate([
+            'people' => ['present', 'array', 'max:10'],
+            'people.*.employee_id' => ['required', 'uuid', 'distinct', Rule::exists('employees', 'id')->where('organization_id', $currentOrg->id())],
+            'people.*.carry_share' => ['required', 'numeric', 'min:0', 'max:100'],
+            'people.*.credit_share' => ['required', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        $budgetGroup->people()->sync($this->keys((array) $validated['people']));
+
+        return response()->json(['data' => ['id' => $budgetGroup->id, 'people' => $validated['people']]]);
+    }
+
+    /**
      * Create cost block
      *
      * Accounts are named by code; an account already in another block of
@@ -89,5 +112,19 @@ class BudgetGroupApiController extends Controller
             'plan_amount' => $group->plan_amount,
             'account_codes' => $group->accounts()->orderBy('code')->pluck('code')->all(),
         ]], 201);
+    }
+
+    /**
+     * @param  array<int, array{employee_id: string, carry_share: mixed, credit_share: mixed}>  $people
+     * @return array<string, array{carry_share: string, credit_share: string}>
+     */
+    private function keys(array $people): array
+    {
+        $keys = [];
+        foreach ($people as $p) {
+            $keys[$p['employee_id']] = ['carry_share' => (string) $p['carry_share'], 'credit_share' => (string) $p['credit_share']];
+        }
+
+        return $keys;
     }
 }

@@ -49,6 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the reclaimable input VAT taken off, charges the people; returned articles
   charge nobody; return deadlines within 14 days are flagged. The ledger is
   only read. A list with totals per person, CSV and an API complete it.
+- **Steering for owners:** per person the contribution of customer projects
+  by status (booked net once revenue is booked, expected amount before, both
+  less allocated costs) through shares set on a project or inherited from its
+  area, the effect of cost blocks (credit for work done less the part borne),
+  drawings by plan items plus acquisitions, and what is left with and without
+  possible projects; booked salary cost is shown beside for comparison. Page,
+  CSV and PDF, owners only; keys and plan items can also be set over the API.
 - **Follow a figure in the profit and loss statement:** clicking an account
   there opens its statement for the report's own period — every posted movement
   with its counter account, and a way back to the report rather than to a

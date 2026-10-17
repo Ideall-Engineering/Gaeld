@@ -2543,6 +2543,63 @@
         "data": "[{id, name}] active employees"
       },
       "notes": "Spec 009, stage 4. Only for organizations with the projects module switched on; otherwise 403."
+    },
+    {
+      "name": "api.projects.shares",
+      "method": "PUT",
+      "path": "/api/v1/projects/{project}/shares",
+      "controller": "ProjectApiController@shares",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view",
+        "organization.delete"
+      ],
+      "request": {
+        "shares": "[{employee_id, share}] adding up to 100, or [] to clear"
+      },
+      "response_200": {
+        "data": "[{employee_id, share}]"
+      },
+      "notes": "Spec 009, stage 5. Owners only (projects.view and organization.delete); projects module on. A project without shares takes those of the nearest project above it."
+    },
+    {
+      "name": "api.budget-groups.people",
+      "method": "PUT",
+      "path": "/api/v1/budget-groups/{budgetGroup}/people",
+      "controller": "BudgetGroupApiController@people",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view",
+        "organization.delete"
+      ],
+      "request": {
+        "people": "[{employee_id, carry_share, credit_share}] in percent"
+      },
+      "response_200": {
+        "data": "{id, people}"
+      },
+      "notes": "Spec 009, stage 5. Owners only (projects.view and organization.delete); projects module on."
+    },
+    {
+      "name": "api.steering-items.store",
+      "method": "POST",
+      "path": "/api/v1/steering-items",
+      "controller": "SteeringController@storeItemApi",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view",
+        "organization.delete"
+      ],
+      "request": {
+        "year": "required",
+        "employee_id": "required",
+        "label": "required",
+        "amount": "required"
+      },
+      "response_201": {
+        "data": "{id, year, employee_id, label, amount}"
+      },
+      "notes": "Spec 009, stage 5. Owners only (projects.view and organization.delete); projects module on. A planned drawing of a person in a year."
     }
   ],
   "audit_findings": {

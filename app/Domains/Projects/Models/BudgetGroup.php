@@ -3,6 +3,7 @@
 namespace App\Domains\Projects\Models;
 
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Payroll\Models\Employee;
 use App\Domains\Projects\Enums\BudgetGroupKind;
 use App\Support\Traits\Auditable;
 use App\Support\Traits\BelongsToOrganization;
@@ -46,6 +47,19 @@ class BudgetGroup extends Model
             'plan_amount' => 'decimal:2',
             'position' => 'integer',
         ];
+    }
+
+    /**
+     * Who bears the block (carry_share) and who is credited for doing the
+     * work (credit_share), in percent (spec 009, stage 5).
+     *
+     * @return BelongsToMany<Employee, $this>
+     */
+    public function people(): BelongsToMany
+    {
+        return $this->belongsToMany(Employee::class, 'budget_group_shares')
+            ->withPivot('carry_share', 'credit_share')
+            ->withTimestamps();
     }
 
     /** @return BelongsToMany<Account, $this> */

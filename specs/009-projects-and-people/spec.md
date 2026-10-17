@@ -280,3 +280,36 @@ Die Liste zeigt pro Projekt Bereich, Verantwortlich, Status, Zieltermin mit Ampe
 
 - **FR-018**: Liste mit Filter nach Jahr, Person und Status, Summen je Person, CSV; Anlegen, Ändern, Löschen mit `projects.manage`, Ansehen mit `projects.view`.
 - **FR-019**: API zum Lesen und Anlegen (für den einmaligen Import) und eine Liste der Personen.
+
+---
+
+# Etappe 5: Gründer-Steuerung
+
+**Status**: umgesetzt, Parallelbetrieb mit dem Excel steht aus
+
+**Ziel**: Das Blatt „Steuerung“ wird überflüssig: Beitrag je Person aus den Kundenprojekten, Wirkung der Kostenblöcke, Bezogenes und daraus die Spielmasse, mit und ohne „Möglich“.
+
+## Entscheide Etappe 5
+
+| Frage | Entscheid |
+|---|---|
+| Wert eines Projekts | Sobald Ertrag gebucht ist: gebuchter Ertrag minus zugeordneter Aufwand. Vorher: erwarteter Betrag minus zugeordneter Aufwand. Verlorene Projekte zählen nicht. |
+| Anteile je Person | Tabelle `project_shares`. Ein Projekt ohne eigene Anteile übernimmt die des nächsten Bereichs darüber. Ohne Anteile wird der Wert als „nicht verteilt“ ausgewiesen. |
+| Kostenblöcke | Tabelle `budget_group_shares` mit Tragschlüssel und Gutschrift je Person. Basis ist der Plan des Blocks. Ohne Tragschlüssel tragen alle gleich viel; ohne Gutschrift wird niemand entlastet (extern erledigt). |
+| Bezogen | Planposten je Person und Jahr (`steering_items`: Lohn, 13. Monatslohn, Arbeitgeberbeiträge, Pauschale, Boni) plus Anschaffungen. Die gebuchten Lohnkosten aus den Lohnabrechnungen stehen zum Vergleich daneben. |
+| Sichtbarkeit | Nur Owner (Recht `projects.view` und `organization.delete`), auch für Anteile, Schlüssel und Planposten. |
+| Ausgabe | Seite, CSV und PDF; API zum Setzen von Anteilen, Schlüsseln und Planposten für den einmaligen Import. |
+
+## User Story 12: Steuerung (P1)
+
+**Acceptance Scenarios** (durchgerechnetes Beispiel im Test `SteeringTest`):
+
+1. **Given** ein Bereich mit Anteilen 50/50 und darunter ein erledigtes Projekt mit Ertrag 1000 und Aufwand 200, **Then** trägt es je 400 bei.
+2. **Given** ein Projekt mit eigenem Anteil 100 % für A und erwartetem Betrag 300, **Then** trägt A 300 bei.
+3. **Given** ein Kostenblock mit Plan 1000, A hat die Arbeit gemacht, trägt 30 %, B 70 %, **Then** Wirkung A +700, B −700.
+4. **Given** Planposten 2000 für A und eine Anschaffung von 100 für B, **Then** ist das Bezogene 2000 und 100.
+5. **Given** ein Admin, **When** er die Steuerung öffnet, **Then** wird das abgelehnt.
+
+## Parallelbetrieb
+
+Einen Monat lang werden Excel und Gäld nebeneinander geführt. Jede Abweichung wird erklärt, bevor das Excel stillgelegt wird. Bekannte Unterschiede beim Start: Gäld rechnet das Ist aus den Buchungen, das Excel aus abgetippten Werten; einzelne Kostenblöcke weichen deshalb ab (zum Beispiel Büromaterial 4010).

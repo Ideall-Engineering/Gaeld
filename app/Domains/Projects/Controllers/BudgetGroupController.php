@@ -8,6 +8,7 @@ use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Projects\Enums\BudgetGroupKind;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Requests\BudgetGroupRequest;
 use App\Domains\Projects\Services\PlanActualService;
 use App\Http\Controllers\Controller;
@@ -40,7 +41,11 @@ class BudgetGroupController extends Controller
                 ->map(fn (Account $a) => ['id' => $a->id, 'code' => $a->code, 'name' => $a->display_name]),
             'kinds' => array_map(fn (BudgetGroupKind $k) => ['value' => $k->value, 'label' => __('app.budget_group_kind_'.$k->value)], BudgetGroupKind::cases()),
             'hasPreviousYear' => BudgetGroup::query()->where('year', $year - 1)->exists(),
-            'can' => ['manage' => $request->user()?->can('create', Project::class) ?? false],
+            'employees' => ProjectQuery::employeeOptions(),
+            'can' => [
+                'manage' => $request->user()?->can('create', Project::class) ?? false,
+                'steer' => $request->user()?->can('steer', Project::class) ?? false,
+            ],
         ]);
     }
 
@@ -61,6 +66,7 @@ class BudgetGroupController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
             $group->accounts()->sync($validated['account_ids'] ?? []);
+            $this->syncPeople($group, $validated);
         });
 
         return back()->with('success', __('app.saved'));
@@ -81,6 +87,7 @@ class BudgetGroupController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
             $budgetGroup->accounts()->sync($validated['account_ids'] ?? []);
+            $this->syncPeople($budgetGroup, $validated);
         });
 
         return back()->with('success', __('app.saved'));
@@ -128,10 +135,39 @@ class BudgetGroupController extends Controller
         ], $rows, "plan-actual-{$year}.csv");
     }
 
+    /**
+     * Owners set the carry and credit keys of a block (spec 009, stage 5);
+     * the field is ignored for everyone else.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function syncPeople(BudgetGroup $group, array $validated): void
+    {
+        if (! array_key_exists('people', $validated) || ! (request()->user()?->can('steer', Project::class) ?? false)) {
+            return;
+        }
+
+        $group->people()->sync($this->keys((array) $validated['people']));
+    }
+
     private function year(Request $request): int
     {
         $year = $request->integer('year', (int) now()->year);
 
         return $year >= 2000 && $year <= 2100 ? $year : (int) now()->year;
+    }
+
+    /**
+     * @param  array<int, array{employee_id: string, carry_share: mixed, credit_share: mixed}>  $people
+     * @return array<string, array{carry_share: string, credit_share: string}>
+     */
+    private function keys(array $people): array
+    {
+        $keys = [];
+        foreach ($people as $p) {
+            $keys[$p['employee_id']] = ['carry_share' => (string) $p['carry_share'], 'credit_share' => (string) $p['credit_share']];
+        }
+
+        return $keys;
     }
 }

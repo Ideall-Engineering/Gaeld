@@ -4,6 +4,7 @@ namespace App\Domains\Projects\Queries;
 
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Models\ProjectShare;
 use Illuminate\Support\Collection;
 
 /**
@@ -17,8 +18,12 @@ class ProjectQuery
      *
      * @return array<int, array<string, mixed>>
      */
-    public static function tree(bool $activeOnly = false): array
+    public static function tree(bool $activeOnly = false, bool $withShares = false): array
     {
+        $shares = $withShares
+            ? ProjectShare::query()->get()->groupBy('cost_center_id')
+            : collect();
+
         $projects = Project::query()
             ->with(['contact:id,name', 'responsible:id,first_name,last_name'])
             ->when($activeOnly, fn ($query) => $query->where('is_active', true))
@@ -29,9 +34,9 @@ class ProjectQuery
         $known = $projects->pluck('id')->flip();
         $rows = [];
 
-        $walk = function (int $parentId, int $depth) use (&$walk, &$rows, $byParent): void {
+        $walk = function (int $parentId, int $depth) use (&$walk, &$rows, $byParent, $shares, $withShares): void {
             foreach ($byParent->get($parentId, collect()) as $project) {
-                $rows[] = self::present($project, $depth);
+                $rows[] = self::present($project, $depth, $withShares ? $shares->get($project->id, collect()) : null);
                 if ($depth < 32) {
                     $walk($project->id, $depth + 1);
                 }
@@ -44,7 +49,7 @@ class ProjectQuery
         // projects are listed; they hang at the top level then.
         foreach ($projects as $project) {
             if ($project->parent_id !== null && ! $known->has($project->parent_id)) {
-                $rows[] = self::present($project, 0);
+                $rows[] = self::present($project, 0, $withShares ? $shares->get($project->id, collect()) : null);
                 $walk($project->id, 1);
             }
         }
@@ -82,10 +87,14 @@ class ProjectQuery
             ->map(fn (Employee $e) => ['id' => $e->id, 'name' => trim("{$e->first_name} {$e->last_name}")]);
     }
 
-    /** @return array<string, mixed> */
-    private static function present(Project $project, int $depth): array
+    /**
+     * @param  Collection<int, ProjectShare>|null  $shares  null leaves the key out
+     * @return array<string, mixed>
+     */
+    private static function present(Project $project, int $depth, ?Collection $shares = null): array
     {
         return [
+            ...($shares === null ? [] : ['shares' => $shares->map(fn (ProjectShare $s) => ['employee_id' => $s->employee_id, 'share' => (string) (float) $s->share])->values()->all()]),
             'id' => $project->id,
             'code' => $project->code,
             'name' => $project->name,

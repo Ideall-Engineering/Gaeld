@@ -28,6 +28,7 @@ const props = defineProps({
   accounts: Array,
   kinds: Array,
   hasPreviousYear: Boolean,
+  employees: { type: Array, default: () => [] },
   can: Object,
 })
 
@@ -48,7 +49,10 @@ function changeYear(value) {
 const showForm = ref(false)
 const editing = ref(null)
 const accountFilter = ref('')
-const blank = () => ({ year: props.year, name: '', kind: 'running', plan_amount: '', notes: '', account_ids: [] })
+// Stage 5: everyone bears an equal part unless set otherwise; nobody is
+// credited until someone is named as having done the work.
+const blankPeople = () => props.employees.map(e => ({ employee_id: e.id, carry_share: String(+(100 / Math.max(props.employees.length, 1)).toFixed(4)), credit_share: '0' }))
+const blank = () => ({ year: props.year, name: '', kind: 'running', plan_amount: '', notes: '', account_ids: [], ...(props.can.steer ? { people: blankPeople() } : {}) })
 const form = useForm(blank())
 
 const visibleAccounts = computed(() => {
@@ -73,7 +77,14 @@ function openEdit(group) {
     plan_amount: group.plan_from_budgets ? '' : group.plan,
     notes: group.notes ?? '',
     account_ids: group.accounts.map(a => a.id),
+    ...(props.can.steer ? {
+      people: props.employees.map(e => {
+        const p = group.people.find(x => x.employee_id === e.id)
+        return { employee_id: e.id, carry_share: p ? p.carry_share : '0', credit_share: p ? p.credit_share : '0' }
+      }),
+    } : {}),
   })
+  if (props.can.steer && group.people.length === 0) form.people = blankPeople()
   form.clearErrors()
   accountFilter.value = ''
   showForm.value = true
@@ -218,6 +229,18 @@ const accountError = computed(() => Object.entries(form.errors).find(([key]) => 
             </label>
           </div>
           <p v-if="accountError" class="mt-1 text-xs text-[hsl(var(--destructive))]">{{ accountError }}</p>
+        </div>
+        <div v-if="can.steer && form.people" class="rounded-md border border-[hsl(var(--border))] p-3">
+          <div class="mb-1 text-sm font-medium">{{ t('budget_group_keys') }}</div>
+          <p class="mb-2 text-xs text-[hsl(var(--muted-foreground))]">{{ t('budget_group_keys_hint') }}</p>
+          <div class="grid grid-cols-3 gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+            <span></span><span>{{ t('budget_group_carry') }}</span><span>{{ t('budget_group_credit') }}</span>
+          </div>
+          <div v-for="(person, index) in form.people" :key="person.employee_id" class="grid grid-cols-3 items-center gap-2">
+            <span class="text-sm">{{ employees.find(e => e.id === person.employee_id)?.name }}</span>
+            <FormInput :id="`carry_${index}`" v-model="person.carry_share" type="number" step="0.01" min="0" max="100" />
+            <FormInput :id="`credit_${index}`" v-model="person.credit_share" type="number" step="0.01" min="0" max="100" />
+          </div>
         </div>
         <FormTextarea id="notes" v-model="form.notes" :label="t('notes')" :error="form.errors.notes" />
         <div class="flex justify-end gap-2">

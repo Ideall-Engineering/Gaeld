@@ -12,6 +12,7 @@ use App\Domains\Api\Enums\TokenType;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Payroll\Models\Employee;
+use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\LineAllocation;
 use App\Domains\Projects\Models\Project;
 use Illuminate\Support\Facades\DB;
@@ -255,6 +256,34 @@ class ProjectApiTest extends SecurityTestCase
             ->assertJsonPath('data.net_amount', '1433.86');
 
         $this->api()->getJson('/api/v1/acquisitions?year=2026')->assertOk()->assertJsonPath('data.people.0.charge', '1433.86');
+    }
+
+    public function test_owners_set_steering_keys_over_the_api(): void
+    {
+        $anna = Employee::factory()->for($this->orgA)->create();
+        $ben = Employee::factory()->for($this->orgA)->create();
+        $project = Project::create(['organization_id' => $this->orgA->id, 'code' => 'ALPHA', 'name' => 'Alpha']);
+        $block = BudgetGroup::create(['organization_id' => $this->orgA->id, 'year' => 2026, 'name' => 'Rent', 'kind' => 'running']);
+
+        $this->api()->withHeaders(['Idempotency-Key' => 'shares-1'])
+            ->putJson("/api/v1/projects/{$project->id}/shares", ['shares' => [['employee_id' => $anna->id, 'share' => 30], ['employee_id' => $ben->id, 'share' => 70]]])
+            ->assertOk()->assertJsonCount(2, 'data');
+        $this->api()->withHeaders(['Idempotency-Key' => 'shares-2'])
+            ->putJson("/api/v1/projects/{$project->id}/shares", ['shares' => [['employee_id' => $anna->id, 'share' => 30]]])
+            ->assertStatus(422)->assertJsonPath('code', 'shares_total');
+        $this->api()->withHeaders(['Idempotency-Key' => 'people-1'])
+            ->putJson("/api/v1/budget-groups/{$block->id}/people", ['people' => [['employee_id' => $anna->id, 'carry_share' => 50, 'credit_share' => 100]]])
+            ->assertOk();
+        $this->api()->withHeaders(['Idempotency-Key' => 'item-1'])
+            ->postJson('/api/v1/steering-items', ['year' => 2026, 'employee_id' => $anna->id, 'label' => 'Salary', 'amount' => '11076.90'])
+            ->assertCreated();
+
+        $admin = $this->createUserInOrg($this->orgA, 'admin');
+        $adminToken = $this->createApiToken($admin, $this->orgA);
+        $this->app['auth']->forgetGuards();
+        $this->withToken($adminToken)->withHeaders(['Idempotency-Key' => 'item-2'])
+            ->postJson('/api/v1/steering-items', ['year' => 2026, 'employee_id' => $anna->id, 'label' => 'X', 'amount' => '1'])
+            ->assertForbidden();
     }
 
     private function api(): static

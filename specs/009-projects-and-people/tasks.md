@@ -128,3 +128,16 @@ description: "Gäld task list: Projekte und Zuordnung von Buchungszeilen, Etappe
 - [x] T062 Tests `AcquisitionTest`, API-Test
 - [x] T063 Importskript liest auch „Anschaffungen“ und verbindet Buchungen (ausserhalb des Repositorys)
 - [x] T064 UI-Durchgang, alle Suiten
+
+---
+
+# Tasks: Etappe 5, Gründer-Steuerung
+
+- [x] T065 Migration `create_steering_tables` (Anteile, Schlüssel der Kostenblöcke, Planposten), Modelle mit Policies
+- [x] T066 `SteeringService` (Wert je Projekt, vererbte Anteile, Wirkung der Blöcke, Bezogen, Spielmasse mit und ohne Möglich, gebuchte Lohnkosten zum Vergleich)
+- [x] T067 Seite „Steuerung“ nur für Owner, CSV und PDF; Anteile im Projektformular, Schlüssel im Kostenblockformular
+- [x] T068 API für Anteile, Schlüssel und Planposten (nur Owner)
+- [x] T069 Tests `SteeringTest` mit durchgerechnetem Beispiel, API-Test
+- [ ] T070 Importskript: Anteile, Schlüssel und Planposten aus dem Excel
+- [ ] T071 UI-Durchgang, alle Suiten
+- [ ] T072 Parallelbetrieb ein Monat (nach Rollout, mit dem Nutzer)

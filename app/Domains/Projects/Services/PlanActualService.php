@@ -92,7 +92,7 @@ class PlanActualService
         $groups = BudgetGroup::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
             ->where('year', $year)
-            ->with('accounts:id,code,name,type')
+            ->with(['accounts:id,code,name,type', 'people'])
             ->orderBy('position')
             ->orderBy('name')
             ->get();
@@ -123,6 +123,11 @@ class PlanActualService
                 'plan_from_budgets' => $group->plan_amount === null,
                 'accounts' => $group->accounts->sortBy('code')->map(fn (Account $a) => ['id' => $a->id, 'code' => $a->code, 'name' => $a->display_name])->values()->all(),
                 'notes' => $group->notes,
+                'people' => $group->people->map(fn ($e) => [
+                    'employee_id' => $e->id,
+                    'carry_share' => (string) (float) data_get($e, 'pivot.carry_share'),
+                    'credit_share' => (string) (float) data_get($e, 'pivot.credit_share'),
+                ])->values()->all(),
                 'plan' => $plan,
                 'actual' => $actual,
                 'customer_projects' => $customer,

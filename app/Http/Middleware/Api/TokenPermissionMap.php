@@ -187,6 +187,8 @@ final class TokenPermissionMap
                 'update' => Permission::ProjectsManage,
                 'delete' => Permission::ProjectsManage,
                 'allocate' => Permission::ProjectsAllocate,
+                // Steering is for owners: no other role holds this permission.
+                'steer' => Permission::OrganizationDelete,
             ],
             BankAccount::class => [
                 'viewAny' => Permission::BankingView,

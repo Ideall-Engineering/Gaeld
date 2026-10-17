@@ -146,6 +146,7 @@ const blankProject = () => ({
   expected_amount: '',
   notes: '',
   is_active: true,
+  shares: [],
 })
 
 const form = useForm(blankProject())
@@ -173,6 +174,7 @@ function openEdit(project) {
   form.expected_amount = project.expected_amount ?? ''
   form.notes = project.notes ?? ''
   form.is_active = project.is_active
+  form.shares = (project.shares ?? []).map(s => ({ ...s }))
   form.clearErrors()
   showForm.value = true
 }
@@ -407,6 +409,19 @@ function performDelete() {
         </div>
         <FormInput id="billing_month" v-model="form.billing_month" type="month" :label="t('project_billing_month')" :error="form.errors.billing_month" />
         <FormTextarea id="notes" v-model="form.notes" :label="t('notes')" :error="form.errors.notes" />
+        <div v-if="can.steer" class="rounded-md border border-[hsl(var(--border))] p-3">
+          <div class="mb-1 text-sm font-medium">{{ t('project_shares') }}</div>
+          <p class="mb-2 text-xs text-[hsl(var(--muted-foreground))]">{{ t('project_shares_hint') }}</p>
+          <div v-for="(share, index) in form.shares" :key="index" class="mb-2 flex items-end gap-2">
+            <FormSelect :id="`share_person_${index}`" v-model="share.employee_id" :options="employeeOptions.slice(1)" class="flex-1" />
+            <FormInput :id="`share_value_${index}`" v-model="share.share" type="number" step="0.01" min="0" max="100" class="w-28" />
+            <Button type="button" variant="ghost" size="icon" :aria-label="t('delete')" @click="form.shares.splice(index, 1)"><Trash2 class="h-4 w-4" /></Button>
+          </div>
+          <Button type="button" size="sm" variant="outline" @click="form.shares.push({ employee_id: employees[0]?.id ?? '', share: form.shares.length ? '' : '100' })">
+            <Plus class="mr-1 h-3 w-3" /> {{ t('acquisition_add_person') }}
+          </Button>
+          <p v-if="form.errors.shares" class="mt-1 text-xs text-[hsl(var(--destructive))]">{{ form.errors.shares }}</p>
+        </div>
         <label v-if="editing" class="flex items-center gap-2 text-sm">
           <input v-model="form.is_active" type="checkbox" class="h-4 w-4 rounded border-[hsl(var(--input))]" />
           {{ t('active') }}
