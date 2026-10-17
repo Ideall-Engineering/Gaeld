@@ -285,7 +285,7 @@ Die Liste zeigt pro Projekt Bereich, Verantwortlich, Status, Zieltermin mit Ampe
 
 # Etappe 5: Gründer-Steuerung
 
-**Status**: umgesetzt, Parallelbetrieb mit dem Excel steht aus
+**Status**: umgesetzt und getestet, Rollout und Parallelbetrieb stehen aus
 
 **Ziel**: Das Blatt „Steuerung“ wird überflüssig: Beitrag je Person aus den Kundenprojekten, Wirkung der Kostenblöcke, Bezogenes und daraus die Spielmasse, mit und ohne „Möglich“.
 

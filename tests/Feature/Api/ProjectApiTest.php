@@ -272,8 +272,11 @@ class ProjectApiTest extends SecurityTestCase
             ->putJson("/api/v1/projects/{$project->id}/shares", ['shares' => [['employee_id' => $anna->id, 'share' => 30]]])
             ->assertStatus(422)->assertJsonPath('code', 'shares_total');
         $this->api()->withHeaders(['Idempotency-Key' => 'people-1'])
-            ->putJson("/api/v1/budget-groups/{$block->id}/people", ['people' => [['employee_id' => $anna->id, 'carry_share' => 50, 'credit_share' => 100]]])
+            ->putJson("/api/v1/budget-groups/{$block->id}/people", ['people' => [['employee_id' => $anna->id, 'carry_share' => 50, 'credit_share' => 100], ['employee_id' => $ben->id, 'carry_share' => 50, 'credit_share' => 0]]])
             ->assertOk();
+        $this->api()->withHeaders(['Idempotency-Key' => 'people-2'])
+            ->putJson("/api/v1/budget-groups/{$block->id}/people", ['people' => [['employee_id' => $anna->id, 'carry_share' => 50, 'credit_share' => 0]]])
+            ->assertStatus(422)->assertJsonPath('code', 'keys_total');
         $this->api()->withHeaders(['Idempotency-Key' => 'item-1'])
             ->postJson('/api/v1/steering-items', ['year' => 2026, 'employee_id' => $anna->id, 'label' => 'Salary', 'amount' => '11076.90'])
             ->assertCreated();
