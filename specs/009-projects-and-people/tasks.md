@@ -117,3 +117,14 @@ description: "Gäld task list: Projekte und Zuordnung von Buchungszeilen, Etappe
 - [x] T056 Tests `PlanActualTest`, API-Test
 - [x] T057 Importskript liest auch „Interne Aufwände“ (ausserhalb des Repositorys)
 - [x] T058 UI-Durchgang, alle Suiten
+
+---
+
+# Tasks: Etappe 4, Anschaffungen je Person
+
+- [x] T059 Migration `create_acquisitions_tables`, Modell `Acquisition` mit Policy, Enum `AcquisitionStatus`
+- [x] T060 `AcquisitionService` (Netto, Belastung je Person mit Rappenausgleich, Fristen, Summen)
+- [x] T061 Seite „Anschaffungen“ mit Filter, Formular, CSV; API mit Personenliste
+- [x] T062 Tests `AcquisitionTest`, API-Test
+- [x] T063 Importskript liest auch „Anschaffungen“ und verbindet Buchungen (ausserhalb des Repositorys)
+- [ ] T064 UI-Durchgang, alle Suiten

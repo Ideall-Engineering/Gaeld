@@ -11,6 +11,7 @@ use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Api\Enums\TokenType;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Payroll\Models\Employee;
 use App\Domains\Projects\Models\LineAllocation;
 use App\Domains\Projects\Models\Project;
 use Illuminate\Support\Facades\DB;
@@ -237,6 +238,23 @@ class ProjectApiTest extends SecurityTestCase
             ->assertOk()
             ->assertJsonPath('data.groups.0.name', 'Rent')
             ->assertJsonPath('data.groups.0.plan', '3000.00');
+    }
+
+    public function test_acquisitions_are_created_over_the_api(): void
+    {
+        $employee = Employee::factory()->for($this->orgA)->create(['first_name' => 'Anna', 'last_name' => 'A']);
+
+        $this->api()->getJson('/api/v1/acquisitions/people')->assertOk()->assertJsonPath('data.0.name', 'Anna A');
+
+        $this->api()->withHeaders(['Idempotency-Key' => 'acq-1'])
+            ->postJson('/api/v1/acquisitions', [
+                'item' => 'Display', 'purchased_on' => '2026-09-28', 'quantity' => 1, 'unit_price' => '1550',
+                'vat_rate' => '8.10', 'status' => 'delivered', 'people' => [['employee_id' => $employee->id, 'share' => 100]],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.net_amount', '1433.86');
+
+        $this->api()->getJson('/api/v1/acquisitions?year=2026')->assertOk()->assertJsonPath('data.people.0.charge', '1433.86');
     }
 
     private function api(): static

@@ -42,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   counted as internal. Expense accounts outside any block are listed so
   nothing slips through, a block set can be carried over from the year
   before, and blocks are available as CSV and over the API.
+- **Acquisitions per person:** record material and devices article by
+  article with supplier, quantity, price, VAT, status (ordered, delivered,
+  returned), return and warranty dates, an optional link to the entry that
+  booked them, and the people they belong to in shares. The net amount, with
+  the reclaimable input VAT taken off, charges the people; returned articles
+  charge nobody; return deadlines within 14 days are flagged. The ledger is
+  only read. A list with totals per person, CSV and an API complete it.
 - **Follow a figure in the profit and loss statement:** clicking an account
   there opens its statement for the report's own period — every posted movement
   with its counter account, and a way back to the report rather than to a

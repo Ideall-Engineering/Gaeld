@@ -246,3 +246,37 @@ Die Liste zeigt pro Projekt Bereich, Verantwortlich, Status, Zieltermin mit Ampe
 
 - **FR-016**: Kostenblöcke anlegen, ändern, löschen (Recht `projects.manage`), ansehen (Recht `projects.view`); ein Konto gehört pro Jahr höchstens einem Block an.
 - **FR-017**: CSV-Export und API zum Lesen und Anlegen von Kostenblöcken (für den einmaligen Import).
+
+---
+
+# Etappe 4: Anschaffungen je Person
+
+**Status**: in Arbeit
+
+**Ziel**: Das Blatt „Anschaffungen“ wird überflüssig. Material und Geräte, die einer Person zugewiesen sind, werden als Artikel geführt; der Nettobetrag wird der Person belastet und fliesst in Etappe 5 ins „Bezogene“.
+
+## Entscheide Etappe 4
+
+| Frage | Entscheid |
+|---|---|
+| Granularität | Ein Artikel pro Zeile, nicht pro Buchungszeile: Eine Bestellung enthält oft Artikel für verschiedene Personen. Neue Tabelle `acquisitions`, optional mit Verweis auf die Buchung. |
+| Personen | Tabelle `acquisition_people` mit Anteil; „beide“ ist zweimal 50 %. Personen sind Mitarbeitende aus dem Lohnmodul. |
+| Netto | Brutto mal Menge; mit MWST wird die Vorsteuer abgezogen (Satz am Artikel, Standard 8.1 %), ohne MWST ist Netto gleich Brutto. Der Nettobetrag bleibt überschreibbar. |
+| Status | bestellt, geliefert, retourniert. Retournierte Artikel belasten niemanden. |
+| Fristen | Rückgabe bis und Garantie bis. Rückgabefristen in den nächsten 14 Tagen werden hervorgehoben, solange der Artikel nicht retourniert ist. |
+| Buchhaltung | Wird nicht beschrieben. Der Verweis auf die Buchung dient dem Abgleich. |
+
+## User Story 11: Anschaffungen je Person (P1)
+
+**Acceptance Scenarios**:
+
+1. **Given** ein Artikel über 1550 brutto mit MWST für Person A, **Then** belastet er A mit 1433.86.
+2. **Given** ein Artikel über 35.70 für beide, **Then** belastet er A und B mit je 16.51 (Rappenausgleich auf dem letzten Anteil).
+3. **Given** ein retournierter Artikel, **Then** belastet er niemanden.
+4. **Given** eine Rückgabefrist in 10 Tagen, **Then** ist der Artikel markiert; nach Status retourniert nicht mehr.
+5. **Given** ein Artikel mit Verweis auf eine Buchung, **Then** führt ein Link zur Buchung.
+
+## Requirements Etappe 4
+
+- **FR-018**: Liste mit Filter nach Jahr, Person und Status, Summen je Person, CSV; Anlegen, Ändern, Löschen mit `projects.manage`, Ansehen mit `projects.view`.
+- **FR-019**: API zum Lesen und Anlegen (für den einmaligen Import) und eine Liste der Personen.

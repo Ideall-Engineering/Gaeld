@@ -209,6 +209,7 @@ const navigation = computed(() => {
       { key: 'projects', href: '/projects', icon: FolderKanban, children: [
         { key: 'projects', href: '/projects', exact: true },
         { key: 'budget_groups', href: '/projects/plan' },
+        { key: 'acquisitions', href: '/projects/acquisitions' },
       ]},
     ] : []),
     // ── Payroll ──

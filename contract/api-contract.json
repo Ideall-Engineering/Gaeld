@@ -2477,6 +2477,72 @@
         "data": "{id, year, name, kind, plan_amount, account_codes}"
       },
       "notes": "Spec 009, stage 3. Only for organizations with the projects module switched on; otherwise 403. An account already in another block of the year answers 422 account_taken."
+    },
+    {
+      "name": "api.acquisitions.index",
+      "method": "GET",
+      "path": "/api/v1/acquisitions",
+      "controller": "AcquisitionApiController@index",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view"
+      ],
+      "request": {
+        "query": {
+          "year": "required integer"
+        }
+      },
+      "response_200": {
+        "data": {
+          "rows": "[{id, item, category, supplier, purchased_on, quantity, unit_price, gross_amount, vat_rate, net_amount, status, return_until, warranty_until, return_due, journal_entry_id, journal_reference, notes, people: [{employee_id, name, share, charge}]}]",
+          "people": "[{employee_id, name, charge}]",
+          "totals": "{gross, net}"
+        }
+      },
+      "notes": "Spec 009, stage 4. Only for organizations with the projects module switched on; otherwise 403. Returned articles charge nobody."
+    },
+    {
+      "name": "api.acquisitions.store",
+      "method": "POST",
+      "path": "/api/v1/acquisitions",
+      "controller": "AcquisitionApiController@store",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.manage"
+      ],
+      "request": {
+        "item": "required",
+        "purchased_on": "required date",
+        "quantity": "required > 0",
+        "unit_price": "required",
+        "vat_rate": "optional percent; empty = no VAT",
+        "net_amount": "optional; default from gross and VAT",
+        "status": "ordered|delivered|returned",
+        "return_until": "optional date",
+        "warranty_until": "optional date",
+        "journal_entry_id": "optional entry uuid",
+        "notes": "optional",
+        "people": "[{employee_id, share}] adding up to 100"
+      },
+      "response_201": {
+        "data": "{id, item, net_amount, charges: {employee_id: amount}}"
+      },
+      "notes": "Spec 009, stage 4. Only for organizations with the projects module switched on; otherwise 403."
+    },
+    {
+      "name": "api.acquisitions.people",
+      "method": "GET",
+      "path": "/api/v1/acquisitions/people",
+      "controller": "AcquisitionApiController@people",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view"
+      ],
+      "request": {},
+      "response_200": {
+        "data": "[{id, name}] active employees"
+      },
+      "notes": "Spec 009, stage 4. Only for organizations with the projects module switched on; otherwise 403."
     }
   ],
   "audit_findings": {

@@ -1,5 +1,6 @@
 <?php
 
+use App\Domains\Projects\Controllers\AcquisitionController;
 use App\Domains\Projects\Controllers\AllocationReviewController;
 use App\Domains\Projects\Controllers\BudgetGroupController;
 use App\Domains\Projects\Controllers\InvoiceProjectController;
@@ -22,6 +23,11 @@ Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::post('/projects/plan/copy-previous', [BudgetGroupController::class, 'copyPrevious'])->name('projects.plan.copy');
     Route::put('/projects/plan/{budgetGroup}', [BudgetGroupController::class, 'update'])->name('projects.plan.update');
     Route::delete('/projects/plan/{budgetGroup}', [BudgetGroupController::class, 'destroy'])->name('projects.plan.destroy');
+    Route::get('/projects/acquisitions', [AcquisitionController::class, 'index'])->name('projects.acquisitions');
+    Route::get('/projects/acquisitions/export', [AcquisitionController::class, 'export'])->name('projects.acquisitions.export');
+    Route::post('/projects/acquisitions', [AcquisitionController::class, 'store'])->name('projects.acquisitions.store');
+    Route::put('/projects/acquisitions/{acquisition}', [AcquisitionController::class, 'update'])->name('projects.acquisitions.update');
+    Route::delete('/projects/acquisitions/{acquisition}', [AcquisitionController::class, 'destroy'])->name('projects.acquisitions.destroy');
     Route::get('/projects/unallocated', [UnallocatedLinesController::class, 'index'])->name('projects.unallocated');
     Route::post('/projects/unallocated', [UnallocatedLinesController::class, 'apply'])->name('projects.unallocated.apply');
     Route::get('/projects/allocation-reviews', [AllocationReviewController::class, 'index'])->name('projects.allocation-reviews.index');
