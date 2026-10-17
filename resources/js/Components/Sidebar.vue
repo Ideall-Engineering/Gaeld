@@ -207,7 +207,7 @@ const navigation = computed(() => {
     ]},
     ...(features.value.projects && can('projects.view') ? [
       { key: 'projects', href: '/projects', icon: FolderKanban, children: [
-        { key: 'projects', href: '/projects' },
+        { key: 'projects', href: '/projects', exact: true },
         { key: 'budget_groups', href: '/projects/plan' },
       ]},
     ] : []),
@@ -425,7 +425,7 @@ function isGroupActive(item) {
                 :href="child.href"
                 :class="[
                   'block rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                  isActive(child.href)
+                  isActive(child.href, child.exact)
                     ? 'text-[hsl(var(--primary))]'
                     : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--sidebar-foreground))]',
                 ]"
