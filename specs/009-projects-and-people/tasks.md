@@ -103,6 +103,6 @@ description: "Gäld task list: Projekte und Zuordnung von Buchungszeilen, Etappe
 - [x] T047 `AllocationSuggestionService` und Seite „Nicht zugeordnet“ mit Übernehmen
 - [x] T048 Löschschutz für Projekte mit Rechnungen
 - [x] T049 Tests `tests/Feature/Projects/InvoiceProjectTest.php`
-- [ ] T050 UI-Durchgang Etappe 2
-- [ ] T051 Lokales Importskript für das Excel (ausserhalb des Repositorys), Probelauf
+- [x] T050 UI-Durchgang Etappe 2
+- [x] T051 Lokales Importskript für das Excel (ausserhalb des Repositorys), Probelauf
 - [ ] T052 Alle Suiten, Review
