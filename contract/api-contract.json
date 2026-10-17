@@ -2600,6 +2600,26 @@
         "data": "{id, year, employee_id, label, amount}"
       },
       "notes": "Spec 009, stage 5. Owners only (projects.view and organization.delete); projects module on. A planned drawing of a person in a year."
+    },
+    {
+      "name": "api.steering.index",
+      "method": "GET",
+      "path": "/api/v1/steering",
+      "controller": "SteeringController@indexApi",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view",
+        "organization.delete"
+      ],
+      "request": {
+        "query": {
+          "year": "required"
+        }
+      },
+      "response_200": {
+        "data": "{year, people: [{employee_id, name, by_status, contribution, credit, burden, effect, value, planned_items, acquisitions, drawn, booked_salary, play, play_without_possible}], blocks, items, unshared, totals}"
+      },
+      "notes": "Spec 009, stage 5. Owners only; projects module on."
     }
   ],
   "audit_findings": {

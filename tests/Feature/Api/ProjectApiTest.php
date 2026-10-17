@@ -277,6 +277,7 @@ class ProjectApiTest extends SecurityTestCase
         $this->api()->withHeaders(['Idempotency-Key' => 'item-1'])
             ->postJson('/api/v1/steering-items', ['year' => 2026, 'employee_id' => $anna->id, 'label' => 'Salary', 'amount' => '11076.90'])
             ->assertCreated();
+        $this->api()->getJson('/api/v1/steering?year=2026')->assertOk()->assertJsonPath('data.items.0.label', 'Salary');
 
         $admin = $this->createUserInOrg($this->orgA, 'admin');
         $adminToken = $this->createApiToken($admin, $this->orgA);

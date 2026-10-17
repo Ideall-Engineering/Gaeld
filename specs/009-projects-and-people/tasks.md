@@ -138,6 +138,6 @@ description: "Gäld task list: Projekte und Zuordnung von Buchungszeilen, Etappe
 - [x] T067 Seite „Steuerung“ nur für Owner, CSV und PDF; Anteile im Projektformular, Schlüssel im Kostenblockformular
 - [x] T068 API für Anteile, Schlüssel und Planposten (nur Owner)
 - [x] T069 Tests `SteeringTest` mit durchgerechnetem Beispiel, API-Test
-- [ ] T070 Importskript: Anteile, Schlüssel und Planposten aus dem Excel
+- [x] T070 Importskript: Anteile, Schlüssel und Planposten aus dem Excel
 - [ ] T071 UI-Durchgang, alle Suiten
 - [ ] T072 Parallelbetrieb ein Monat (nach Rollout, mit dem Nutzer)

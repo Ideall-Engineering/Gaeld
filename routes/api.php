@@ -134,6 +134,7 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
         Route::get('/acquisitions/people', [AcquisitionApiController::class, 'people'])->name('api.acquisitions.people');
         Route::put('/projects/{project}/shares', [ProjectApiController::class, 'shares'])->name('api.projects.shares');
         Route::put('/budget-groups/{budgetGroup}/people', [BudgetGroupApiController::class, 'people'])->name('api.budget-groups.people');
+        Route::get('/steering', [SteeringController::class, 'indexApi'])->name('api.steering.index');
         Route::post('/steering-items', [SteeringController::class, 'storeItemApi'])->name('api.steering-items.store');
         Route::get('/budget-groups', [BudgetGroupApiController::class, 'index'])->name('api.budget-groups.index');
         Route::post('/budget-groups', [BudgetGroupApiController::class, 'store'])->name('api.budget-groups.store');

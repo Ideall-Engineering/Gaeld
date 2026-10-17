@@ -37,6 +37,18 @@ class SteeringController extends Controller
     }
 
     /**
+     * The steering of a year over the API (owners only).
+     */
+    public function indexApi(Request $request, SteeringService $steering, CurrentOrganization $currentOrg): JsonResponse
+    {
+        $this->authorize('steer', Project::class);
+
+        $year = (int) $request->validate(['year' => ['required', 'integer', 'between:2000,2100']])['year'];
+
+        return response()->json(['data' => $steering->forYear($currentOrg->id(), $year)]);
+    }
+
+    /**
      * Add a planned drawing over the API (owners only).
      */
     public function storeItemApi(Request $request, CurrentOrganization $currentOrg): JsonResponse
