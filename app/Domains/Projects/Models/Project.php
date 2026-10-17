@@ -30,7 +30,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $target_date
  * @property string|null $expected_amount
  * @property string|null $notes
- * @property-read Project|null $parent
+ * @property-read CostCenter|null $parent
  * @property-read Contact|null $contact
  * @property-read Employee|null $responsible
  */
@@ -62,18 +62,6 @@ class Project extends CostCenter
             'target_date' => 'date',
             'expected_amount' => 'decimal:2',
         ];
-    }
-
-    /** @return BelongsTo<self, $this> */
-    public function parent(): BelongsTo
-    {
-        return $this->belongsTo(self::class, 'parent_id');
-    }
-
-    /** @return HasMany<self, $this> */
-    public function children(): HasMany
-    {
-        return $this->hasMany(self::class, 'parent_id');
     }
 
     /** @return BelongsTo<Contact, $this> */

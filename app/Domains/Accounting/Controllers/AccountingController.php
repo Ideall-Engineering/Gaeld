@@ -43,8 +43,8 @@ use App\Support\PdfExportService;
 use App\Support\QueryBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
@@ -234,7 +234,7 @@ class AccountingController extends Controller
             $base[] = "{$prefix}.allocations.employee:id,first_name,last_name";
         }
 
-        return $base;
+        return array_values($base);
     }
 
     /**

@@ -13,6 +13,7 @@ use App\Domains\Projects\Models\Project;
 use App\Domains\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Activitylog\Models\Activity;
 use Tests\TestCase;
@@ -272,7 +273,7 @@ class AllocationEditAnyStateTest extends TestCase
     }
 
     /** @param  array<int, array<string, mixed>>  $lines */
-    private function putAllocations(JournalEntry $entry, array $lines): \Illuminate\Testing\TestResponse
+    private function putAllocations(JournalEntry $entry, array $lines): TestResponse
     {
         return $this->actAsOrg()->put("/accounting/journal-entries/{$entry->id}/allocations", ['lines' => $lines]);
     }

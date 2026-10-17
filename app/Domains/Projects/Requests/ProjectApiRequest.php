@@ -9,6 +9,7 @@ use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\Project;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -86,12 +87,11 @@ class ProjectApiRequest extends FormRequest
         if (array_key_exists('parent_code', $validated)) {
             $parentId = $validated['parent_code'] === null ? null : Project::query()->where('code', $validated['parent_code'])->value('id');
             $current = $this->route('project');
-            $fails = false;
-            (new ValidCostCenterParent($orgId, $current instanceof Project ? $current : null))
-                ->validate('parent_code', $parentId, function () use (&$fails): void {
-                    $fails = true;
-                });
-            if ($fails) {
+            $parentCheck = Validator::make(
+                ['parent_id' => $parentId],
+                ['parent_id' => [new ValidCostCenterParent($orgId, $current instanceof Project ? $current : null)]],
+            );
+            if ($parentCheck->fails()) {
                 throw ValidationException::withMessages(['parent_code' => 'The parent would create a circular hierarchy.']);
             }
             $validated['parent_id'] = $parentId;

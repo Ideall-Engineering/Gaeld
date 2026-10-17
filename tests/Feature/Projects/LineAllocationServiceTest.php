@@ -4,6 +4,7 @@ namespace Tests\Feature\Projects;
 
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
+use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Models\Employee;
@@ -105,7 +106,7 @@ class LineAllocationServiceTest extends TestCase
             $this->fail('A foreign project must be refused.');
         } catch (InvalidAllocationException) {
             $this->assertSame(0, LineAllocation::count());
-            $this->assertSame(0, \App\Domains\Accounting\Models\JournalEntry::count(), 'The entry is rolled back with it.');
+            $this->assertSame(0, JournalEntry::count(), 'The entry is rolled back with it.');
         }
     }
 

@@ -8,6 +8,7 @@ use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Api\Enums\TokenType;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Projects\Models\LineAllocation;
@@ -167,7 +168,7 @@ class ProjectApiTest extends SecurityTestCase
     public function test_a_token_without_project_abilities_is_refused(): void
     {
         $result = $this->ownerA->createToken('limited', ['accounting.view']);
-        $result->accessToken->update(['organization_id' => $this->orgA->id, 'type' => \App\Domains\Api\Enums\TokenType::Personal]);
+        $result->accessToken->update(['organization_id' => $this->orgA->id, 'type' => TokenType::Personal]);
 
         $this->withToken($result->plainTextToken)->getJson('/api/v1/projects')->assertForbidden();
     }

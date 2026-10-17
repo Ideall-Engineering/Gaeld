@@ -104,7 +104,7 @@ jobs:
           - name: 'Feature (Group 2)'
             test-paths: 'tests/Feature/Organizations tests/Feature/Invoicing tests/Feature/Api tests/Feature/Reporting tests/Feature/Expenses tests/Feature/Banking tests/Feature/Users tests/Feature/Payroll tests/Feature/Contacts tests/Feature/Auth tests/Feature/Assets tests/Feature/Seeders tests/Feature/Security tests/Feature/Dashboard tests/Feature/Billing tests/Feature/SaasAdmin'
           - name: 'Feature (Group 3) & Modules'
-            test-paths: 'tests/Feature/Automation tests/Feature/EditionBoundary tests/Feature/Http tests/Feature/Plugins tests/Feature/OfferPlanDefinitionTest.php tests/Feature/NotificationMailContentTest.php tests/Feature/OrganizationCommunicationsTest.php plugins/accountant-api/tests'
+            test-paths: 'tests/Feature/Automation tests/Feature/EditionBoundary tests/Feature/Http tests/Feature/Plugins tests/Feature/Projects tests/Feature/OfferPlanDefinitionTest.php tests/Feature/NotificationMailContentTest.php tests/Feature/OrganizationCommunicationsTest.php plugins/accountant-api/tests'
           # Non-Feature suites
           - name: 'Unit'
             test-paths: 'tests/Unit'

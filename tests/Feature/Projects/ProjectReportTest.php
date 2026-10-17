@@ -4,6 +4,7 @@ namespace Tests\Feature\Projects;
 
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
+use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Projects\DTOs\LineAllocationData;
@@ -154,8 +155,8 @@ class ProjectReportTest extends TestCase
      */
     private function book(
         string $reference,
-        \App\Domains\Accounting\Models\Account $debit,
-        \App\Domains\Accounting\Models\Account $credit,
+        Account $debit,
+        Account $credit,
         string $amount,
         ?array $revenueTo = null,
         ?array $expenseTo = null,

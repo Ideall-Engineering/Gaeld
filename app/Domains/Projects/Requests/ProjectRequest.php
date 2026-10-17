@@ -7,12 +7,13 @@ use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Policies\ProjectPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
  * Create or change a project (spec 009). Authorization happens in the
- * controller through {@see \App\Domains\Projects\Policies\ProjectPolicy}.
+ * controller through {@see ProjectPolicy}.
  */
 class ProjectRequest extends FormRequest
 {

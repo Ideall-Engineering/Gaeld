@@ -35,7 +35,7 @@ class AllocationReviewController extends Controller
             'reviews' => $reviews->map(fn (AllocationReview $review) => [
                 'id' => $review->id,
                 'created_at' => $review->created_at->toIso8601String(),
-                'entry' => $review->journalEntry === null ? null : [
+                'entry' => [
                     'id' => $review->journalEntry->id,
                     'date' => $review->journalEntry->date->toDateString(),
                     'reference' => $review->journalEntry->reference,

@@ -372,7 +372,7 @@ class LineAllocationService
 
         foreach ($shares as $index => $share) {
             $parts[$index] = Money::percentage($amount, $share);
-            $total = bcadd($total, $share, 4);
+            $total = bcadd($total, Money::of($share), 4);
             $assigned = Money::add($assigned, $parts[$index]);
         }
 

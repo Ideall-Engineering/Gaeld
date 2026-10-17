@@ -14,8 +14,9 @@ use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Services\JournalCorrectionEligibilityService;
 use App\Domains\Accounting\Services\LedgerService;
-use App\Support\Exceptions\DomainException;
+use App\Domains\Projects\DTOs\LineAllocationData;
 use App\Domains\Projects\Services\LineAllocationService;
+use App\Support\Exceptions\DomainException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -151,7 +152,7 @@ class PrepareJournalCorrectionAction
      * The replacement draft, and any of the original's allocations that a
      * caller-supplied replacement left without a clear successor line.
      *
-     * @return array{0: JournalEntryData, 1: array<int, array<string, mixed>>}
+     * @return array{0: JournalEntryData, 1: array<int, array{account_id: string, debit: string, credit: string, allocations: array<int, LineAllocationData>}>}
      */
     private function buildReplacementData(
         JournalEntry $original,

@@ -14,11 +14,11 @@ use App\Domains\Api\Controllers\JournalEntryApiController;
 use App\Domains\Api\Controllers\JournalEntryRevisionApiController;
 use App\Domains\Api\Controllers\OrgTokenController;
 use App\Domains\Api\Controllers\WebhookApiController;
-use App\Http\Middleware\Api\HandleApiIdempotency;
-use App\Http\Middleware\LogOrgTokenActivity;
 use App\Domains\Projects\Controllers\JournalAllocationApiController;
 use App\Domains\Projects\Controllers\ProjectApiController;
+use App\Http\Middleware\Api\HandleApiIdempotency;
 use App\Http\Middleware\EnsureProjectsModule;
+use App\Http\Middleware\LogOrgTokenActivity;
 use Illuminate\Support\Facades\Route;
 
 /*
