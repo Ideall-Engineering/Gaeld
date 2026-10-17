@@ -8,18 +8,23 @@ use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\JournalEntryRevision;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Models\VatEntry;
+use App\Domains\Projects\Services\LineAllocationService;
 
 /**
  * Freezes the complete current state of a posted journal entry before it
  * is amended or deleted.
  *
- * The snapshot holds the header, every line and every VAT entry exactly as
- * stored, so any earlier state can be shown or restored without consulting
+ * The snapshot holds the header, every line, every VAT entry and the
+ * lines' project allocations exactly as stored, so any earlier state can be shown or restored without consulting
  * the activity log (which records rows separately, misses bulk deletes and
  * is pruned after a year).
  */
 class JournalEntryRevisionRecorder
 {
+    public function __construct(
+        private LineAllocationService $allocations,
+    ) {}
+
     public function record(
         JournalEntry $entry,
         JournalEntryRevisionKind $kind,
@@ -44,6 +49,9 @@ class JournalEntryRevisionRecorder
                 'entry' => $entry->withoutRelations()->attributesToArray(),
                 'lines' => $lines->map(fn (TransactionLine $line) => $line->attributesToArray())->all(),
                 'vat_entries' => $vatEntries->map(fn (VatEntry $vat) => $vat->attributesToArray())->all(),
+                // Projects and people per line id (spec 009); they go with
+                // the lines when those are rebuilt or deleted.
+                'line_allocations' => $this->allocations->snapshot($entry),
             ],
             'reason' => $context->reason !== null && trim($context->reason) !== '' ? trim($context->reason) : null,
             'user_id' => $context->userId,

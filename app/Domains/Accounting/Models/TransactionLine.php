@@ -3,11 +3,13 @@
 namespace App\Domains\Accounting\Models;
 
 use App\Domains\Accounting\Enums\VatEntryType;
+use App\Domains\Projects\Models\LineAllocation;
 use App\Support\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Single debit or credit line within a {@see JournalEntry}.
@@ -73,5 +75,15 @@ class TransactionLine extends Model
     public function costCenter(): BelongsTo
     {
         return $this->belongsTo(CostCenter::class);
+    }
+
+    /**
+     * Projects and people this line is allocated to (spec 009).
+     *
+     * @return HasMany<LineAllocation, $this>
+     */
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(LineAllocation::class);
     }
 }

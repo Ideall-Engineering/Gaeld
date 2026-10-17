@@ -15,6 +15,7 @@ use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Services\JournalCorrectionEligibilityService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Support\Exceptions\DomainException;
+use App\Domains\Projects\Services\LineAllocationService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -28,6 +29,7 @@ class PrepareJournalCorrectionAction
     public function __construct(
         private LedgerService $ledgerService,
         private JournalCorrectionEligibilityService $eligibilityService,
+        private LineAllocationService $allocations,
     ) {}
 
     /**
@@ -64,8 +66,9 @@ class PrepareJournalCorrectionAction
             $reversalDraft = $this->ledgerService->createDraft($locked->organization_id, $reversalData);
             $reversalDraft->update(['reversal_of_entry_id' => $locked->id]);
 
-            $replacementData = $this->buildReplacementData($locked, $correctionDate, $replacement);
+            [$replacementData, $leftOverAllocations] = $this->buildReplacementData($locked, $correctionDate, $replacement);
             $replacementDraft = $this->ledgerService->createDraft($locked->organization_id, $replacementData);
+            $this->allocations->flagLeftOver($replacementDraft, $leftOverAllocations);
 
             $correction = JournalCorrection::create([
                 'organization_id' => $locked->organization_id,
@@ -121,7 +124,9 @@ class PrepareJournalCorrectionAction
 
     private function buildReversalData(JournalEntry $original, string $correctionDate): JournalEntryData
     {
-        $lines = $original->lines->map(fn (TransactionLine $line) => new JournalLineData(
+        $allocations = $this->allocations->forLinesOf($original);
+
+        $lines = $original->lines->sortBy('id')->values()->map(fn (TransactionLine $line, int $index) => new JournalLineData(
             accountId: (string) $line->account_id,
             debit: (string) $line->credit,
             credit: (string) $line->debit,
@@ -130,6 +135,7 @@ class PrepareJournalCorrectionAction
             vatAmount: $line->vat_amount,
             vatType: $line->vat_type?->value,
             vatFigure: $line->vat_figure,
+            allocations: ($allocations[$index] ?? []) !== [] ? $allocations[$index] : null,
         ))->all();
 
         return new JournalEntryData(
@@ -141,22 +147,35 @@ class PrepareJournalCorrectionAction
         );
     }
 
+    /**
+     * The replacement draft, and any of the original's allocations that a
+     * caller-supplied replacement left without a clear successor line.
+     *
+     * @return array{0: JournalEntryData, 1: array<int, array<string, mixed>>}
+     */
     private function buildReplacementData(
         JournalEntry $original,
         string $correctionDate,
         ?JournalEntryData $replacement,
-    ): JournalEntryData {
+    ): array {
         if ($replacement !== null) {
-            return new JournalEntryData(
+            [$lines, $leftOver] = $this->allocations->inherit(
+                $this->allocations->captureLines($original),
+                $replacement->lines,
+            );
+
+            return [new JournalEntryData(
                 date: $correctionDate,
                 reference: $replacement->reference,
                 description: $replacement->description ?? $original->description,
-                lines: $replacement->lines,
+                lines: $lines,
                 type: $original->type,
-            );
+            ), $leftOver];
         }
 
-        $lines = $original->lines->map(fn (TransactionLine $line) => new JournalLineData(
+        $allocations = $this->allocations->forLinesOf($original);
+
+        $lines = $original->lines->sortBy('id')->values()->map(fn (TransactionLine $line, int $index) => new JournalLineData(
             accountId: (string) $line->account_id,
             debit: (string) $line->debit,
             credit: (string) $line->credit,
@@ -165,14 +184,15 @@ class PrepareJournalCorrectionAction
             vatAmount: $line->vat_amount,
             vatType: $line->vat_type?->value,
             vatFigure: $line->vat_figure,
+            allocations: ($allocations[$index] ?? []) !== [] ? $allocations[$index] : null,
         ))->all();
 
-        return new JournalEntryData(
+        return [new JournalEntryData(
             date: $correctionDate,
             reference: null,
             description: $original->description,
             lines: $lines,
             type: $original->type,
-        );
+        ), []];
     }
 }

@@ -116,6 +116,9 @@ enum Role: string
 
             // Migration
             Permission::MigrationImport,
+
+            // Projects
+            Permission::ProjectsView,
         ];
     }
 
@@ -187,6 +190,11 @@ enum Role: string
 
             // Migration
             Permission::MigrationImport,
+
+            // Projects
+            Permission::ProjectsView,
+            Permission::ProjectsManage,
+            Permission::ProjectsAllocate,
         ];
     }
 
@@ -204,6 +212,7 @@ enum Role: string
             Permission::OrganizationView,
             Permission::ReportingView,
             Permission::PayrollView,
+            Permission::ProjectsView,
         ];
     }
 }

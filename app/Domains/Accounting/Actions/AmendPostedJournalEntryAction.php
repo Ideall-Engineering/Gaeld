@@ -5,6 +5,7 @@ namespace App\Domains\Accounting\Actions;
 use App\Domains\Accounting\DTOs\JournalEntryChangeContext;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
+use App\Domains\Accounting\Enums\JournalCorrectionSource;
 use App\Domains\Accounting\Enums\JournalEntryRevisionKind;
 use App\Domains\Accounting\Events\JournalEntryAmended;
 use App\Domains\Accounting\Exceptions\BankAmountChangeUnacknowledgedException;
@@ -20,6 +21,8 @@ use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Accounting\Services\VatEntryWriter;
 use App\Support\Money;
+use App\Domains\Projects\Enums\AllocationSource;
+use App\Domains\Projects\Services\LineAllocationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -39,6 +42,7 @@ class AmendPostedJournalEntryAction
         private JournalEntryEditStateService $editState,
         private JournalEntryRevisionRecorder $revisions,
         private VatEntryWriter $vatEntryWriter,
+        private LineAllocationService $allocations,
     ) {}
 
     /**
@@ -67,6 +71,9 @@ class AmendPostedJournalEntryAction
 
             $revision = $this->revisions->record($locked, JournalEntryRevisionKind::Updated, $context);
 
+            $allocationsBefore = $this->allocations->captureLines($locked);
+            $rebuilt = [];
+
             VatEntry::query()->where('journal_entry_id', $locked->id)->get()->each->delete();
             TransactionLine::query()->where('journal_entry_id', $locked->id)->get()->each->delete();
 
@@ -92,7 +99,15 @@ class AmendPostedJournalEntryAction
                 ]);
 
                 $this->vatEntryWriter->writeFor($locked, $transactionLine, $vatRateIds);
+                $rebuilt[] = [$transactionLine, $line];
             }
+
+            $this->allocations->applyAfterRebuild(
+                $locked,
+                $allocationsBefore,
+                $rebuilt,
+                $context->source === JournalCorrectionSource::Api ? AllocationSource::Api : AllocationSource::Manual,
+            );
 
             return [$locked, $previousRevision, $revision->id];
         });

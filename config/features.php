@@ -34,6 +34,10 @@ return [
     'assets' => env('FEATURE_ASSETS', true),
     'payroll' => env('FEATURE_PAYROLL', true),
 
+    // Projects and line allocations (spec 009). Off until an owner switches it
+    // on for their organization under Settings → Modules.
+    'projects' => env('FEATURE_PROJECTS', false),
+
     // Cookie consent banner and the floating button that reopens its
     // preferences. An installation that sets only technically necessary cookies
     // — the session and the CSRF token — needs no consent for them, and then

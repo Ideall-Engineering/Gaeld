@@ -2,7 +2,7 @@
 
 namespace App\Domains\Accounting\DTOs;
 
-use App\Support\MapsToSnakeCase;
+use App\Domains\Projects\DTOs\LineAllocationData;
 use App\Support\ValidatesFromArray;
 
 /**
@@ -10,10 +10,12 @@ use App\Support\ValidatesFromArray;
  *
  * Amounts are always strings (bcmath-compatible). Callers must pass
  * string values; use '0' instead of integer 0.
+ *
+ * `allocations` (spec 009) is null when the caller says nothing about
+ * projects and people, and an empty array when it clears them.
  */
 readonly class JournalLineData
 {
-    use MapsToSnakeCase;
     use ValidatesFromArray;
 
     public function __construct(
@@ -25,6 +27,8 @@ readonly class JournalLineData
         public ?string $vatAmount = null,
         public ?string $vatType = null,
         public ?string $vatFigure = null,
+        /** @var array<int, LineAllocationData>|null */
+        public ?array $allocations = null,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -41,6 +45,45 @@ readonly class JournalLineData
             vatAmount: isset($data['vat_amount']) ? (string) $data['vat_amount'] : null,
             vatType: $data['vat_type'] ?? null,
             vatFigure: $data['vat_figure'] ?? null,
+            allocations: LineAllocationData::listFromLine($data),
         );
+    }
+
+    /**
+     * The same line with other allocations; everything else stays as is.
+     *
+     * @param  array<int, LineAllocationData>|null  $allocations
+     */
+    public function withAllocations(?array $allocations): self
+    {
+        return new self(
+            accountId: $this->accountId,
+            debit: $this->debit,
+            credit: $this->credit,
+            description: $this->description,
+            vatRateId: $this->vatRateId,
+            vatAmount: $this->vatAmount,
+            vatType: $this->vatType,
+            vatFigure: $this->vatFigure,
+            allocations: $allocations,
+        );
+    }
+
+    /** @return array<string, mixed> */
+    public function toArray(): array
+    {
+        return [
+            'account_id' => $this->accountId,
+            'debit' => $this->debit,
+            'credit' => $this->credit,
+            'description' => $this->description,
+            'vat_rate_id' => $this->vatRateId,
+            'vat_amount' => $this->vatAmount,
+            'vat_type' => $this->vatType,
+            'vat_figure' => $this->vatFigure,
+            'allocations' => $this->allocations === null
+                ? null
+                : array_map(fn (LineAllocationData $allocation) => $allocation->toArray(), $this->allocations),
+        ];
     }
 }

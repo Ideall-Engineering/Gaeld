@@ -65,6 +65,11 @@ enum Permission: string
     // Migration
     case MigrationImport = 'migration.import';
 
+    // Projects
+    case ProjectsView = 'projects.view';
+    case ProjectsManage = 'projects.manage';
+    case ProjectsAllocate = 'projects.allocate';
+
     /**
      * @return string[]
      */

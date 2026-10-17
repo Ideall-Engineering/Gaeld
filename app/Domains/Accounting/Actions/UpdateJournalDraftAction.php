@@ -11,6 +11,8 @@ use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Projects\Enums\AllocationSource;
+use App\Domains\Projects\Services\LineAllocationService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -30,6 +32,7 @@ class UpdateJournalDraftAction
     public function __construct(
         private LedgerService $ledgerService,
         private LedgerQueryService $ledgerQuery,
+        private LineAllocationService $allocations,
     ) {}
 
     /**
@@ -53,6 +56,9 @@ class UpdateJournalDraftAction
         $this->assertReferenceAvailable($draft, $data->reference);
 
         return DB::transaction(function () use ($draft, $data): JournalEntry {
+            $allocationsBefore = $this->allocations->captureLines($draft);
+            $rebuilt = [];
+
             $draft->lines()->delete();
             $draft->update([
                 'date' => $data->date,
@@ -61,7 +67,7 @@ class UpdateJournalDraftAction
             ]);
 
             foreach ($data->lines as $line) {
-                TransactionLine::create([
+                $rebuilt[] = [TransactionLine::create([
                     'journal_entry_id' => $draft->id,
                     'account_id' => $line->accountId,
                     'debit' => $line->debit,
@@ -71,8 +77,10 @@ class UpdateJournalDraftAction
                     'vat_amount' => $line->vatAmount,
                     'vat_type' => $line->vatType,
                     'vat_figure' => $line->vatFigure,
-                ]);
+                ]), $line];
             }
+
+            $this->allocations->applyAfterRebuild($draft, $allocationsBefore, $rebuilt, AllocationSource::Manual);
 
             return $draft->fresh(['lines.account']);
         });

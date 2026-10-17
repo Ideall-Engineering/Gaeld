@@ -19,6 +19,7 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Projects\Services\LineAllocationService;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Organizations\Models\Organization;
 use App\Support\Money;
@@ -42,6 +43,7 @@ class LedgerService
     public function __construct(
         private LedgerQueryService $queryService,
         private VatEntryWriter $vatEntryWriter,
+        private LineAllocationService $allocations,
     ) {}
 
     // ──────────────────────────────────────────────────────────────
@@ -198,7 +200,11 @@ class LedgerService
             $reversalReference = self::REFERENCE_PREFIX_REVERSAL.$original->reference;
             $this->throwIfDuplicateReference($original->organization_id, $reversalReference);
 
-            $lines = $original->lines->map(fn (TransactionLine $line) => new JournalLineData(
+            // The reversal carries the original's projects and people, so a
+            // reversed entry nets to zero in every project report.
+            $allocations = $this->allocations->forLinesOf($original);
+
+            $lines = $original->lines->sortBy('id')->values()->map(fn (TransactionLine $line, int $index) => new JournalLineData(
                 accountId: (string) $line->account_id,
                 debit: (string) $line->credit,
                 credit: (string) $line->debit,
@@ -207,6 +213,7 @@ class LedgerService
                 vatAmount: $line->vat_amount,
                 vatType: $line->vat_type?->value,
                 vatFigure: $line->vat_figure,
+                allocations: ($allocations[$index] ?? []) !== [] ? $allocations[$index] : null,
             ))->all();
 
             $reversalEntry = $this->createDraft($original->organization_id, new JournalEntryData(
@@ -406,6 +413,8 @@ class LedgerService
                         'vat_type' => $line->vatType,
                         'vat_figure' => $line->vatFigure,
                     ]);
+
+                    $this->allocations->writeFor($transactionLine, $organizationId, $line->allocations);
 
                     if ($isPosted) {
                         $this->createVatEntries($journalEntry, $transactionLine, $vatRateIds);
