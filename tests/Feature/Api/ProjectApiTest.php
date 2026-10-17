@@ -173,6 +173,54 @@ class ProjectApiTest extends SecurityTestCase
         $this->withToken($result->plainTextToken)->getJson('/api/v1/projects')->assertForbidden();
     }
 
+    public function test_an_explicit_null_keeps_the_allocations_on_amend(): void
+    {
+        $this->orgA->update(['posted_entry_edit_mode' => 'flexible']);
+        Project::create(['organization_id' => $this->orgA->id, 'code' => 'ALPHA', 'name' => 'Alpha']);
+        $created = $this->api()->withHeaders(['Idempotency-Key' => 'null-1'])->postJson('/api/v1/journal-entries', [
+            'date' => '2026-08-10',
+            'reference' => 'API-NULL',
+            'status' => 'posted',
+            'lines' => [
+                ['account_code' => '6000', 'debit' => '100.00', 'credit' => '0', 'allocations' => [['project_code' => 'ALPHA']]],
+                ['account_code' => '1020', 'debit' => '0', 'credit' => '100.00'],
+            ],
+        ])->assertCreated();
+
+        $this->api()->withHeaders(['If-Match' => '1', 'Idempotency-Key' => 'null-2'])
+            ->patchJson('/api/v1/journal-entries/'.$created->json('data.id'), [
+                'date' => '2026-08-10',
+                'reference' => 'API-NULL',
+                'description' => 'Text only',
+                'lines' => [
+                    ['account_code' => '6000', 'debit' => '100.00', 'credit' => '0', 'allocations' => null],
+                    ['account_code' => '1020', 'debit' => '0', 'credit' => '100.00'],
+                ],
+            ])->assertOk()
+            ->assertJsonPath('data.lines.0.allocations.0.project_code', 'ALPHA');
+    }
+
+    public function test_allocations_from_a_token_without_the_permission_are_refused(): void
+    {
+        Project::create(['organization_id' => $this->orgA->id, 'code' => 'ALPHA', 'name' => 'Alpha']);
+        $result = $this->ownerA->createToken('no-allocate', ['accounting.view', 'accounting.create']);
+        $result->accessToken->update(['organization_id' => $this->orgA->id, 'type' => TokenType::Personal]);
+
+        $this->withToken($result->plainTextToken)->withHeaders(['Idempotency-Key' => 'forbidden-1'])
+            ->postJson('/api/v1/journal-entries', [
+                'date' => '2026-08-10',
+                'reference' => 'API-FORBIDDEN',
+                'status' => 'posted',
+                'lines' => [
+                    ['account_code' => '6000', 'debit' => '10.00', 'credit' => '0', 'allocations' => [['project_code' => 'ALPHA']]],
+                    ['account_code' => '1020', 'debit' => '0', 'credit' => '10.00'],
+                ],
+            ])->assertForbidden()
+            ->assertJsonPath('code', 'allocations_forbidden');
+
+        $this->assertSame(0, JournalEntry::query()->where('reference', 'API-FORBIDDEN')->count());
+    }
+
     private function api(): static
     {
         return $this->withToken($this->tokenA);

@@ -41,6 +41,15 @@ const vatRateOptions = computed(() => [
   ...props.vatRates.map(r => ({ value: r.uuid, label: r.label })),
 ])
 
+// Lines are keyed by identity, not position: removing a line must not hand
+// its editor state (such as an open split) to the line that moves up.
+const lineKeys = new WeakMap()
+let nextLineKey = 0
+function keyOf(line) {
+  if (!lineKeys.has(line)) lineKeys.set(line, ++nextLineKey)
+  return lineKeys.get(line)
+}
+
 function lineError(index, field) {
   return props.errors[`lines.${index}.${field}`]
 }
@@ -127,7 +136,7 @@ export function serializeLines(lines) {
     <div class="space-y-3">
       <div
         v-for="(line, index) in lines"
-        :key="index"
+        :key="keyOf(line)"
         class="rounded-md border border-[hsl(var(--border))] p-2"
       >
         <div class="grid grid-cols-12 items-start gap-2">

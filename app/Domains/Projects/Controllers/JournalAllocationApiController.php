@@ -46,7 +46,12 @@ class JournalAllocationApiController extends Controller
         $validated = $request->validate([
             'lines' => ['required', 'array', 'min:1', 'max:200'],
             'lines.*.line_id' => ['required', 'integer'],
-            ...ApiAllocations::rules($currentOrganization->id(), 'lines.*.allocations', AllocationRules::projectsOf($journalEntry)),
+            ...ApiAllocations::rules(
+                $currentOrganization->id(),
+                'lines.*.allocations',
+                AllocationRules::projectsOf($journalEntry),
+                AllocationRules::employeesOf($journalEntry),
+            ),
             'lines.*.allocations' => ['present', 'array', 'max:20'],
         ]);
 

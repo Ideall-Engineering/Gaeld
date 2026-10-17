@@ -15,9 +15,10 @@ final class ApiAllocations
 {
     /**
      * @param  array<int, int>  $keptProjectIds  projects the entry already uses
+     * @param  array<int, string>  $keptEmployeeIds  people the entry already uses
      * @return array<string, array<int, mixed>>
      */
-    public static function rules(string $organizationId, string $prefix, array $keptProjectIds = []): array
+    public static function rules(string $organizationId, string $prefix, array $keptProjectIds = [], array $keptEmployeeIds = []): array
     {
         return [
             $prefix => ['sometimes', 'nullable', 'array', 'max:20'],
@@ -33,7 +34,9 @@ final class ApiAllocations
             "{$prefix}.*.employee_id" => [
                 'nullable',
                 'uuid',
-                Rule::exists('employees', 'id')->where('organization_id', $organizationId)->whereNull('deleted_at'),
+                Rule::exists('employees', 'id')
+                    ->where('organization_id', $organizationId)
+                    ->where(fn ($query) => $query->whereNull('deleted_at')->orWhereIn('id', $keptEmployeeIds ?: ['00000000-0000-0000-0000-000000000000'])),
             ],
             "{$prefix}.*.share" => ['sometimes', 'numeric', 'gt:0', 'max:100'],
         ];

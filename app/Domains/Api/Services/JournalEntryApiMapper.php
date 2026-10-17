@@ -35,8 +35,10 @@ final class JournalEntryApiMapper
                     vatAmount: isset($explicit['vat_amount']) ? (string) $explicit['vat_amount'] : null,
                     vatType: $explicit['vat_type'] ?? null,
                     vatFigure: $explicit['vat_figure'] ?? null,
-                    allocations: $withAllocations && array_key_exists('allocations', $explicit)
-                        ? ApiAllocations::toData((array) ($explicit['allocations'] ?? []))
+                    // An explicit null says nothing, like a missing key; only
+                    // a list, even an empty one, sets the allocations.
+                    allocations: $withAllocations && isset($explicit['allocations'])
+                        ? ApiAllocations::toData((array) $explicit['allocations'])
                         : null,
                 );
             }

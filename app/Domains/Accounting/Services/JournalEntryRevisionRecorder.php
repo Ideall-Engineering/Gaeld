@@ -39,20 +39,27 @@ class JournalEntryRevisionRecorder
             ->orderBy('id')
             ->get();
 
+        $snapshot = [
+            'entry' => $entry->withoutRelations()->attributesToArray(),
+            'lines' => $lines->map(fn (TransactionLine $line) => $line->attributesToArray())->all(),
+            'vat_entries' => $vatEntries->map(fn (VatEntry $vat) => $vat->attributesToArray())->all(),
+        ];
+
+        // Projects and people per line id (spec 009); they go with the
+        // lines when those are rebuilt or deleted. Only written where there
+        // are any, so snapshots elsewhere keep their shape.
+        $allocations = $this->allocations->snapshot($entry);
+        if ($allocations !== []) {
+            $snapshot['line_allocations'] = $allocations;
+        }
+
         return JournalEntryRevision::create([
             'organization_id' => $entry->organization_id,
             'journal_entry_id' => $entry->id,
             'revision' => $entry->revision,
             'kind' => $kind,
             'reference' => $entry->reference,
-            'snapshot' => [
-                'entry' => $entry->withoutRelations()->attributesToArray(),
-                'lines' => $lines->map(fn (TransactionLine $line) => $line->attributesToArray())->all(),
-                'vat_entries' => $vatEntries->map(fn (VatEntry $vat) => $vat->attributesToArray())->all(),
-                // Projects and people per line id (spec 009); they go with
-                // the lines when those are rebuilt or deleted.
-                'line_allocations' => $this->allocations->snapshot($entry),
-            ],
+            'snapshot' => $snapshot,
             'reason' => $context->reason !== null && trim($context->reason) !== '' ? trim($context->reason) : null,
             'user_id' => $context->userId,
             'token_id' => $context->tokenId,

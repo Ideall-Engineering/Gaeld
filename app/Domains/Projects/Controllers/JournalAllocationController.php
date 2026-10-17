@@ -16,6 +16,7 @@ use App\Domains\Projects\Support\AllocationRules;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -36,7 +37,11 @@ class JournalAllocationController extends Controller
         $validated = $request->validate([
             'lines' => ['required', 'array', 'min:1', 'max:200'],
             'lines.*.id' => ['required', 'integer'],
-            ...AllocationRules::for($currentOrg->id(), keptProjectIds: AllocationRules::projectsOf($journalEntry)),
+            ...AllocationRules::for(
+                $currentOrg->id(),
+                keptProjectIds: AllocationRules::projectsOf($journalEntry),
+                keptEmployeeIds: AllocationRules::employeesOf($journalEntry),
+            ),
         ]);
 
         $byLine = [];
@@ -86,37 +91,43 @@ class JournalAllocationController extends Controller
         $assigned = 0;
         $skipped = 0;
 
+        // All or nothing: every entry is checked before any is changed.
         foreach ($entries as $entry) {
             $this->authorize('view', $entry);
-
-            $lines = TransactionLine::query()
-                ->where('journal_entry_id', $entry->id)
-                ->whereHas('account', fn ($q) => $q->whereIn('type', [AccountType::Revenue->value, AccountType::Expense->value]))
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id);
-
-            $allocated = LineAllocation::query()
-                ->whereIn('transaction_line_id', $lines)
-                ->distinct()
-                ->pluck('transaction_line_id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
-
-            $byLine = [];
-            foreach ($lines as $lineId) {
-                if (! $overwrite && in_array($lineId, $allocated, true)) {
-                    $skipped++;
-
-                    continue;
-                }
-                $byLine[$lineId] = [new LineAllocationData(projectId: (int) $validated['project_id'], employeeId: null)];
-            }
-
-            if ($byLine !== []) {
-                $allocations->replaceForEntry($entry, $byLine, AllocationSource::Bulk, $request->user()?->id);
-                $assigned += count($byLine);
-            }
         }
+
+        DB::transaction(function () use ($entries, $overwrite, $validated, $allocations, $request, &$assigned, &$skipped): void {
+            foreach ($entries as $entry) {
+
+                $lines = TransactionLine::query()
+                    ->where('journal_entry_id', $entry->id)
+                    ->whereHas('account', fn ($q) => $q->whereIn('type', [AccountType::Revenue->value, AccountType::Expense->value]))
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id);
+
+                $allocated = LineAllocation::query()
+                    ->whereIn('transaction_line_id', $lines)
+                    ->distinct()
+                    ->pluck('transaction_line_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+
+                $byLine = [];
+                foreach ($lines as $lineId) {
+                    if (! $overwrite && in_array($lineId, $allocated, true)) {
+                        $skipped++;
+
+                        continue;
+                    }
+                    $byLine[$lineId] = [new LineAllocationData(projectId: (int) $validated['project_id'], employeeId: null)];
+                }
+
+                if ($byLine !== []) {
+                    $allocations->replaceForEntry($entry, $byLine, AllocationSource::Bulk, $request->user()?->id);
+                    $assigned += count($byLine);
+                }
+            }
+        });
 
         $response = back()->with('success', __('app.allocations_bulk_done', ['count' => $assigned]));
 

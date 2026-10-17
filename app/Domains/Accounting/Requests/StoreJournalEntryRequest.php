@@ -6,6 +6,7 @@ use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Rules\NotSystemReference;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Support\AllocationRules;
 use App\Domains\Projects\Support\ProjectsModule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -67,13 +68,22 @@ class StoreJournalEntryRequest extends FormRequest
      */
     private function allocationRules(string $orgId): array
     {
-        if (! ProjectsModule::enabledFor(app(CurrentOrganization::class)->get())) {
+        // Allocations from someone who may not set them are ignored later
+        // (see AccountingController::journalEntryDataFrom), so they must not
+        // be able to fail the save either.
+        if (! ProjectsModule::enabledFor(app(CurrentOrganization::class)->get())
+            || ! ($this->user()?->can('allocate', Project::class) ?? false)) {
             return [];
         }
 
         $entry = $this->route('journalEntry');
+        $entry = $entry instanceof JournalEntry ? $entry : null;
 
-        return AllocationRules::for($orgId, keptProjectIds: AllocationRules::projectsOf($entry instanceof JournalEntry ? $entry : null));
+        return AllocationRules::for(
+            $orgId,
+            keptProjectIds: AllocationRules::projectsOf($entry),
+            keptEmployeeIds: AllocationRules::employeesOf($entry),
+        );
     }
 
     /**

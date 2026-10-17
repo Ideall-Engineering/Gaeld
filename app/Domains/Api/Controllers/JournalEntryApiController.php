@@ -98,6 +98,10 @@ class JournalEntryApiController extends Controller
     ): JournalEntryResource|JsonResponse {
         $this->authorize('create', JournalEntry::class);
 
+        if ($refusal = $this->refuseUnauthorizedAllocations($request)) {
+            return $refusal;
+        }
+
         $reservation = null;
 
         try {
@@ -161,6 +165,10 @@ class JournalEntryApiController extends Controller
         $expectedRevision = $this->expectedRevision($request);
         if ($expectedRevision === null) {
             return $this->revisionRequired();
+        }
+
+        if ($refusal = $this->refuseUnauthorizedAllocations($request)) {
+            return $refusal;
         }
 
         return $this->executeMutation(
@@ -416,7 +424,9 @@ class JournalEntryApiController extends Controller
     {
         $org = app(CurrentOrganization::class);
 
-        return $org->isBound() && ProjectsModule::enabledFor($org->get())
+        return $org->isBound()
+            && ProjectsModule::enabledFor($org->get())
+            && (request()->user()?->can('viewAny', Project::class) ?? false)
             ? ['lines.account', 'lines.allocations.project:id,code']
             : ['lines.account'];
     }
@@ -428,6 +438,29 @@ class JournalEntryApiController extends Controller
         return $org->isBound()
             && ProjectsModule::enabledFor($org->get())
             && ($request->user()?->can('allocate', Project::class) ?? false);
+    }
+
+    /**
+     * Allocations sent by a token that may not set them are refused rather
+     * than dropped, so a client never believes they were stored (spec 009).
+     */
+    private function refuseUnauthorizedAllocations(Request $request): ?JsonResponse
+    {
+        $org = app(CurrentOrganization::class);
+        if (! $org->isBound() || ! ProjectsModule::enabledFor($org->get()) || $this->mayAllocate($request)) {
+            return null;
+        }
+
+        foreach ((array) $request->input('lines', []) as $line) {
+            if (is_array($line) && isset($line['allocations'])) {
+                return response()->json([
+                    'message' => 'This token may not set project allocations (projects.allocate).',
+                    'code' => 'allocations_forbidden',
+                ], 403);
+            }
+        }
+
+        return null;
     }
 
     private function ensureOrganization(JournalEntry $journalEntry, string $organizationId): void

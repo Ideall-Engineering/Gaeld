@@ -17,6 +17,7 @@ use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Models\InvoiceLine;
 use App\Domains\Invoicing\Models\InvoicePayment;
+use App\Domains\Projects\Services\LineAllocationService;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,7 @@ class InvoiceAccountingService
         private LedgerService $ledgerService,
         private LedgerQueryService $ledgerQuery,
         private VatPeriodLockService $vatPeriodLocks,
+        private LineAllocationService $allocations,
     ) {}
 
     /**
@@ -267,17 +269,21 @@ class InvoiceAccountingService
             );
             $this->ledgerService->postDraft($reversal);
 
+            // The repost keeps the projects and people of the lines it copies.
+            $allocations = $this->allocations->forLinesOf($original);
+
             $replacement = $this->ledgerService->postEntry(
                 $payment->organization_id,
                 new JournalEntryData(
                     date: $paymentDate,
                     reference: 'PAYDATE-'.$payment->id.'-'.Str::lower(Str::replace('-', '', Str::uuid()->toString())),
                     description: "Payment received for {$invoice->number} (date corrected)",
-                    lines: $original->lines->map(fn ($line) => new JournalLineData(
+                    lines: $original->lines->sortBy('id')->values()->map(fn ($line, int $index) => new JournalLineData(
                         accountId: (string) $line->account_id,
                         debit: (string) $line->debit,
                         credit: (string) $line->credit,
                         description: $line->description,
+                        allocations: ($allocations[$index] ?? []) !== [] ? $allocations[$index] : null,
                     ))->all(),
                 ),
             );

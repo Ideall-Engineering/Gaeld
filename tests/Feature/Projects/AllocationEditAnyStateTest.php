@@ -6,6 +6,7 @@ use App\Domains\Accounting\Enums\FiscalYearStatus;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Payroll\Models\Employee;
 use App\Domains\Projects\Enums\AllocationSource;
 use App\Domains\Projects\Models\AllocationReview;
 use App\Domains\Projects\Models\LineAllocation;
@@ -258,6 +259,65 @@ class AllocationEditAnyStateTest extends TestCase
                 ->where('entries.data.0.cost_center', 'ALPHA')
                 ->has('allocationOptions.projects', 2)
                 ->where('entries.data.0.lines.0.allocations.0.project.code', 'ALPHA'));
+    }
+
+    public function test_an_entry_allocated_to_a_person_who_left_can_still_be_saved(): void
+    {
+        $employee = Employee::factory()->for($this->organization)->create();
+        $entry = $this->postSimpleEntry();
+        $this->putAllocations($entry, [['id' => $this->lineOn($entry, $this->expense->id)->id, 'allocations' => [['employee_id' => $employee->id, 'share' => 100]]]])
+            ->assertSessionHasNoErrors();
+        $employee->delete();
+
+        $this->actAsOrg()->put("/accounting/journal-entries/{$entry->id}", [
+            'date' => '2026-08-10',
+            'reference' => 'JE-1',
+            'description' => 'Still savable',
+            'revision' => 1,
+            'lines' => [
+                ['account_id' => $this->expense->id, 'debit' => '100.00', 'credit' => '0', 'allocations' => [['project_id' => null, 'employee_id' => $employee->id, 'share' => '100']]],
+                ['account_id' => $this->bank->id, 'debit' => '0', 'credit' => '100.00', 'allocations' => []],
+            ],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame($employee->id, $this->allocationsOf($this->lineOn($entry->fresh(), $this->expense->id))[0]['employee']);
+    }
+
+    public function test_a_user_who_may_not_allocate_cannot_fail_a_save_over_allocations(): void
+    {
+        $member = User::factory()->create(['onboarding_completed_at' => now()]);
+        $this->organization->users()->attach($member->id, ['role' => 'member']);
+        $this->assignOrganizationRole($member, $this->organization, 'member');
+
+        $this->actingAs($member)->withSession(['current_organization_id' => $this->organization->id])
+            ->post('/accounting/journal-entries', [
+                'date' => '2026-08-10',
+                'reference' => 'MEMBER-1',
+                'description' => 'Member entry',
+                'lines' => [
+                    ['account_id' => $this->expense->id, 'debit' => '10.00', 'credit' => '0', 'allocations' => [['project_id' => 999999, 'share' => '100']]],
+                    ['account_id' => $this->bank->id, 'debit' => '0', 'credit' => '10.00'],
+                ],
+            ])->assertSessionHasNoErrors();
+
+        $this->assertSame(1, JournalEntry::query()->where('reference', 'MEMBER-1')->count());
+        $this->assertSame(0, LineAllocation::count());
+    }
+
+    public function test_the_list_keeps_a_mixed_cost_centre_empty_where_projects_are_off(): void
+    {
+        $entry = $this->postSimpleEntry();
+        $this->putAllocations($entry, [
+            ['id' => $this->lineOn($entry, $this->expense->id)->id, 'allocations' => [['project_id' => $this->alpha->id, 'share' => 100]]],
+            ['id' => $this->lineOn($entry, $this->bank->id)->id, 'allocations' => [['project_id' => $this->beta->id, 'share' => 100]]],
+        ]);
+
+        $this->actAsOrg()->get('/accounting/journal-entries')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('entries.data.0.cost_center', 'ALPHA, BETA'));
+
+        $this->organization->update(['enabled_modules' => ['projects' => false]]);
+        $this->actAsOrg()->get('/accounting/journal-entries')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('entries.data.0.cost_center', null));
     }
 
     private function assertAllocatable(JournalEntry $entry): void

@@ -227,7 +227,9 @@ class AccountingController extends Controller
     {
         $org = app(CurrentOrganization::class);
 
-        if ($org->isBound() && ProjectsModule::enabledFor($org->get())) {
+        if ($org->isBound()
+            && ProjectsModule::enabledFor($org->get())
+            && (request()->user()?->can('viewAny', Project::class) ?? false)) {
             // 'lines.account' -> 'lines', 'replacement.lines.account' -> 'replacement.lines'
             $prefix = Str::beforeLast($base[0] ?? 'lines.account', '.');
             $base[] = "{$prefix}.allocations.project:id,code,name";
@@ -376,7 +378,13 @@ class AccountingController extends Controller
             'is_split' => $lines->count() > 2,
             'vat_code' => $vatCodes->count() === 1 ? $vatCodes->first() : null,
             'vat_amount' => number_format($lines->sum(fn (TransactionLine $line) => (float) $line->vat_amount), 2, '.', ''),
-            'cost_center' => $costCentres->count() === 1 ? $costCentres->first() : ($costCentres->count() > 1 ? $costCentres->implode(', ') : null),
+            // Several project codes are listed only where projects are on;
+            // elsewhere a mixed entry keeps showing no cost centre, as before.
+            'cost_center' => match (true) {
+                $costCentres->count() === 1 => $costCentres->first(),
+                $costCentres->count() > 1 && $lines->contains(fn (TransactionLine $line) => $line->relationLoaded('allocations')) => $costCentres->implode(', '),
+                default => null,
+            },
             'line_description' => $lines->first(fn (TransactionLine $line) => filled($line->description))?->description,
         ];
     }
@@ -538,6 +546,9 @@ class AccountingController extends Controller
                 ? AllocationRules::for($orgId, keptProjectIds: [
                     ...AllocationRules::projectsOf($journalCorrection->replacement),
                     ...AllocationRules::projectsOf($journalCorrection->original),
+                ], keptEmployeeIds: [
+                    ...AllocationRules::employeesOf($journalCorrection->replacement),
+                    ...AllocationRules::employeesOf($journalCorrection->original),
                 ])
                 : []),
         ]);

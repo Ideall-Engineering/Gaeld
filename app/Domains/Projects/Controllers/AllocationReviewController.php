@@ -62,7 +62,7 @@ class AllocationReviewController extends Controller
     /** The person decided the old allocations no longer apply. */
     public function dismiss(Request $request, AllocationReview $allocationReview): RedirectResponse
     {
-        $this->authorize('allocate', Project::class);
+        $this->authorize('update', $allocationReview);
 
         if ($allocationReview->resolved_at === null) {
             $allocationReview->update(['resolved_at' => now(), 'resolved_by' => $request->user()?->id]);

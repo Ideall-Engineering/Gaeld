@@ -18,9 +18,10 @@ final class AllocationRules
 {
     /**
      * @param  array<int, int>  $keptProjectIds  projects the entry already uses
+     * @param  array<int, string>  $keptEmployeeIds  people the entry already uses, also if they left since
      * @return array<string, array<int, mixed>>
      */
-    public static function for(string $organizationId, string $prefix = 'lines.*.allocations', array $keptProjectIds = []): array
+    public static function for(string $organizationId, string $prefix = 'lines.*.allocations', array $keptProjectIds = [], array $keptEmployeeIds = []): array
     {
         return [
             $prefix => ['sometimes', 'nullable', 'array', 'max:20'],
@@ -36,7 +37,7 @@ final class AllocationRules
                 'uuid',
                 Rule::exists('employees', 'id')
                     ->where('organization_id', $organizationId)
-                    ->whereNull('deleted_at'),
+                    ->where(fn ($query) => $query->whereNull('deleted_at')->orWhereIn('id', $keptEmployeeIds ?: ['00000000-0000-0000-0000-000000000000'])),
             ],
             "{$prefix}.*.share" => ['required', 'numeric', 'gt:0', 'max:100'],
         ];
@@ -60,6 +61,27 @@ final class AllocationRules
             ->distinct()
             ->pluck('line_allocations.cost_center_id')
             ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    /**
+     * People the lines of an entry are allocated to today.
+     *
+     * @return array<int, string>
+     */
+    public static function employeesOf(?JournalEntry $entry): array
+    {
+        if ($entry === null) {
+            return [];
+        }
+
+        return LineAllocation::withoutGlobalScopes()
+            ->join('transaction_lines', 'transaction_lines.id', '=', 'line_allocations.transaction_line_id')
+            ->where('transaction_lines.journal_entry_id', $entry->id)
+            ->whereNotNull('line_allocations.employee_id')
+            ->distinct()
+            ->pluck('line_allocations.employee_id')
+            ->map(fn ($id) => (string) $id)
             ->all();
     }
 

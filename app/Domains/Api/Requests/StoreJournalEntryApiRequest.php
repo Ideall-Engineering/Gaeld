@@ -86,7 +86,9 @@ class StoreJournalEntryApiRequest extends FormRequest
             $rules['lines.*.vat_figure'] = ['nullable', 'string', Rule::in(self::DEDUCTION_FIGURES)];
             // A shorthand line becomes several lines; which of them a
             // project share belongs to would be a guess (spec 009).
-            $rules['lines.*.allocations'] = ['prohibited'];
+            if ($currentOrganization->isBound() && ProjectsModule::enabledFor($currentOrganization->get())) {
+                $rules['lines.*.allocations'] = ['prohibited'];
+            }
 
             return $rules;
         }
@@ -106,9 +108,10 @@ class StoreJournalEntryApiRequest extends FormRequest
 
         if ($currentOrganization->isBound() && ProjectsModule::enabledFor($currentOrganization->get())) {
             $entry = $this->route('journalEntry');
+            $entry = $entry instanceof JournalEntry ? $entry : null;
             $rules = [
                 ...$rules,
-                ...ApiAllocations::rules($organizationId, 'lines.*.allocations', AllocationRules::projectsOf($entry instanceof JournalEntry ? $entry : null)),
+                ...ApiAllocations::rules($organizationId, 'lines.*.allocations', AllocationRules::projectsOf($entry), AllocationRules::employeesOf($entry)),
             ];
         }
 

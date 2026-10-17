@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Projects and allocation of journal lines (module `projects`, off by
+  default):** keep areas and projects with kind, status, customer, person
+  responsible, target date and expected amount, and allocate any journal line
+  to one or more projects and optionally a person, in percentages. The
+  allocation lives beside the ledger and never touches lines, VAT or archives,
+  so it can be changed at any time, also for entries in settled, closed or
+  archived periods; every change is logged. Amending, reversing and the guided
+  correction carry allocations over, and anything that cannot be matched
+  unambiguously goes on a review list instead of being guessed. A project
+  report shows revenue, expenses and contribution with sub-projects rolled up
+  and year-end closing entries left out, as CSV and PDF too. The API lists and
+  writes projects, answers and accepts allocations per line, and replaces the
+  allocations of any entry at `PUT /api/v1/journal-entries/{id}/allocations`.
+  Unlike other modules, it is enforced per organization: one that has not
+  switched it on sees no project routes and no change in API answers.
 - **Follow a figure in the profit and loss statement:** clicking an account
   there opens its statement for the report's own period — every posted movement
   with its counter account, and a way back to the report rather than to a
