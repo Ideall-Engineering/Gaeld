@@ -24,6 +24,7 @@ import {
   Sun,
   Moon,
   Cog,
+  FolderKanban,
 } from 'lucide-vue-next'
 import { useTranslations } from '@/lib/useTranslations'
 import { usePermissions } from '@/lib/usePermissions'
@@ -204,6 +205,9 @@ const navigation = computed(() => {
         { key: 'analytical_report', href: '/accounting/analytical-report' },
       ] : []),
     ]},
+    ...(features.value.projects && can('projects.view') ? [
+      { key: 'projects', href: '/projects', icon: FolderKanban },
+    ] : []),
     // ── Payroll ──
     { type: 'group', label: 'nav_payroll' },
     ...(features.value.payroll ? [

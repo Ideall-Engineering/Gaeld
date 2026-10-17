@@ -19,6 +19,8 @@ use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Accounting\Policies\ConsolidationGroupPolicy;
 use App\Domains\Accounting\Policies\CostCenterPolicy;
+use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Policies\ProjectPolicy;
 use App\Domains\Accounting\Policies\ExchangeRatePolicy;
 use App\Domains\Accounting\Policies\FiscalYearPolicy;
 use App\Domains\Accounting\Policies\TaxDeclarationPolicy;
@@ -213,6 +215,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(FiscalYear::class, FiscalYearPolicy::class);
         Gate::policy(TaxDeclaration::class, TaxDeclarationPolicy::class);
         Gate::policy(CostCenter::class, CostCenterPolicy::class);
+        Gate::policy(Project::class, ProjectPolicy::class);
         Gate::policy(ExchangeRate::class, ExchangeRatePolicy::class);
         Gate::policy(ConsolidationGroup::class, ConsolidationGroupPolicy::class);
         Gate::policy(RecurringExpense::class, RecurringExpensePolicy::class);

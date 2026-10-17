@@ -35,7 +35,8 @@ return [
     'payroll' => env('FEATURE_PAYROLL', true),
 
     // Projects and line allocations (spec 009). Off until an owner switches it
-    // on for their organization under Settings → Modules.
+    // on for their organization under Settings → Modules; unlike the modules
+    // above, EnsureProjectsModule enforces that per organization.
     'projects' => env('FEATURE_PROJECTS', false),
 
     // Cookie consent banner and the floating button that reopens its
