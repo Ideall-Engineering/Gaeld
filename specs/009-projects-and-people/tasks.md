@@ -105,4 +105,4 @@ description: "Gäld task list: Projekte und Zuordnung von Buchungszeilen, Etappe
 - [x] T049 Tests `tests/Feature/Projects/InvoiceProjectTest.php`
 - [x] T050 UI-Durchgang Etappe 2
 - [x] T051 Lokales Importskript für das Excel (ausserhalb des Repositorys), Probelauf
-- [ ] T052 Alle Suiten, Review
+- [x] T052 Alle Suiten, Review

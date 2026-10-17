@@ -63,7 +63,7 @@ class JournalVatTest extends TestCase
         // organization bound. A request only ever serves one organization, so
         // that null cannot happen in production — but it makes this assertion
         // depend on test execution order.
-        $this->assertSame($this->vatRate->uuid, $entry->lines->first()->vat_rate_id);
+        $this->assertSame($this->vatRate->uuid, $entry->lines->sortBy('id')->first()->vat_rate_id);
     }
 
     public function test_input_investment_line_creates_input_investment_entry(): void
