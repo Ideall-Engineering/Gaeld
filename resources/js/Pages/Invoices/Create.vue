@@ -24,6 +24,7 @@ import UnsavedChangesDialog from '@/Components/UI/UnsavedChangesDialog.vue'
 import { useFormValidation, z } from '@/lib/useFormValidation'
 import FileUpload from '@/Components/UI/FileUpload.vue'
 import InvoiceLineItems from '@/Components/Invoices/InvoiceLineItems.vue'
+import InvoiceProjectField from '@/Components/Projects/InvoiceProjectField.vue'
 import { Plus } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -35,6 +36,7 @@ const props = defineProps({
   defaultPaymentTermsDays: { type: Number, default: null },
   defaultVatRateId: { type: [String, Number], default: null },
   taxTreatments: { type: Array, default: () => [] },
+  projectOptions: { type: Array, default: null },
 })
 
 const { t } = useTranslations()
@@ -53,6 +55,7 @@ const form = useForm({
   lines: [{ type: 'item', discount_type: 'flat', description: '', quantity: 1, unit_price: 0, vat_rate_id: props.defaultVatRateId ? String(props.defaultVatRateId) : '' }],
   justificatif: null,
   finalize: false,
+  project_id: '',
 })
 
 // Reload the suggested-number preview whenever the issue-date year changes so
@@ -216,6 +219,15 @@ function onDueDateManualEdit() {
                   <Plus class="h-4 w-4" />
                 </Button>
               </div>
+            </div>
+            <div v-if="projectOptions" class="lg:col-span-2">
+              <InvoiceProjectField
+                v-model="form.project_id"
+                :options="projectOptions"
+                :customer-id="form.customer_id"
+                follow-customer
+                :error="form.errors.project_id"
+              />
             </div>
             <div class="lg:col-span-2">
               <label class="text-sm font-medium leading-none">{{ t('invoice_number') }}</label>

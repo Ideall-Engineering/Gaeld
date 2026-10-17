@@ -9,6 +9,7 @@ use App\Domains\Accounting\Requests\StoreCostCenterRequest;
 use App\Domains\Accounting\Requests\UpdateCostCenterRequest;
 use App\Domains\Accounting\Support\AccountDisplayName;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Models\InvoiceProject;
 use App\Domains\Projects\Models\LineAllocation;
 use App\Domains\Reporting\Services\ExportReportService;
 use App\Http\Controllers\Controller;
@@ -83,12 +84,13 @@ class CostCenterController extends Controller
             return back()->withErrors(['cost_center' => __('app.cannot_delete_with_children')]);
         }
 
-        // Project allocations (spec 009) count as use too; their foreign
-        // key would refuse the delete anyway.
+        // Project allocations and invoice links (spec 009) count as use too;
+        // their foreign keys would refuse the delete anyway.
         $used = TransactionLine::query()
             ->where('cost_center_id', (string) $costCenter->id)
             ->exists()
-            || LineAllocation::withoutGlobalScopes()->where('cost_center_id', $costCenter->id)->exists();
+            || LineAllocation::withoutGlobalScopes()->where('cost_center_id', $costCenter->id)->exists()
+            || InvoiceProject::withoutGlobalScopes()->where('cost_center_id', $costCenter->id)->exists();
 
         if ($used) {
             return back()->withErrors(['cost_center' => __('app.cannot_delete_used_cost_center')]);

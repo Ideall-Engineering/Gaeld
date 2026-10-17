@@ -19,6 +19,7 @@ import { useTranslations } from '@/lib/useTranslations'
 import { ref, computed } from 'vue'
 import { Pencil, Trash2, Copy, Download, Paperclip, Ban, FileMinus, Bell, Mail, Eye, X, RotateCcw, FileText, RefreshCw } from 'lucide-vue-next'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
+import InvoiceProjectCard from '@/Components/Projects/InvoiceProjectCard.vue'
 import HelpText from '@/Components/HelpText.vue'
 
 const props = defineProps({
@@ -35,6 +36,9 @@ const props = defineProps({
   bankAccounts: { type: Array, default: () => [] },
   creditNotes: { type: Array, default: () => [] },
   relatedInvoice: { type: Object, default: null },
+  projectOptions: { type: Array, default: null },
+  invoiceProjectId: { type: Number, default: null },
+  canChangeProject: { type: Boolean, default: false },
   reminderCount: { type: Number, default: 0 },
   lastRemindedAt: { type: String, default: null },
   hasQrIban: { type: Boolean, default: false },
@@ -496,6 +500,14 @@ const bankAccountOptions = computed(() =>
       </Card>
 
       <!-- Journal Entry -->
+      <InvoiceProjectCard
+        v-if="projectOptions"
+        :invoice-id="invoice.id"
+        :options="projectOptions"
+        :current-id="invoiceProjectId"
+        :can-change="canChangeProject"
+      />
+
       <Card v-if="invoice?.journal_entry">
         <CardHeader>
           <CardTitle>{{ t('ledger_entry') }}</CardTitle>

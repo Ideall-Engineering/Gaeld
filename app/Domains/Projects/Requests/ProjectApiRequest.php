@@ -58,6 +58,7 @@ class ProjectApiRequest extends FormRequest
             'contact_id' => ['sometimes', 'nullable', 'uuid', Rule::exists('contacts', 'uuid')->where('organization_id', $orgId)],
             'responsible_employee_id' => ['sometimes', 'nullable', 'uuid', Rule::exists('employees', 'id')->where('organization_id', $orgId)],
             'target_date' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'billing_month' => ['sometimes', 'nullable', 'date_format:Y-m'],
             'expected_amount' => ['sometimes', 'nullable', 'string', 'regex:/^\d{1,11}(?:\.\d{1,2})?$/'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'is_active' => ['sometimes', 'boolean'],
@@ -82,6 +83,9 @@ class ProjectApiRequest extends FormRequest
     public function projectAttributes(): array
     {
         $validated = $this->validated();
+        if (array_key_exists('billing_month', $validated) && $validated['billing_month'] !== null) {
+            $validated['billing_month'] .= '-01';
+        }
         $orgId = app(CurrentOrganization::class)->id();
 
         if (array_key_exists('parent_code', $validated)) {

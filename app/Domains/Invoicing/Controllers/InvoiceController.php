@@ -20,6 +20,8 @@ use App\Domains\Invoicing\Requests\UpdateInvoiceRequest;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Organizations\Services\OrganizationDocumentStorageService;
+use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Support\InvoiceProjectInput;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
 use App\Support\Contracts\OrganizationQuotaResolver;
@@ -85,6 +87,7 @@ class InvoiceController extends Controller
             'defaultPaymentTermsDays' => $currentOrg->get()->default_payment_terms_days,
             'defaultVatRateId' => optional(VatRateQuery::active()->firstWhere('is_default', true))->id,
             'taxTreatments' => InvoiceTaxTreatment::options(),
+            'projectOptions' => InvoiceProjectInput::options($request),
         ]);
     }
 
@@ -110,6 +113,8 @@ class InvoiceController extends Controller
         $validated = $request->validated();
         $validated['organization_id'] = $orgId;
         $newJustificatifPath = null;
+        // Spec 009: checked before anything is written.
+        $projectId = InvoiceProjectInput::fromRequest($request);
 
         if ($request->hasFile('justificatif')) {
             $organization = $currentOrg->get();
@@ -144,6 +149,8 @@ class InvoiceController extends Controller
                 try {
                     $dto = CreateInvoiceData::fromArray($validated);
                     $invoice = $action->execute($dto);
+                    // Before finalizing, so the booking already carries it.
+                    InvoiceProjectInput::apply($invoice, $projectId, $request->user()?->id);
                     break;
                 } catch (QueryException $e) {
                     $sqlState = $e->errorInfo[0] ?? (string) $e->getCode();
@@ -208,6 +215,9 @@ class InvoiceController extends Controller
             'relatedInvoice' => $invoice->relatedInvoice
                 ? $invoice->relatedInvoice->only('id', 'number')
                 : null,
+            'projectOptions' => InvoiceProjectInput::options($request),
+            'invoiceProjectId' => InvoiceProjectInput::currentFor($invoice),
+            'canChangeProject' => $request->user()->can('allocate', Project::class),
             'reminderCount' => $invoice->reminder_count ?? 0,
             'lastRemindedAt' => $invoice->last_reminded_at?->toISOString(),
         ]);
@@ -219,6 +229,8 @@ class InvoiceController extends Controller
 
         return Inertia::render('Invoices/Edit', [
             'invoice' => $invoice->load('lines.vatRate'),
+            'projectOptions' => InvoiceProjectInput::options($request),
+            'invoiceProjectId' => InvoiceProjectInput::currentFor($invoice),
             'customers' => ContactQuery::forSelect(),
             'vatRates' => VatRateQuery::active(),
             'justificatifUrl' => $invoice->justificatif_path
@@ -234,6 +246,7 @@ class InvoiceController extends Controller
         $validated = $request->validated();
         $validated['organization_id'] = $invoice->organization_id;
         $oldJustificatifPath = null;
+        $projectId = InvoiceProjectInput::fromRequest($request, $invoice);
         $newJustificatifPath = null;
 
         if ($request->hasFile('justificatif')) {
@@ -257,6 +270,7 @@ class InvoiceController extends Controller
 
         try {
             $action->execute($invoice, $dto);
+            InvoiceProjectInput::apply($invoice, $projectId, $request->user()?->id);
         } catch (InvalidInvoiceStateException $e) {
             if ($newJustificatifPath) {
                 $this->documentStorage->delete($invoice->organization, $newJustificatifPath);

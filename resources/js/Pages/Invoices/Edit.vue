@@ -23,6 +23,7 @@ import UnsavedChangesDialog from '@/Components/UI/UnsavedChangesDialog.vue'
 import { useFormValidation, z } from '@/lib/useFormValidation'
 import FileUpload from '@/Components/UI/FileUpload.vue'
 import InvoiceLineItems from '@/Components/Invoices/InvoiceLineItems.vue'
+import InvoiceProjectField from '@/Components/Projects/InvoiceProjectField.vue'
 import { Plus } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -33,6 +34,8 @@ const props = defineProps({
   justificatifUrl: { type: String, default: null },
   defaultVatRateId: { type: [String, Number], default: null },
   taxTreatments: { type: Array, default: () => [] },
+  projectOptions: { type: Array, default: null },
+  invoiceProjectId: { type: Number, default: null },
 })
 
 const { t } = useTranslations()
@@ -58,6 +61,7 @@ const form = useForm({
     vat_rate_id: l.vat_rate_id ?? '',
   })),
   justificatif: null,
+  project_id: props.invoiceProjectId ? String(props.invoiceProjectId) : '',
 })
 
 if (form.lines.length === 0) {
@@ -150,6 +154,14 @@ function onCustomerCreated(customer) {
               </div>
               <p class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('required_to_finalize') }}</p>
             </div>
+            <InvoiceProjectField
+              v-if="projectOptions"
+              v-model="form.project_id"
+              :options="projectOptions"
+              :customer-id="form.customer_id"
+              :follow-customer="!invoiceProjectId"
+              :error="form.errors.project_id"
+            />
             <FormInput
               id="number"
               v-model="form.number"

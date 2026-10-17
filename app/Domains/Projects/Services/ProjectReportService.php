@@ -34,66 +34,17 @@ class ProjectReportService
     {
         $projectIds = $project->selfAndDescendantIds();
 
-        $lines = DB::table('transaction_lines')
-            ->join('journal_entries', 'journal_entries.id', '=', 'transaction_lines.journal_entry_id')
-            ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
-            ->where('journal_entries.organization_id', $project->organization_id)
-            ->where('journal_entries.is_posted', true)
-            ->whereBetween('journal_entries.date', [$from, $to])
-            ->where(fn ($q) => $q->whereNull('journal_entries.type')->orWhere('journal_entries.type', '<>', 'year_end_closing'))
-            ->whereIn('accounts.type', [AccountType::Revenue->value, AccountType::Expense->value])
-            ->whereExists(fn ($q) => $q->selectRaw('1')
-                ->from('line_allocations')
-                ->whereColumn('line_allocations.transaction_line_id', 'transaction_lines.id')
-                ->whereIn('line_allocations.cost_center_id', $projectIds))
-            ->get([
-                'transaction_lines.id',
-                'transaction_lines.debit',
-                'transaction_lines.credit',
-                'accounts.code',
-                'accounts.name',
-                'accounts.type',
-            ]);
-
-        // Every allocation of those lines, also to other projects, so the
-        // rounding lands on the same share whichever project is reported.
-        $allocations = LineAllocation::withoutGlobalScopes()
-            ->whereIn('transaction_line_id', $lines->pluck('id'))
-            ->orderBy('id')
-            ->get(['id', 'transaction_line_id', 'cost_center_id', 'share'])
-            ->groupBy('transaction_line_id');
-
         $byAccount = [];
         $byProject = [];
 
-        foreach ($lines as $line) {
-            /** @var object{id:int,debit:string,credit:string,code:string,name:string,type:string} $line */
-            $isRevenue = $line->type === AccountType::Revenue->value;
-            // Positive is good for revenue, a cost for expenses.
-            $amount = $isRevenue
-                ? Money::subtract((string) $line->credit, (string) $line->debit)
-                : Money::subtract((string) $line->debit, (string) $line->credit);
+        foreach ($this->allocatedParts($project->organization_id, $from, $to, $projectIds) as $part) {
+            $key = $part['type'].'|'.$part['code'];
+            $byAccount[$key] ??= ['type' => $part['type'], 'code' => $part['code'], 'name' => $part['name'], 'amount' => '0.00'];
+            $byAccount[$key]['amount'] = Money::add($byAccount[$key]['amount'], $part['amount']);
 
-            $lineAllocations = $allocations->get($line->id, collect())->values();
-            $parts = LineAllocationService::splitAmount(
-                $amount,
-                $lineAllocations->map(fn (LineAllocation $a) => (string) $a->share)->all(),
-            );
-
-            foreach ($lineAllocations as $index => $allocation) {
-                if (! in_array($allocation->cost_center_id, $projectIds, true)) {
-                    continue;
-                }
-
-                $part = $parts[$index];
-                $key = $line->type.'|'.$line->code;
-                $byAccount[$key] ??= ['type' => $line->type, 'code' => (string) $line->code, 'name' => AccountDisplayName::for((string) $line->code, (string) $line->name), 'amount' => '0.00'];
-                $byAccount[$key]['amount'] = Money::add($byAccount[$key]['amount'], $part);
-
-                $projectKey = (int) $allocation->cost_center_id;
-                $byProject[$projectKey] ??= ['revenue' => '0.00', 'expenses' => '0.00'];
-                $byProject[$projectKey][$isRevenue ? 'revenue' : 'expenses'] = Money::add($byProject[$projectKey][$isRevenue ? 'revenue' : 'expenses'], $part);
-            }
+            $side = $part['type'] === AccountType::Revenue->value ? 'revenue' : 'expenses';
+            $byProject[$part['project_id']] ??= ['revenue' => '0.00', 'expenses' => '0.00'];
+            $byProject[$part['project_id']][$side] = Money::add($byProject[$part['project_id']][$side], $part['amount']);
         }
 
         ksort($byAccount);
@@ -141,5 +92,92 @@ class ProjectReportService
             'total_expenses' => $totalExpenses,
             'contribution' => Money::subtract($totalRevenue, $totalExpenses),
         ];
+    }
+
+    /**
+     * Revenue and expenses per project (each project on its own, without
+     * its sub-projects) for every project of the organization.
+     *
+     * @return array<int, array{revenue: string, expenses: string}>
+     */
+    public function totalsByProject(string $organizationId, string $from, string $to): array
+    {
+        $totals = [];
+
+        foreach ($this->allocatedParts($organizationId, $from, $to) as $part) {
+            $side = $part['type'] === AccountType::Revenue->value ? 'revenue' : 'expenses';
+            $totals[$part['project_id']] ??= ['revenue' => '0.00', 'expenses' => '0.00'];
+            $totals[$part['project_id']][$side] = Money::add($totals[$part['project_id']][$side], $part['amount']);
+        }
+
+        return $totals;
+    }
+
+    /**
+     * What each allocation of a posted revenue or expense line in the period
+     * stands for. Positive is good for revenue and a cost for expenses. All
+     * allocations of a line take part in the split, so the rounding lands on
+     * the same share whichever projects are asked for.
+     *
+     * @param  array<int, int>|null  $projectIds  only parts for these projects; null for all
+     * @return \Generator<int, array{project_id: int, type: string, code: string, name: string, amount: string}>
+     */
+    private function allocatedParts(string $organizationId, string $from, string $to, ?array $projectIds = null): \Generator
+    {
+        $lines = DB::table('transaction_lines')
+            ->join('journal_entries', 'journal_entries.id', '=', 'transaction_lines.journal_entry_id')
+            ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
+            ->where('journal_entries.organization_id', $organizationId)
+            ->where('journal_entries.is_posted', true)
+            ->whereBetween('journal_entries.date', [$from, $to])
+            ->where(fn ($q) => $q->whereNull('journal_entries.type')->orWhere('journal_entries.type', '<>', 'year_end_closing'))
+            ->whereIn('accounts.type', [AccountType::Revenue->value, AccountType::Expense->value])
+            ->whereExists(fn ($q) => $q->selectRaw('1')
+                ->from('line_allocations')
+                ->whereColumn('line_allocations.transaction_line_id', 'transaction_lines.id')
+                ->whereNotNull('line_allocations.cost_center_id')
+                ->when($projectIds !== null, fn ($q) => $q->whereIn('line_allocations.cost_center_id', $projectIds)))
+            ->get([
+                'transaction_lines.id',
+                'transaction_lines.debit',
+                'transaction_lines.credit',
+                'accounts.code',
+                'accounts.name',
+                'accounts.type',
+            ]);
+
+        $allocations = LineAllocation::withoutGlobalScopes()
+            ->whereIn('transaction_line_id', $lines->pluck('id'))
+            ->orderBy('id')
+            ->get(['id', 'transaction_line_id', 'cost_center_id', 'share'])
+            ->groupBy('transaction_line_id');
+
+        foreach ($lines as $line) {
+            /** @var object{id:int,debit:string,credit:string,code:string,name:string,type:string} $line */
+            $amount = $line->type === AccountType::Revenue->value
+                ? Money::subtract((string) $line->credit, (string) $line->debit)
+                : Money::subtract((string) $line->debit, (string) $line->credit);
+
+            $lineAllocations = $allocations->get($line->id, collect())->values();
+            $parts = LineAllocationService::splitAmount(
+                $amount,
+                $lineAllocations->map(fn (LineAllocation $a) => (string) $a->share)->all(),
+            );
+
+            foreach ($lineAllocations as $index => $allocation) {
+                if ($allocation->cost_center_id === null
+                    || ($projectIds !== null && ! in_array($allocation->cost_center_id, $projectIds, true))) {
+                    continue;
+                }
+
+                yield [
+                    'project_id' => (int) $allocation->cost_center_id,
+                    'type' => (string) $line->type,
+                    'code' => (string) $line->code,
+                    'name' => AccountDisplayName::for((string) $line->code, (string) $line->name),
+                    'amount' => $parts[$index],
+                ];
+            }
+        }
     }
 }

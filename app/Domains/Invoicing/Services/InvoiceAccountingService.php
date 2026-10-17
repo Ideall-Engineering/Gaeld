@@ -17,6 +17,7 @@ use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Models\InvoiceLine;
 use App\Domains\Invoicing\Models\InvoicePayment;
+use App\Domains\Projects\Services\InvoiceProjectService;
 use App\Domains\Projects\Services\LineAllocationService;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -35,6 +36,7 @@ class InvoiceAccountingService
         private LedgerQueryService $ledgerQuery,
         private VatPeriodLockService $vatPeriodLocks,
         private LineAllocationService $allocations,
+        private InvoiceProjectService $invoiceProjects,
     ) {}
 
     /**
@@ -141,6 +143,9 @@ class InvoiceAccountingService
                 'status' => InvoiceStatus::Sent,
                 'journal_entry_id' => $journalEntry->id,
             ]);
+
+            // Spec 009: the revenue lines belong to the invoice's project.
+            $this->invoiceProjects->allocateEntry($invoice, $journalEntry);
 
             return $invoice->fresh(['lines', 'customer', 'journalEntry.lines']);
         });

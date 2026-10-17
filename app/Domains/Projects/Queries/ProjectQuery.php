@@ -101,6 +101,7 @@ class ProjectQuery
                 ? trim("{$project->responsible->first_name} {$project->responsible->last_name}")
                 : null,
             'target_date' => $project->target_date?->toDateString(),
+            'billing_month' => $project->billing_month?->format('Y-m'),
             'expected_amount' => $project->expected_amount,
             'notes' => $project->notes,
         ];

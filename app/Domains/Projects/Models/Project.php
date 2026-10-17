@@ -28,6 +28,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $contact_id
  * @property string|null $responsible_employee_id
  * @property Carbon|null $target_date
+ * @property Carbon|null $billing_month
  * @property string|null $expected_amount
  * @property string|null $notes
  * @property-read CostCenter|null $parent
@@ -49,6 +50,7 @@ class Project extends CostCenter
         'contact_id',
         'responsible_employee_id',
         'target_date',
+        'billing_month',
         'expected_amount',
         'notes',
     ];
@@ -60,6 +62,7 @@ class Project extends CostCenter
             'kind' => ProjectKind::class,
             'status' => ProjectStatus::class,
             'target_date' => 'date',
+            'billing_month' => 'date',
             'expected_amount' => 'decimal:2',
         ];
     }

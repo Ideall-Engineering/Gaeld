@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   allocations of any entry at `PUT /api/v1/journal-entries/{id}/allocations`.
   Unlike other modules, it is enforced per organization: one that has not
   switched it on sees no project routes and no change in API answers.
+- **Project overview and invoices:** the projects page gains an overview per
+  year with expected amount, revenue, expenses and net from the allocations,
+  invoiced, received and open from the invoices, a payment state, a deadline
+  light (overdue, critical within 14 days, on track) and totals by status and
+  area, also as CSV; a project now has a billing month. An invoice can carry a
+  project, preselected with the customer's one open project; booking it
+  allocates its revenue lines, a credit note keeps the project of its invoice,
+  and the project can be changed at any time, also after archiving, without
+  touching the invoice. A "not allocated" list shows revenue and expense lines
+  without a project with suggestions from the invoice, the customer or the
+  last allocation of the same account and text, and takes over what is chosen.
 - **Follow a figure in the profit and loss statement:** clicking an account
   there opens its statement for the report's own period — every posted movement
   with its counter account, and a way back to the report rather than to a

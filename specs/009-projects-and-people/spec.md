@@ -150,3 +150,63 @@ Ein API-Client liest Projekte und Zuordnungen, legt Projekte an und ändert Zuor
 - **SC-002**: Jeder der Wege Verbuchen, Ändern, Storno, Korrekturweg hat einen Test, der die Übernahme der Zuordnung belegt.
 - **SC-003**: Eine archivierte Buchung erhält eine Zuordnung, und ihre Archivprüfung bleibt gültig.
 - **SC-004**: Mit ausgeschaltetem Modul laufen alle bestehenden Testsuiten unverändert grün.
+
+---
+
+# Etappe 2: Projektübersicht und Rechnungen
+
+**Status**: in Arbeit
+
+**Ziel**: Das Blatt „Projekte“ wird überflüssig. Die Übersicht zeigt pro Projekt dieselben Kennzahlen wie das Excel, die Ist-Werte kommen aus der Buchhaltung, Eingang und Offen aus den Rechnungen in Gäld.
+
+## Entscheide Etappe 2
+
+| Frage | Entscheid |
+|---|---|
+| Netto | Ertrag minus Aufwand aus den Zuordnungen (wie die Projektauswertung). Das entspricht „Brutto ohne MWST minus Fremdkosten minus Abzüge“. |
+| Erwartet | `expected_amount` bleibt der Planwert netto. Ein neues Feld `billing_month` hält den geplanten Rechnungsmonat. |
+| Eingang und Offen | Aus den Rechnungen mit diesem Projekt am Kopf: Eingang = erfasste Zahlungen, Offen = Total minus Zahlungen, ohne Entwürfe und stornierte Rechnungen. |
+| Zahlungsstatus | bezahlt (Offen ≤ 1.00), teilweise, offen; ohne Rechnung leer. |
+| Termin-Ampel | erledigt (Status Erledigt oder Verloren), kein Termin, überfällig (Zieltermin vorbei), kritisch (≤ 14 Tage), im Plan. |
+| Projekt am Rechnungskopf | Eigene Tabelle `invoice_projects` (eine Zeile pro Rechnung), damit das Projekt auch bei archivierten Rechnungen änderbar bleibt, vorbelegt mit dem offenen Projekt des Kunden (Kunde am Projekt, Status nicht Erledigt oder Verloren), wenn es genau eines gibt. Beim Verbuchen erhalten die Ertragszeilen die Zuordnung. Gutschriften übernehmen das Projekt der Rechnung. |
+| Projekt einer verbuchten Rechnung ändern | Jederzeit möglich; die Ertragszeilen der Rechnungsbuchung werden umgehängt, die Buchung bleibt unverändert. |
+| Vorschläge | Liste „nicht zugeordnet“ mit Erfolgszeilen ohne Zuordnung im Zeitraum. Vorschlag aus (1) Rechnung mit Projekt, (2) dem einzigen offenen Projekt des Kunden, (3) dem Projekt, dem dieselbe Kombination aus Konto und Buchungstext zuletzt zugeordnet wurde. Übernehmen einzeln oder alle. |
+| Bankregeln | Zurückgestellt: In der Instanz laufen keine Bankbewegungen über Gäld, Buchungen kommen über die API. Wird nachgeholt, sobald Bankimporte genutzt werden. |
+| Excel-Import | Einmalig über ein lokales Skript ausserhalb des Repositorys, das über die API Projekte anlegt und belegte Buchungen zuordnet; mit Probelauf. |
+
+## User Stories Etappe 2
+
+### User Story 7: Projektübersicht (P1)
+
+Die Liste zeigt pro Projekt Bereich, Verantwortlich, Status, Zieltermin mit Ampel, Rechnungsmonat, Erwartet, Ertrag, Aufwand, Netto, Eingang, Offen und Zahlungsstatus, dazu Summen nach Status und nach Bereich, filterbar nach Jahr, Status und Bereich.
+
+**Acceptance Scenarios**:
+
+1. **Given** ein Projekt mit zugeordnetem Ertrag 1000 und Aufwand 200, **When** die Übersicht geöffnet wird, **Then** zeigt sie Netto 800.
+2. **Given** eine Rechnung über 1081 mit einer Zahlung über 500 am Projekt, **Then** Eingang 500, Offen 581, Zahlungsstatus teilweise.
+3. **Given** ein Projekt mit Zieltermin in 10 Tagen und Status In Arbeit, **Then** Ampel kritisch; mit Status Erledigt **Then** erledigt.
+4. **Given** Projekte in zwei Bereichen, **Then** stimmen die Bereichssummen mit der Summe ihrer Projekte überein.
+
+### User Story 8: Projekt auf der Rechnung (P1)
+
+**Acceptance Scenarios**:
+
+1. **Given** ein Kunde mit genau einem offenen Projekt, **When** eine Rechnung für ihn angelegt wird, **Then** ist dieses Projekt vorbelegt; bei mehreren bleibt das Feld leer.
+2. **Given** eine Rechnung mit Projekt, **When** sie verbucht wird, **Then** sind ihre Ertragszeilen zu 100 % dem Projekt zugeordnet, Debitoren- und MWST-Zeile nicht.
+3. **Given** eine verbuchte Rechnung, **When** ihr Projekt geändert wird, **Then** hängen die Ertragszeilen am neuen Projekt, die Buchung und ihre Revision bleiben gleich.
+4. **Given** eine Gutschrift zu einer Rechnung mit Projekt, **Then** trägt sie dasselbe Projekt.
+5. **Given** das Modul ist aus, **Then** zeigt das Rechnungsformular kein Projektfeld und das Verbuchen bleibt wie bisher.
+
+### User Story 9: Nachpflegen mit Vorschlägen (P2)
+
+**Acceptance Scenarios**:
+
+1. **Given** Erfolgszeilen ohne Zuordnung, **When** die Liste geöffnet wird, **Then** steht bei jeder Zeile ein Vorschlag, wenn es einen gibt, mit seiner Quelle.
+2. **Given** markierte Vorschläge, **When** übernommen wird, **Then** sind die Zeilen zugeordnet und verschwinden aus der Liste.
+
+## Requirements Etappe 2
+
+- **FR-012**: Übersicht mit den Kennzahlen aus User Story 7, CSV-Export.
+- **FR-013**: Tabelle `invoice_projects` und Spalte `cost_centers.billing_month`, beide optional; ohne Modul ungenutzt. Rechnungen selbst werden nicht beschrieben.
+- **FR-014**: Ein Projekt mit Rechnungen oder Kundenbezug lässt sich nicht löschen.
+- **FR-015**: Jede Übernahme von Vorschlägen ist protokolliert wie jede andere Zuordnung.

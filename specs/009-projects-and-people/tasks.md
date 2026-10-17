@@ -90,3 +90,19 @@ description: "Gäld task list: Projekte und Zuordnung von Buchungszeilen, Etappe
 - [x] T039 UI-Durchgang im Browser mit eingeschaltetem und ausgeschaltetem Modul
 - [x] T040 `CHANGELOG.md` (Unreleased) und Domain-README
 - [ ] T041 Review, Merge nach `deployment`, Rollout nach Freigabe
+
+---
+
+# Tasks: Etappe 2, Projektübersicht und Rechnungen
+
+- [x] T042 Migrationen `add_billing_month_to_cost_centers`, `create_invoice_projects_table`
+- [x] T043 Modell `InvoiceProject` mit Policy; `AllocationSource::Invoice`
+- [x] T044 `InvoiceProjectService`: Projekt einer Rechnung setzen, Ertragszeilen beim Verbuchen und bei jeder Änderung zuordnen, Gutschrift erbt, Vorschlag aus dem Kunden
+- [x] T045 Rechnungsformulare (Anlegen, Bearbeiten, Detail) mit Projektfeld; Änderung auch bei archivierten Rechnungen
+- [x] T046 `ProjectOverviewService` (Ertrag, Aufwand, Netto, Fakturiert, Eingang, Offen, Zahlungsstatus, Termin-Ampel, Summen nach Status und Bereich) und Ansicht „Übersicht“ mit Jahr und CSV
+- [x] T047 `AllocationSuggestionService` und Seite „Nicht zugeordnet“ mit Übernehmen
+- [x] T048 Löschschutz für Projekte mit Rechnungen
+- [x] T049 Tests `tests/Feature/Projects/InvoiceProjectTest.php`
+- [ ] T050 UI-Durchgang Etappe 2
+- [ ] T051 Lokales Importskript für das Excel (ausserhalb des Repositorys), Probelauf
+- [ ] T052 Alle Suiten, Review
