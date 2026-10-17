@@ -30,6 +30,11 @@ use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Models\LineAllocation;
+use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Queries\ProjectQuery;
+use App\Domains\Projects\Support\AllocationRules;
+use App\Domains\Projects\Support\ProjectsModule;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
 use App\Support\CsvExportService;
@@ -39,6 +44,7 @@ use App\Support\QueryBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
@@ -91,7 +97,7 @@ class AccountingController extends Controller
     {
         $this->authorize('viewAny', JournalEntry::class);
 
-        $query = JournalEntry::with(['lines.account', 'lines.vatRate', 'lines.costCenter']);
+        $query = JournalEntry::with($this->lineRelations('lines.account', 'lines.vatRate', 'lines.costCenter'));
 
         // Account is a filter over the entry's lines, so it cannot go through
         // QueryBuilder's exact-match filters, which only address base columns.
@@ -199,6 +205,39 @@ class AccountingController extends Controller
     }
 
     /**
+     * Whether projects are switched on and the current user may allocate
+     * lines to them (spec 009).
+     */
+    private function mayAllocate(): bool
+    {
+        $org = app(CurrentOrganization::class);
+
+        return $org->isBound()
+            && ProjectsModule::enabledFor($org->get())
+            && (request()->user()?->can('allocate', Project::class) ?? false);
+    }
+
+    /**
+     * Relations to load on journal lines; allocations only where projects
+     * are switched on, so answers elsewhere stay exactly as they were.
+     *
+     * @return array<int, string>
+     */
+    private function lineRelations(string ...$base): array
+    {
+        $org = app(CurrentOrganization::class);
+
+        if ($org->isBound() && ProjectsModule::enabledFor($org->get())) {
+            // 'lines.account' -> 'lines', 'replacement.lines.account' -> 'replacement.lines'
+            $prefix = Str::beforeLast($base[0] ?? 'lines.account', '.');
+            $base[] = "{$prefix}.allocations.project:id,code,name";
+            $base[] = "{$prefix}.allocations.employee:id,first_name,last_name";
+        }
+
+        return $base;
+    }
+
+    /**
      * What the journal entry form needs beyond the accounts: the VAT rates a
      * line can carry and whether posted entries are changeable at all.
      *
@@ -224,6 +263,11 @@ class AccountingController extends Controller
             'postedEntryEditMode' => $editState->isFlexible($organizationId)
                 ? PostedEntryEditMode::Flexible->value
                 : PostedEntryEditMode::Strict->value,
+            // Spec 009: null hides the project fields entirely.
+            'allocationOptions' => $this->mayAllocate() ? [
+                'projects' => ProjectQuery::tree(),
+                'employees' => ProjectQuery::employeeOptions(),
+            ] : null,
         ];
     }
 
@@ -320,7 +364,9 @@ class AccountingController extends Controller
         ];
 
         $vatCodes = $lines->map(fn (TransactionLine $line) => $line->vatRate?->code)->filter()->unique();
-        $costCentres = $lines->map(fn (TransactionLine $line) => $line->costCenter?->code)->filter()->unique();
+        $costCentres = $lines->flatMap(fn (TransactionLine $line) => $line->relationLoaded('allocations')
+            ? [$line->costCenter?->code, ...$line->allocations->map(fn (LineAllocation $a) => $a->project?->code)]
+            : [$line->costCenter?->code])->filter()->unique()->values();
 
         return [
             'debit_account' => $debits->count() === 1 ? $describe($debits->first()) : null,
@@ -330,7 +376,7 @@ class AccountingController extends Controller
             'is_split' => $lines->count() > 2,
             'vat_code' => $vatCodes->count() === 1 ? $vatCodes->first() : null,
             'vat_amount' => number_format($lines->sum(fn (TransactionLine $line) => (float) $line->vat_amount), 2, '.', ''),
-            'cost_center' => $costCentres->count() === 1 ? $costCentres->first() : null,
+            'cost_center' => $costCentres->count() === 1 ? $costCentres->first() : ($costCentres->count() > 1 ? $costCentres->implode(', ') : null),
             'line_description' => $lines->first(fn (TransactionLine $line) => filled($line->description))?->description,
         ];
     }
@@ -370,13 +416,17 @@ class AccountingController extends Controller
     {
         $this->authorize('view', $journalEntry);
 
-        $journalEntry->load('lines.account');
+        $journalEntry->load($this->lineRelations('lines.account'));
 
         $correction = JournalCorrection::query()
             ->where('original_journal_entry_id', $journalEntry->id)
             ->orWhere('replacement_journal_entry_id', $journalEntry->id)
             ->orWhere('reversal_journal_entry_id', $journalEntry->id)
-            ->with(['original.lines.account', 'reversal.lines.account', 'replacement.lines.account'])
+            ->with([
+                ...$this->lineRelations('original.lines.account'),
+                ...$this->lineRelations('reversal.lines.account'),
+                ...$this->lineRelations('replacement.lines.account'),
+            ])
             // A replacement corrected again is both the replacement of one
             // correction and the original of the next; the newer one wins.
             ->latest()
@@ -484,6 +534,12 @@ class AccountingController extends Controller
             'lines.*.credit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
             'lines.*.description' => ['nullable', 'string', 'max:500'],
             ...StoreJournalEntryRequest::lineVatRules($orgId),
+            ...($this->mayAllocate()
+                ? AllocationRules::for($orgId, keptProjectIds: [
+                    ...AllocationRules::projectsOf($journalCorrection->replacement),
+                    ...AllocationRules::projectsOf($journalCorrection->original),
+                ])
+                : []),
         ]);
 
         $entryData = $this->journalEntryDataFrom($validated);
@@ -625,6 +681,8 @@ class AccountingController extends Controller
      */
     private function journalEntryDataFrom(array $validated): JournalEntryData
     {
+        $mayAllocate = $this->mayAllocate();
+
         $lines = array_map(fn (array $line) => new JournalLineData(
             accountId: (string) $line['account_id'],
             debit: (string) ($line['debit'] ?? '0'),
@@ -634,6 +692,7 @@ class AccountingController extends Controller
             vatAmount: ($line['vat_type'] ?? null) !== null && isset($line['vat_amount']) ? (string) $line['vat_amount'] : null,
             vatType: $line['vat_type'] ?? null,
             vatFigure: ($line['vat_type'] ?? null) !== null ? ($line['vat_figure'] ?? null) : null,
+            allocations: AllocationRules::fromValidatedLine($line, $mayAllocate),
         ), $validated['lines']);
 
         return new JournalEntryData(

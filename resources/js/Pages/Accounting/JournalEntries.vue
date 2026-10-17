@@ -19,7 +19,9 @@ import JournalAccountCell from '@/Components/Accounting/JournalAccountCell.vue'
 import JournalEntryFormModal from '@/Components/Accounting/JournalEntryFormModal.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
-import { BookText, Plus, Check, RotateCcw, Replace, Trash2, Pencil, HelpCircle, Lock, History } from 'lucide-vue-next'
+import AllocationDialog from '@/Components/Projects/AllocationDialog.vue'
+import FormSelect from '@/Components/UI/FormSelect.vue'
+import { BookText, Plus, Check, RotateCcw, Replace, Trash2, Pencil, HelpCircle, Lock, History, FolderKanban } from 'lucide-vue-next'
 
 const props = defineProps({
   entries: Object,
@@ -27,6 +29,7 @@ const props = defineProps({
   vatRates: { type: Array, default: () => [] },
   vatTypes: { type: Array, default: () => [] },
   postedEntryEditMode: { type: String, default: 'strict' },
+  allocationOptions: { type: Object, default: null },
   recentChangesCount: { type: Number, default: 0 },
   query: {
     type: Object,
@@ -215,6 +218,43 @@ function openCorrect(entry) {
   correctingEntry.value = entry
 }
 
+// Projects (spec 009): change the allocation of one entry, whatever its
+// state, or allocate the selected entries to one project at once.
+const allocatingEntry = ref(null)
+const selectedEntryIds = ref([])
+const bulkProjectId = ref('')
+const bulkOverwrite = ref(false)
+const bulkProcessing = ref(false)
+
+const bulkProjectOptions = computed(() => [
+  { value: '', label: t('select_placeholder') },
+  ...(props.allocationOptions?.projects ?? [])
+    .filter(p => p.is_active)
+    .map(p => ({ value: String(p.id), label: `${'· '.repeat(p.depth)}${p.code} ${p.name}` })),
+])
+
+function allocationCodes(line) {
+  return (line.allocations ?? [])
+    .map(a => {
+      const who = [a.project?.code, a.employee ? `${a.employee.first_name} ${a.employee.last_name}` : null].filter(Boolean).join(' / ')
+      return Number(a.share) === 100 ? who : `${who} ${Number(a.share)} %`
+    })
+    .join(', ')
+}
+
+function allocateSelected() {
+  if (!bulkProjectId.value || selectedEntryIds.value.length === 0) return
+  bulkProcessing.value = true
+  router.post('/accounting/journal-entry-allocations/bulk', {
+    entry_ids: selectedEntryIds.value,
+    project_id: Number(bulkProjectId.value),
+    overwrite: bulkOverwrite.value,
+  }, {
+    preserveScroll: true,
+    onFinish: () => { bulkProcessing.value = false },
+  })
+}
+
 // Delete action
 const deletingEntry = ref(null)
 
@@ -276,6 +316,20 @@ function doDelete() {
         </div>
       </CardHeader>
       <CardContent>
+        <div
+          v-if="allocationOptions && selectedEntryIds.length > 0"
+          class="mb-3 flex flex-wrap items-end gap-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] p-3"
+        >
+          <span class="text-sm font-medium">{{ t('allocation_selected_count', { count: selectedEntryIds.length }) }}</span>
+          <FormSelect id="bulk_project" v-model="bulkProjectId" :label="t('project')" :options="bulkProjectOptions" class="min-w-[14rem]" />
+          <label class="flex items-center gap-2 pb-2 text-sm">
+            <input v-model="bulkOverwrite" type="checkbox" class="h-4 w-4 rounded border-[hsl(var(--input))]" />
+            {{ t('allocation_bulk_overwrite') }}
+          </label>
+          <Button size="sm" :disabled="!bulkProjectId || bulkProcessing" :loading="bulkProcessing" @click="allocateSelected">
+            <FolderKanban class="mr-1 h-4 w-4" /> {{ t('allocation_bulk_assign') }}
+          </Button>
+        </div>
         <DataTable
           :columns="columns"
           :rows="entries?.data ?? []"
@@ -287,6 +341,8 @@ function doDelete() {
           :filters="filters"
           searchable
           expandable
+          :selectable="!!allocationOptions"
+          @selection-change="ids => selectedEntryIds = ids"
           @sort="handleSort"
           @search="handleSearch"
           @filter="handleFilter"
@@ -347,6 +403,11 @@ function doDelete() {
           </template>
           <template #cell-actions="{ row }">
             <div class="flex justify-end gap-1">
+              <Tooltip v-if="allocationOptions" :content="t('allocation_dialog_title')" side="left">
+                <Button variant="ghost" size="icon" :aria-label="t('allocation_dialog_title')" @click="allocatingEntry = row">
+                  <FolderKanban class="h-4 w-4" />
+                </Button>
+              </Tooltip>
               <!-- Draft entry actions -->
               <template v-if="!row.is_posted">
                 <Tooltip v-if="can.edit && row.correction_role !== 'reversal'" :content="t('edit')" side="left">
@@ -420,6 +481,7 @@ function doDelete() {
                       </span>
                     </th>
                     <th class="pb-1 text-right">{{ t('credit') }}</th>
+                    <th v-if="allocationOptions" class="pb-1 pl-4">{{ t('project') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -427,6 +489,7 @@ function doDelete() {
                     <td>{{ line.account?.code }} — {{ line.account?.name }}</td>
                     <td class="text-right">{{ formatCurrency(line.debit) }}</td>
                     <td class="text-right">{{ formatCurrency(line.credit) }}</td>
+                    <td v-if="allocationOptions" class="pl-4 font-mono text-xs">{{ allocationCodes(line) }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -437,6 +500,14 @@ function doDelete() {
       </CardContent>
     </Card>
 
+    <AllocationDialog
+      v-if="allocationOptions"
+      :open="!!allocatingEntry"
+      :entry="allocatingEntry"
+      :options="allocationOptions"
+      @close="allocatingEntry = null"
+    />
+
     <!-- Create / edit / amend -->
     <JournalEntryFormModal
       :open="showForm"
@@ -444,6 +515,7 @@ function doDelete() {
       :accounts="accounts"
       :vat-rates="vatRates"
       :vat-types="vatTypes"
+      :allocation-options="allocationOptions"
       @close="closeForm"
     />
 

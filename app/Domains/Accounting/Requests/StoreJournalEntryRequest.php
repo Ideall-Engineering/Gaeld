@@ -6,6 +6,8 @@ use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Rules\NotSystemReference;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Support\AllocationRules;
+use App\Domains\Projects\Support\ProjectsModule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -53,7 +55,25 @@ class StoreJournalEntryRequest extends FormRequest
             'revision' => ['nullable', 'integer', 'min:1'],
             'change_reason' => ['nullable', 'string', 'max:1000'],
             'acknowledge_bank_amount_change' => ['sometimes', 'boolean'],
+            ...$this->allocationRules($orgId),
         ];
+    }
+
+    /**
+     * Allocation rules only where projects are switched on (spec 009);
+     * elsewhere allocations are not read at all.
+     *
+     * @return array<string, mixed>
+     */
+    private function allocationRules(string $orgId): array
+    {
+        if (! ProjectsModule::enabledFor(app(CurrentOrganization::class)->get())) {
+            return [];
+        }
+
+        $entry = $this->route('journalEntry');
+
+        return AllocationRules::for($orgId, keptProjectIds: AllocationRules::projectsOf($entry instanceof JournalEntry ? $entry : null));
     }
 
     /**

@@ -17,6 +17,7 @@ const props = defineProps({
   accounts: { type: Array, default: () => [] },
   vatRates: { type: Array, default: () => [] },
   vatTypes: { type: Array, default: () => [] },
+  allocationOptions: { type: Object, default: null },
   redirectTo: { type: String, default: null },
 })
 
@@ -134,6 +135,7 @@ function submit(post = true) {
           :accounts="accounts"
           :vat-rates="vatRates"
           :vat-types="vatTypes"
+          :allocation-options="allocationOptions"
           :errors="form.errors"
           id-prefix="journal"
         />

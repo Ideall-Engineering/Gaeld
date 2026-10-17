@@ -1,5 +1,7 @@
 <?php
 
+use App\Domains\Projects\Controllers\AllocationReviewController;
+use App\Domains\Projects\Controllers\JournalAllocationController;
 use App\Domains\Projects\Controllers\ProjectController;
 use App\Http\Middleware\EnsureProjectsModule;
 use Illuminate\Support\Facades\Route;
@@ -9,6 +11,11 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
+    Route::get('/projects/allocation-reviews', [AllocationReviewController::class, 'index'])->name('projects.allocation-reviews.index');
+    Route::post('/projects/allocation-reviews/{allocationReview}/dismiss', [AllocationReviewController::class, 'dismiss'])->name('projects.allocation-reviews.dismiss');
     Route::put('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
+
+    Route::put('/accounting/journal-entries/{journalEntry}/allocations', [JournalAllocationController::class, 'update'])->name('accounting.journal-entries.allocations.update');
+    Route::post('/accounting/journal-entry-allocations/bulk', [JournalAllocationController::class, 'bulk'])->name('accounting.journal-entries.allocations.bulk');
 });

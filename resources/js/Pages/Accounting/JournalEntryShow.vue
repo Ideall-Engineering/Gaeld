@@ -15,7 +15,8 @@ import JournalCorrectionDialog from '@/Components/Accounting/JournalCorrectionDi
 import JournalEntryFormModal from '@/Components/Accounting/JournalEntryFormModal.vue'
 import JournalLinesEditor, { lineFromEntry, serializeLines } from '@/Components/Accounting/JournalLinesEditor.vue'
 import JournalEntryHistory from '@/Components/Accounting/JournalEntryHistory.vue'
-import { Lock, Pencil, Replace, RotateCcw, Trash2 } from 'lucide-vue-next'
+import AllocationDialog from '@/Components/Projects/AllocationDialog.vue'
+import { FolderKanban, Lock, Pencil, Replace, RotateCcw, Trash2 } from 'lucide-vue-next'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 
@@ -27,6 +28,7 @@ const props = defineProps({
   vatRates: { type: Array, default: () => [] },
   vatTypes: { type: Array, default: () => [] },
   postedEntryEditMode: { type: String, default: 'strict' },
+  allocationOptions: { type: Object, default: null },
   revisions: { type: Array, default: () => [] },
   can: { type: Object, default: () => ({ correct: false, reverse: false, amend: false }) },
 })
@@ -116,6 +118,20 @@ function doReverse() {
   router.post(`/accounting/journal-entries/${props.entry.id}/reverse`, {}, { preserveScroll: true })
 }
 const confirmingReverse = ref(false)
+
+// Projects (spec 009): shown wherever lines carry allocations, changeable
+// for every entry because the entry itself stays untouched.
+const allocating = ref(false)
+const showsAllocations = computed(() => (props.entry.lines || []).some(line => Array.isArray(line.allocations)))
+
+function allocationLabel(line) {
+  return (line.allocations ?? [])
+    .map(a => {
+      const who = [a.project?.code, a.employee ? `${a.employee.first_name} ${a.employee.last_name}` : null].filter(Boolean).join(' / ')
+      return Number(a.share) === 100 ? who : `${who} ${Number(a.share)} %`
+    })
+    .join(', ')
+}
 </script>
 
 <template>
@@ -191,6 +207,10 @@ const confirmingReverse = ref(false)
               <Button v-if="canStartCorrection" size="sm" variant="outline" @click="correctingEntry = entry">
                 <Replace class="mr-1 h-4 w-4" />
                 {{ t('correct') }}
+              </Button>
+              <Button v-if="allocationOptions" size="sm" variant="outline" @click="allocating = true">
+                <FolderKanban class="mr-1 h-4 w-4" />
+                {{ t('allocation_dialog_title') }}
               </Button>
               <Button v-if="canReverse" size="sm" variant="outline" @click="confirmingReverse = true">
                 <RotateCcw class="mr-1 h-4 w-4" />
@@ -269,6 +289,7 @@ const confirmingReverse = ref(false)
                 :accounts="accounts"
                 :vat-rates="vatRates"
                 :vat-types="vatTypes"
+                :allocation-options="allocationOptions"
                 :errors="replacementForm.errors"
                 id-prefix="replacement"
               />
@@ -302,6 +323,7 @@ const confirmingReverse = ref(false)
                   <th class="pb-2 font-medium">{{ t('journal_line_vat') }}</th>
                   <th class="pb-2 text-right font-medium">{{ t('debit') }}</th>
                   <th class="pb-2 text-right font-medium">{{ t('credit') }}</th>
+                  <th v-if="showsAllocations" class="pb-2 pl-4 font-medium">{{ t('project') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-[hsl(var(--border))]">
@@ -314,6 +336,7 @@ const confirmingReverse = ref(false)
                   </td>
                   <td class="py-2 text-right font-mono">{{ formatCurrency(line.debit) }}</td>
                   <td class="py-2 text-right font-mono">{{ formatCurrency(line.credit) }}</td>
+                  <td v-if="showsAllocations" class="py-2 pl-4 font-mono text-xs">{{ allocationLabel(line) || '—' }}</td>
                 </tr>
               </tbody>
               <tfoot>
@@ -342,12 +365,21 @@ const confirmingReverse = ref(false)
       </div>
     </div>
 
+    <AllocationDialog
+      v-if="allocationOptions"
+      :open="allocating"
+      :entry="entry"
+      :options="allocationOptions"
+      @close="allocating = false"
+    />
+
     <JournalEntryFormModal
       :open="editing"
       :entry="editing ? entry : null"
       :accounts="accounts"
       :vat-rates="vatRates"
       :vat-types="vatTypes"
+      :allocation-options="allocationOptions"
       :redirect-to="`/accounting/journal-entries/${entry.id}`"
       @close="editing = false"
     />

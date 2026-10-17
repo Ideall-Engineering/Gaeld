@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import Button from '@/Components/UI/Button.vue'
 import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
+import LineAllocationEditor, { allocationsFromLine, serializeAllocations } from '@/Components/Projects/LineAllocationEditor.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 import { Plus, Trash2 } from 'lucide-vue-next'
@@ -17,6 +18,9 @@ const props = defineProps({
   vatTypes: { type: Array, default: () => [] },
   errors: { type: Object, default: () => ({}) },
   idPrefix: { type: String, default: 'line' },
+  // Projects and people a line can be allocated to (spec 009); null where
+  // projects are off or the user may not allocate.
+  allocationOptions: { type: Object, default: null },
 })
 
 const { t } = useTranslations()
@@ -84,7 +88,9 @@ export function emptyLine() {
 }
 
 export function lineFromEntry(line) {
+  const allocations = allocationsFromLine(line)
   return {
+    ...(allocations !== undefined ? { allocations } : {}),
     account_id: String(line.account_id),
     debit: String(line.debit || '0.00'),
     credit: String(line.credit || '0.00'),
@@ -104,6 +110,7 @@ export function serializeLines(lines) {
     vat_rate_id: line.vat_type ? (line.vat_rate_id || null) : null,
     vat_amount: line.vat_type && line.vat_amount !== '' ? line.vat_amount : null,
     vat_figure: line.vat_type ? (line.vat_figure || null) : null,
+    allocations: serializeAllocations(line.allocations),
   }))
 }
 </script>
@@ -222,6 +229,16 @@ export function serializeLines(lines) {
             </div>
           </template>
         </div>
+
+        <LineAllocationEditor
+          v-if="allocationOptions"
+          v-model="line.allocations"
+          class="mt-2"
+          :options="allocationOptions"
+          :errors="errors"
+          :error-prefix="`lines.${index}.allocations`"
+          :id-prefix="`${idPrefix}_alloc_${index}`"
+        />
       </div>
     </div>
 
