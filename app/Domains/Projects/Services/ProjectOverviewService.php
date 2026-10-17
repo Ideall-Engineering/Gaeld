@@ -113,9 +113,22 @@ class ProjectOverviewService
             ];
         }
 
-        // Sums count every project once: areas only add up what is below
-        // them, so they are left out here.
-        $leaves = array_values(array_filter($rows, fn (array $row) => $row['kind'] !== ProjectKind::Area->value));
+        // Sums count every amount once: an area row adds up what is below
+        // it, so only what is allocated to the area itself counts here.
+        $leaves = [];
+        foreach ($rows as $row) {
+            if ($row['kind'] !== ProjectKind::Area->value) {
+                $leaves[] = $row;
+
+                continue;
+            }
+            $figures = $own[$row['id']];
+            $leaves[] = [
+                ...$row,
+                ...array_intersect_key($figures, array_flip(['expected', 'revenue', 'expenses', 'invoiced', 'received', 'open'])),
+                'net' => Money::subtract($figures['revenue'], $figures['expenses']),
+            ];
+        }
 
         return [
             'rows' => $rows,
@@ -150,7 +163,8 @@ class ProjectOverviewService
         $credited = $invoices
             ->where('type', InvoiceType::CreditNote->value)
             ->groupBy('related_invoice_id')
-            ->map(fn ($notes) => $notes->reduce(fn (string $sum, $note) => Money::add($sum, (string) $note->total), '0.00'));
+            // Credit notes carry a negative total; what they credit is its amount.
+            ->map(fn ($notes) => $notes->reduce(fn (string $sum, $note) => Money::add($sum, Money::absoluteAmount((string) $note->total)), '0.00'));
 
         $figures = [];
         foreach ($invoices as $invoice) {
@@ -158,7 +172,7 @@ class ProjectOverviewService
             $figures[$projectId] ??= ['invoiced' => '0.00', 'received' => '0.00', 'open' => '0.00', 'count' => 0];
 
             if ($invoice->type === InvoiceType::CreditNote->value) {
-                $figures[$projectId]['invoiced'] = Money::subtract($figures[$projectId]['invoiced'], (string) $invoice->total);
+                $figures[$projectId]['invoiced'] = Money::subtract($figures[$projectId]['invoiced'], Money::absoluteAmount((string) $invoice->total));
 
                 continue;
             }

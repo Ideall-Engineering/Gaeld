@@ -5,7 +5,6 @@ namespace App\Domains\Projects\Controllers;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Organizations\Services\CurrentOrganization;
-use App\Domains\Projects\DTOs\LineAllocationData;
 use App\Domains\Projects\Enums\AllocationSource;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Queries\ProjectQuery;
@@ -69,9 +68,7 @@ class UnallocatedLinesController extends Controller
             if ($line === null) {
                 continue;
             }
-            $byEntry[$line->journal_entry_id][(int) $line->id] = [
-                new LineAllocationData(projectId: (int) $item['project_id'], employeeId: null),
-            ];
+            $byEntry[$line->journal_entry_id][(int) $line->id] = $allocations->withProject((int) $line->id, (int) $item['project_id'], AllocationSource::Bulk);
         }
 
         DB::transaction(function () use ($byEntry, $allocations, $request): void {

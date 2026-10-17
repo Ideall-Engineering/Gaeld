@@ -5,9 +5,9 @@ namespace App\Domains\Projects\Services;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Invoice;
-use App\Domains\Projects\DTOs\LineAllocationData;
 use App\Domains\Projects\Enums\AllocationSource;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
@@ -86,7 +86,11 @@ class InvoiceProjectService
                 $current->update(['cost_center_id' => $projectId]);
             }
 
-            $entry = $invoice->journal_entry_id === null
+            // Only a live booking follows the project. A cancelled or reverted
+            // invoice has a reversal carrying the old project; moving the
+            // original alone would leave the two out of balance.
+            $live = in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Paid, InvoiceStatus::Overdue], true);
+            $entry = ! $live || $invoice->journal_entry_id === null
                 ? null
                 : JournalEntry::withoutGlobalScopes()->find($invoice->journal_entry_id);
 
@@ -128,9 +132,7 @@ class InvoiceProjectService
 
         $byLine = [];
         foreach ($revenueLines as $lineId) {
-            $byLine[(int) $lineId] = $projectId === null
-                ? []
-                : [new LineAllocationData(projectId: $projectId, employeeId: null, source: AllocationSource::Invoice)];
+            $byLine[(int) $lineId] = $this->allocations->withProject((int) $lineId, $projectId, AllocationSource::Invoice);
         }
 
         if ($byLine !== []) {

@@ -13,6 +13,7 @@ use App\Domains\Projects\Models\ProjectShare;
 use App\Domains\Projects\Models\SteeringItem;
 use App\Support\Money;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Contribution and drawings per person, and what is left to play with
@@ -40,9 +41,22 @@ class SteeringService
         $from = "{$year}-01-01";
         $to = "{$year}-12-31";
 
+        // Active people, and anyone else a key, plan item or acquisition of
+        // the year still names, so no amount drops out of the sums.
+        $named = collect()
+            ->merge(ProjectShare::withoutGlobalScopes()->where('organization_id', $organizationId)->pluck('employee_id'))
+            ->merge(SteeringItem::withoutGlobalScopes()->where('organization_id', $organizationId)->where('year', $year)->pluck('employee_id'))
+            ->merge(DB::table('budget_group_shares')
+                ->join('budget_groups', 'budget_groups.id', '=', 'budget_group_shares.budget_group_id')
+                ->where('budget_groups.organization_id', $organizationId)->where('budget_groups.year', $year)
+                ->pluck('budget_group_shares.employee_id'))
+            ->merge(array_keys($this->acquisitions->chargesByPerson($organizationId, $from, $to)))
+            ->unique()->values()->all();
+
         $people = Employee::withoutGlobalScopes()
+            ->withTrashed()
             ->where('organization_id', $organizationId)
-            ->where('is_active', true)
+            ->where(fn ($q) => $q->where(fn ($a) => $a->where('is_active', true)->whereNull('deleted_at'))->orWhereIn('id', $named))
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get(['id', 'first_name', 'last_name']);
@@ -65,7 +79,7 @@ class SteeringService
             if ($project->kind !== ProjectKind::Project || $project->status === ProjectStatus::Lost) {
                 continue;
             }
-            $value = $this->valueOf($project, $booked[$project->id] ?? null);
+            $value = $this->valueOf($project, $booked[$project->id] ?? null, $year);
             if (Money::compare($value, '0') === 0) {
                 continue;
             }
@@ -110,9 +124,12 @@ class SteeringService
 
             $carry = $group->people->mapWithKeys(fn (Employee $e) => [$e->id => (string) data_get($e, 'pivot.carry_share')])->filter(fn ($s) => Money::isPositive($s))->all();
             if ($carry === [] && $ids !== []) {
-                // Nobody named: everyone bears an equal part.
+                // Nobody named: everyone bears an equal part, the last one
+                // the remainder, so the whole plan is borne.
                 $equal = bcdiv('100', (string) count($ids), 4);
                 $carry = array_fill_keys($ids, $equal);
+                $last = $ids[array_key_last($ids)];
+                $carry[$last] = bcsub('100', bcmul($equal, (string) (count($ids) - 1), 4), 4);
             }
             $credited = $group->people->mapWithKeys(fn (Employee $e) => [$e->id => (string) data_get($e, 'pivot.credit_share')])->filter(fn ($s) => Money::isPositive($s))->all();
 
@@ -184,14 +201,24 @@ class SteeringService
      *
      * @param  array{revenue: string, expenses: string}|null  $booked
      */
-    public function valueOf(Project $project, ?array $booked): string
+    public function valueOf(Project $project, ?array $booked, int $year): string
     {
         $revenue = $booked['revenue'] ?? '0.00';
         $expenses = $booked['expenses'] ?? '0.00';
 
-        return Money::isPositive($revenue)
-            ? Money::subtract($revenue, $expenses)
-            : Money::subtract($project->expected_amount !== null ? (string) $project->expected_amount : '0.00', $expenses);
+        if (Money::isPositive($revenue)) {
+            return Money::subtract($revenue, $expenses);
+        }
+
+        // No revenue in this year: the expected amount only belongs to the
+        // year the project is to be invoiced in (billing month, else target
+        // date); an undated open project counts for the running year.
+        $planned = $project->billing_month ?? $project->target_date;
+        $belongs = $planned !== null
+            ? (int) $planned->year === $year
+            : $project->status !== ProjectStatus::Done && $year === (int) now()->year;
+
+        return Money::subtract($belongs && $project->expected_amount !== null ? (string) $project->expected_amount : '0.00', $expenses);
     }
 
     /**
@@ -239,12 +266,15 @@ class SteeringService
         $slips = SalarySlip::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
             ->where('period_year', $year)
+            // Only slips that count: posted here, or booked elsewhere.
+            ->where(fn ($q) => $q->whereNotNull('posted_at')->orWhere('booked_externally', true))
             ->get(['employee_id', 'gross_salary', 'deductions', 'adjustments']);
 
         foreach ($slips as $slip) {
             $cost = (string) $slip->gross_salary;
             foreach ((array) $slip->deductions as $code => $amount) {
-                if (str_ends_with((string) $code, '_employer') && is_numeric($amount)) {
+                // Each employer contribution once; total_employer sums them.
+                if (str_ends_with((string) $code, '_employer') && ! str_starts_with((string) $code, 'total_') && is_numeric($amount)) {
                     $cost = Money::add($cost, (string) $amount);
                 }
             }

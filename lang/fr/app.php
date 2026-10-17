@@ -3003,4 +3003,6 @@ return [
     'budget_group_keys_hint' => 'Supporté : part que chaque personne supporte. Crédit : qui a effectué le travail se voit créditer le montant ; fait à l’externe signifie 0 partout.',
     'budget_group_carry' => 'supporte %',
     'budget_group_credit' => 'crédit %',
+    'budget_group_carry_total' => 'La clé de répartition doit totaliser 100 %.',
+    'budget_group_credit_total' => 'Le crédit totalise 100 % ou est vide (fait à l’externe).',
 ];

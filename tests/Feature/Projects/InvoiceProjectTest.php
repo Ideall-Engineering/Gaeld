@@ -11,6 +11,7 @@ use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Invoicing\Actions\CancelInvoiceAction;
 use App\Domains\Invoicing\Actions\CreateCreditNoteAction;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\Actions\FinalizeInvoiceAction;
@@ -22,6 +23,7 @@ use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Enums\PaymentMethod;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Services\InvoiceAccountingService;
+use App\Domains\Payroll\Models\Employee;
 use App\Domains\Projects\DTOs\LineAllocationData;
 use App\Domains\Projects\Enums\AllocationSource;
 use App\Domains\Projects\Enums\ProjectKind;
@@ -312,6 +314,62 @@ class InvoiceProjectTest extends TestCase
 
         $this->actAsOrg()->delete("/projects/{$other->id}")->assertSessionHasErrors('project');
         $this->assertNotNull($other->fresh());
+    }
+
+    public function test_a_credit_note_reduces_invoiced_and_open(): void
+    {
+        $invoice = $this->createInvoice();
+        app(InvoiceProjectService::class)->assign($invoice, $this->website->id);
+        $invoice = app(FinalizeInvoiceAction::class)->execute($invoice);
+        app(FinalizeInvoiceAction::class)->execute(app(CreateCreditNoteAction::class)->execute($invoice)->fresh());
+
+        $web = collect(app(ProjectOverviewService::class)->overview($this->org->id, '2026-01-01', '2026-12-31')['rows'])->firstWhere('code', 'WEB');
+
+        $this->assertSame('0.00', $web['invoiced']);
+        $this->assertSame('0.00', $web['open']);
+        $this->assertSame('0.00', $web['revenue']);
+    }
+
+    public function test_changing_the_project_of_a_cancelled_invoice_leaves_its_bookings(): void
+    {
+        $other = $this->makeProject('OTHER');
+        $invoice = $this->createInvoice();
+        app(InvoiceProjectService::class)->assign($invoice, $this->website->id);
+        $invoice = app(FinalizeInvoiceAction::class)->execute($invoice);
+        app(CancelInvoiceAction::class)->execute($invoice->fresh());
+
+        app(InvoiceProjectService::class)->assign($invoice->fresh(), $other->id);
+
+        $this->assertSame(0, LineAllocation::query()->where('cost_center_id', $other->id)->count());
+        $this->assertSame($other->id, InvoiceProject::query()->where('invoice_id', $invoice->id)->value('cost_center_id'));
+    }
+
+    public function test_allocations_to_an_area_itself_count_in_the_totals(): void
+    {
+        app(LedgerService::class)->postEntry($this->org->id, new JournalEntryData('2026-03-20', 'AREA-COST', 'Area cost', [
+            new JournalLineData(accountId: (string) $this->expenseAccount->id, debit: '75.00', credit: '0', allocations: $this->whole($this->area)),
+            new JournalLineData(accountId: (string) $this->bankAccount->id, debit: '0', credit: '75.00'),
+        ]));
+
+        $overview = app(ProjectOverviewService::class)->overview($this->org->id, '2026-01-01', '2026-12-31');
+
+        $this->assertSame('75.00', $overview['totals']['expenses']);
+    }
+
+    public function test_taking_over_a_suggestion_keeps_the_person_of_a_line(): void
+    {
+        $person = Employee::factory()->for($this->org)->create();
+        $entry = app(LedgerService::class)->postEntry($this->org->id, new JournalEntryData('2026-03-20', 'P-COST', 'x', [
+            new JournalLineData(accountId: (string) $this->expenseAccount->id, debit: '40.00', credit: '0', allocations: [new LineAllocationData(projectId: null, employeeId: $person->id)]),
+            new JournalLineData(accountId: (string) $this->bankAccount->id, debit: '0', credit: '40.00'),
+        ]));
+        $line = TransactionLine::query()->where('journal_entry_id', $entry->id)->where('account_id', $this->expenseAccount->id)->sole();
+
+        $this->actAsOrg()->post('/projects/unallocated', ['items' => [['line_id' => $line->id, 'project_id' => $this->website->id]]])->assertSessionHasNoErrors();
+
+        $allocation = LineAllocation::query()->where('transaction_line_id', $line->id)->sole();
+        $this->assertSame($this->website->id, $allocation->cost_center_id);
+        $this->assertSame($person->id, $allocation->employee_id);
     }
 
     private function createInvoice(string $number = 'INV-2026-001'): Invoice

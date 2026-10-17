@@ -3057,4 +3057,6 @@ return [
     'budget_group_keys_hint' => 'Carried: part each person bears. Credit: whoever did the work is credited the amount; done externally means 0 everywhere.',
     'budget_group_carry' => 'bears %',
     'budget_group_credit' => 'credit %',
+    'budget_group_carry_total' => 'The carry key must add up to 100 %.',
+    'budget_group_credit_total' => 'The credit adds up to 100 % or is empty (done externally).',
 ];

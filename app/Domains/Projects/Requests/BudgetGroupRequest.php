@@ -54,7 +54,17 @@ class BudgetGroupRequest extends FormRequest
             'position' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'notes' => ['nullable', 'string', 'max:2000'],
             // Stage 5: who bears the block and who is credited for the work.
-            'people' => ['sometimes', 'array', 'max:10'],
+            'people' => [
+                'sometimes',
+                'array',
+                'max:100',
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    $error = self::keysError((array) $value);
+                    if ($error !== null) {
+                        $fail($error);
+                    }
+                },
+            ],
             'people.*.employee_id' => ['required', 'uuid', 'distinct', Rule::exists('employees', 'id')->where('organization_id', $orgId)],
             'people.*.carry_share' => ['required', 'numeric', 'min:0', 'max:100'],
             'people.*.credit_share' => ['required', 'numeric', 'min:0', 'max:100'],
@@ -76,5 +86,26 @@ class BudgetGroupRequest extends FormRequest
                 },
             ],
         ];
+    }
+
+    /**
+     * A carry key must cover the whole block and a credit key either the
+     * whole block or nothing (done externally).
+     *
+     * @param  array<int, array<string, mixed>>  $people
+     */
+    public static function keysError(array $people): ?string
+    {
+        $carry = array_sum(array_map(fn ($p) => (float) ($p['carry_share'] ?? 0), $people));
+        $credit = array_sum(array_map(fn ($p) => (float) ($p['credit_share'] ?? 0), $people));
+
+        if ($people !== [] && abs($carry - 100) > 0.0001) {
+            return __('app.budget_group_carry_total');
+        }
+        if ($credit > 0.0001 && abs($credit - 100) > 0.0001) {
+            return __('app.budget_group_credit_total');
+        }
+
+        return null;
     }
 }

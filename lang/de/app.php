@@ -2995,4 +2995,6 @@ return [
     'budget_group_keys_hint' => 'Getragen: Anteil, den jede Person trägt. Gutschrift: wer die Arbeit übernommen hat, erhält den Betrag gutgeschrieben; extern erledigt heisst überall 0.',
     'budget_group_carry' => 'trägt %',
     'budget_group_credit' => 'Gutschrift %',
+    'budget_group_carry_total' => 'Der Tragschlüssel muss zusammen 100 % ergeben.',
+    'budget_group_credit_total' => 'Die Gutschrift ergibt zusammen 100 % oder ist leer (extern erledigt).',
 ];

@@ -35,7 +35,7 @@ class PlanActualService
      *     elapsed: string,
      * }
      */
-    public function forYear(string $organizationId, int $year, ?Carbon $asOf = null): array
+    public function forYear(string $organizationId, int $year, ?Carbon $asOf = null, bool $withKeys = false): array
     {
         $from = Carbon::create($year, 1, 1)->startOfDay();
         $yearEnd = Carbon::create($year, 12, 31)->startOfDay();
@@ -123,7 +123,8 @@ class PlanActualService
                 'plan_from_budgets' => $group->plan_amount === null,
                 'accounts' => $group->accounts->sortBy('code')->map(fn (Account $a) => ['id' => $a->id, 'code' => $a->code, 'name' => $a->display_name])->values()->all(),
                 'notes' => $group->notes,
-                'people' => $group->people->map(fn ($e) => [
+                // Carry and credit keys are steering data: owners only.
+                'people' => ! $withKeys ? [] : $group->people->map(fn ($e) => [
                     'employee_id' => $e->id,
                     'carry_share' => (string) (float) data_get($e, 'pivot.carry_share'),
                     'credit_share' => (string) (float) data_get($e, 'pivot.credit_share'),

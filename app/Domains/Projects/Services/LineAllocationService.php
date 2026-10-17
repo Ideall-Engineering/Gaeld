@@ -177,6 +177,34 @@ class LineAllocationService
     }
 
     /**
+     * The allocations a line gets when it is given to a project: people it
+     * was already allocated to keep their shares, now with the project;
+     * without people the whole line goes to the project. Null clears the
+     * project and keeps the people.
+     *
+     * @return array<int, LineAllocationData>
+     */
+    public function withProject(int $lineId, ?int $projectId, AllocationSource $source): array
+    {
+        $people = LineAllocation::withoutGlobalScopes()
+            ->where('transaction_line_id', $lineId)
+            ->whereNotNull('employee_id')
+            ->orderBy('id')
+            ->get();
+
+        if ($people->isEmpty()) {
+            return $projectId === null ? [] : [new LineAllocationData(projectId: $projectId, employeeId: null, source: $source)];
+        }
+
+        return $people->map(fn (LineAllocation $a) => new LineAllocationData(
+            projectId: $projectId,
+            employeeId: $a->employee_id,
+            share: (string) $a->share,
+            source: $source,
+        ))->values()->all();
+    }
+
+    /**
      * Allocations of every line of an entry, keyed by line id, in a plain
      * form fit for snapshots and comparisons.
      *

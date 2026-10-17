@@ -33,7 +33,7 @@ class BudgetGroupController extends Controller
 
         return Inertia::render('Projects/Plan', [
             'year' => $year,
-            'plan' => $plans->forYear($currentOrg->id(), $year),
+            'plan' => $plans->forYear($currentOrg->id(), $year, withKeys: $request->user()?->can('steer', Project::class) ?? false),
             'accounts' => Account::query()
                 ->where('type', AccountType::Expense->value)
                 ->orderBy('code')

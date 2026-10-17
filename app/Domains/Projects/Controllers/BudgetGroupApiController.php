@@ -7,6 +7,7 @@ use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Projects\Enums\BudgetGroupKind;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Requests\BudgetGroupRequest;
 use App\Domains\Projects\Services\PlanActualService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
@@ -31,7 +32,7 @@ class BudgetGroupApiController extends Controller
 
         $year = $request->validate(['year' => ['required', 'integer', 'between:2000,2100']])['year'];
 
-        return response()->json(['data' => $plans->forYear($currentOrg->id(), (int) $year)]);
+        return response()->json(['data' => $plans->forYear($currentOrg->id(), (int) $year, withKeys: $request->user()?->can('steer', Project::class) ?? false)]);
     }
 
     /**
@@ -46,11 +47,15 @@ class BudgetGroupApiController extends Controller
         $this->authorize('steer', Project::class);
 
         $validated = $request->validate([
-            'people' => ['present', 'array', 'max:10'],
+            'people' => ['present', 'array', 'max:100'],
             'people.*.employee_id' => ['required', 'uuid', 'distinct', Rule::exists('employees', 'id')->where('organization_id', $currentOrg->id())],
             'people.*.carry_share' => ['required', 'numeric', 'min:0', 'max:100'],
             'people.*.credit_share' => ['required', 'numeric', 'min:0', 'max:100'],
         ]);
+
+        if (($error = BudgetGroupRequest::keysError($validated['people'])) !== null) {
+            return response()->json(['message' => $error, 'code' => 'keys_total'], 422);
+        }
 
         $budgetGroup->people()->sync($this->keys((array) $validated['people']));
 

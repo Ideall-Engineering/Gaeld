@@ -6,9 +6,11 @@ use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Payroll\Models\Employee;
+use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\BudgetGroup;
+use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\ProjectShare;
 use App\Domains\Projects\Models\SteeringItem;
 use App\Domains\Projects\Services\AcquisitionService;
@@ -58,11 +60,11 @@ class SteeringTest extends TestCase
         ]));
 
         // B: possible, expected 500, area key
-        $this->makeProject('B', $area)->update(['status' => ProjectStatus::Possible, 'expected_amount' => '500.00']);
+        $this->makeProject('B', $area)->update(['status' => ProjectStatus::Possible, 'expected_amount' => '500.00', 'billing_month' => '2026-11-01']);
 
         // C: in progress, expected 300, all Anna's
         $c = $this->makeProject('C', $area);
-        $c->update(['status' => ProjectStatus::InProgress, 'expected_amount' => '300.00']);
+        $c->update(['status' => ProjectStatus::InProgress, 'expected_amount' => '300.00', 'target_date' => '2026-12-15']);
         $this->share($c->id, ['anna' => '100']);
 
         // Lost projects count for nobody
@@ -120,7 +122,7 @@ class SteeringTest extends TestCase
 
     public function test_a_project_without_any_key_is_reported_as_unshared(): void
     {
-        $this->makeProject('LOOSE')->update(['status' => ProjectStatus::Pipeline, 'expected_amount' => '123.00']);
+        $this->makeProject('LOOSE')->update(['status' => ProjectStatus::Pipeline, 'expected_amount' => '123.00', 'billing_month' => '2026-09-01']);
 
         $this->assertSame('123.00', app(SteeringService::class)->forYear($this->organization->id, 2026)['unshared']);
     }
@@ -168,6 +170,76 @@ class SteeringTest extends TestCase
             'people' => [['employee_id' => $this->anna->id, 'carry_share' => '50', 'credit_share' => '0'], ['employee_id' => $this->ben->id, 'carry_share' => '50', 'credit_share' => '100']],
         ])->assertSessionHasNoErrors();
         $this->assertSame('100.0000', (string) $block->people()->where('employees.id', $this->ben->id)->first()->pivot->credit_share);
+    }
+
+    public function test_expected_amounts_count_only_in_their_year(): void
+    {
+        // Invoiced last year, nothing booked this year: worth nothing now.
+        $old = $this->makeProject('OLD', Project::query()->where('code', 'AREA')->sole());
+        $old->update(['status' => ProjectStatus::Done, 'expected_amount' => '50000.00', 'billing_month' => '2025-06-01']);
+
+        $people = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['people'])->keyBy('name');
+        $this->assertSame('400.00', $people['Anna A']['by_status']['done']);
+
+        $people2027 = collect(app(SteeringService::class)->forYear($this->organization->id, 2027)['people'])->keyBy('name');
+        $this->assertSame('0.00', $people2027['Anna A']['by_status']['possible'], 'B is billed in 2026, not 2027.');
+    }
+
+    public function test_booked_salary_counts_each_employer_contribution_once_and_skips_drafts(): void
+    {
+        $slip = fn (bool $counted) => SalarySlip::create([
+            'organization_id' => $this->organization->id,
+            'employee_id' => $this->anna->id,
+            'period_month' => $counted ? 3 : 4,
+            'period_year' => 2026,
+            'gross_salary' => '1000.00',
+            'net_salary' => '900.00',
+            'booked_externally' => $counted,
+            'deductions' => ['avs_employer' => '50.00', 'ac_employer' => '10.00', 'total_employer' => '60.00', 'avs_employee' => '50.00'],
+            'adjustments' => ['reimbursement_amount' => '50.00'],
+        ]);
+        $slip(true);
+        $slip(false);
+
+        $people = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['people'])->keyBy('name');
+
+        $this->assertSame('1110.00', $people['Anna A']['booked_salary']);
+    }
+
+    public function test_a_person_who_left_keeps_their_part(): void
+    {
+        $this->ben->update(['is_active' => false]);
+
+        $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
+
+        $this->assertSame('-500.00', $data['totals']['play'], 'Ben\'s part is still counted.');
+        $this->assertCount(2, $data['people']);
+    }
+
+    public function test_block_keys_must_add_up(): void
+    {
+        $block = BudgetGroup::query()->where('name', 'Rent')->sole();
+
+        $this->actAsOrg()->put("/projects/plan/{$block->id}", [
+            'name' => 'Rent', 'kind' => 'running', 'plan_amount' => '1000',
+            'people' => [['employee_id' => $this->anna->id, 'carry_share' => '50', 'credit_share' => '0'], ['employee_id' => $this->ben->id, 'carry_share' => '30', 'credit_share' => '0']],
+        ])->assertSessionHasErrors('people');
+
+        $this->actAsOrg()->put("/projects/plan/{$block->id}", [
+            'name' => 'Rent', 'kind' => 'running', 'plan_amount' => '1000',
+            'people' => [['employee_id' => $this->anna->id, 'carry_share' => '50', 'credit_share' => '60'], ['employee_id' => $this->ben->id, 'carry_share' => '50', 'credit_share' => '0']],
+        ])->assertSessionHasErrors('people');
+    }
+
+    public function test_keys_are_hidden_from_everyone_but_owners(): void
+    {
+        $viewer = User::factory()->create(['onboarding_completed_at' => now()]);
+        $this->organization->users()->attach($viewer->id, ['role' => 'viewer']);
+        $this->assignOrganizationRole($viewer, $this->organization, 'viewer');
+
+        $this->actingAs($viewer)->withSession(['current_organization_id' => $this->organization->id])
+            ->get('/projects/plan?year=2026')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('plan.groups.0.people', []));
     }
 
     /** @param  array<string, string>  $shares */

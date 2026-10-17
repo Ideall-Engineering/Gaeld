@@ -51,7 +51,15 @@ const editing = ref(null)
 const accountFilter = ref('')
 // Stage 5: everyone bears an equal part unless set otherwise; nobody is
 // credited until someone is named as having done the work.
-const blankPeople = () => props.employees.map(e => ({ employee_id: e.id, carry_share: String(+(100 / Math.max(props.employees.length, 1)).toFixed(4)), credit_share: '0' }))
+const blankPeople = () => {
+  const n = Math.max(props.employees.length, 1)
+  const equal = Math.floor((100 / n) * 10000) / 10000
+  return props.employees.map((e, i) => ({
+    employee_id: e.id,
+    carry_share: String(i === props.employees.length - 1 ? +(100 - equal * (n - 1)).toFixed(4) : equal),
+    credit_share: '0',
+  }))
+}
 const blank = () => ({ year: props.year, name: '', kind: 'running', plan_amount: '', notes: '', account_ids: [], ...(props.can.steer ? { people: blankPeople() } : {}) })
 const form = useForm(blank())
 
@@ -98,6 +106,10 @@ function toggleAccount(id) {
 
 function submit() {
   const options = { preserveScroll: true, onSuccess: () => { showForm.value = false } }
+  // Rows without carry or credit say nothing; leave them out.
+  form.transform(data => (data.people
+    ? { ...data, people: data.people.filter(p => Number(p.carry_share) > 0 || Number(p.credit_share) > 0) }
+    : data))
   if (editing.value) form.put(`/projects/plan/${editing.value.id}`, options)
   else form.post('/projects/plan', options)
 }
@@ -241,6 +253,7 @@ const accountError = computed(() => Object.entries(form.errors).find(([key]) => 
             <FormInput :id="`carry_${index}`" v-model="person.carry_share" type="number" step="0.01" min="0" max="100" />
             <FormInput :id="`credit_${index}`" v-model="person.credit_share" type="number" step="0.01" min="0" max="100" />
           </div>
+          <p v-if="form.errors.people" class="mt-1 text-xs text-[hsl(var(--destructive))]">{{ form.errors.people }}</p>
         </div>
         <FormTextarea id="notes" v-model="form.notes" :label="t('notes')" :error="form.errors.notes" />
         <div class="flex justify-end gap-2">

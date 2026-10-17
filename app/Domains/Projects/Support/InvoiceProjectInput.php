@@ -73,7 +73,7 @@ final class InvoiceProjectInput
 
         if (! $org->isBound()
             || ! ProjectsModule::enabledFor($org->get())
-            || ! ($request->user()?->can('viewAny', Project::class) ?? false)) {
+            || ! ($request->user()?->can('allocate', Project::class) ?? false)) {
             return null;
         }
 

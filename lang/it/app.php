@@ -2999,4 +2999,6 @@ return [
     'budget_group_keys_hint' => 'Sostenuto: parte che ciascuno sostiene. Accredito: chi ha svolto il lavoro riceve l’importo; svolto esternamente significa 0 ovunque.',
     'budget_group_carry' => 'sostiene %',
     'budget_group_credit' => 'accredito %',
+    'budget_group_carry_total' => 'La chiave di ripartizione deve sommare al 100 %.',
+    'budget_group_credit_total' => 'L’accredito somma al 100 % o è vuoto (svolto esternamente).',
 ];
