@@ -13,6 +13,7 @@ use App\Domains\Expenses\Models\Expense;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Organizations\Models\Organization;
+use App\Domains\Projects\Models\Project;
 
 /**
  * Maps model class + policy ability to the required Spatie permission.
@@ -178,6 +179,14 @@ final class TokenPermissionMap
             JournalEntryRevision::class => [
                 'viewAny' => Permission::AccountingView,
                 'view' => Permission::AccountingView,
+            ],
+            Project::class => [
+                'viewAny' => Permission::ProjectsView,
+                'view' => Permission::ProjectsView,
+                'create' => Permission::ProjectsManage,
+                'update' => Permission::ProjectsManage,
+                'delete' => Permission::ProjectsManage,
+                'allocate' => Permission::ProjectsAllocate,
             ],
             BankAccount::class => [
                 'viewAny' => Permission::BankingView,

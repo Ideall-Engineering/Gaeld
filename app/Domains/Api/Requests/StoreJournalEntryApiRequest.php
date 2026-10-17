@@ -6,6 +6,9 @@ use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Rules\NotSystemReference;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Support\AllocationRules;
+use App\Domains\Projects\Support\ApiAllocations;
+use App\Domains\Projects\Support\ProjectsModule;
 use App\Support\Money;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -81,6 +84,9 @@ class StoreJournalEntryApiRequest extends FormRequest
             // stable error code `unknown_vat_code`, not a validation message.
             $rules['lines.*.vat_code'] = ['required', 'string', 'max:8'];
             $rules['lines.*.vat_figure'] = ['nullable', 'string', Rule::in(self::DEDUCTION_FIGURES)];
+            // A shorthand line becomes several lines; which of them a
+            // project share belongs to would be a guess (spec 009).
+            $rules['lines.*.allocations'] = ['prohibited'];
 
             return $rules;
         }
@@ -97,6 +103,14 @@ class StoreJournalEntryApiRequest extends FormRequest
         ];
         $rules['lines.*.vat_amount'] = ['nullable', 'string', 'regex:/^\d{1,11}(?:\.\d{1,2})?$/'];
         $rules['lines.*.vat_figure'] = ['nullable', 'string', Rule::in(self::DEDUCTION_FIGURES)];
+
+        if ($currentOrganization->isBound() && ProjectsModule::enabledFor($currentOrganization->get())) {
+            $entry = $this->route('journalEntry');
+            $rules = [
+                ...$rules,
+                ...ApiAllocations::rules($organizationId, 'lines.*.allocations', AllocationRules::projectsOf($entry instanceof JournalEntry ? $entry : null)),
+            ];
+        }
 
         return $rules;
     }

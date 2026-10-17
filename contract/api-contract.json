@@ -64,7 +64,10 @@
       "organization.edit",
       "organization.delete",
       "organization.manage-users",
-      "organization.view-audit-log"
+      "organization.view-audit-log",
+      "projects.view",
+      "projects.manage",
+      "projects.allocate"
     ],
     "wildcard": "*",
     "empty_selection": "An omitted or empty abilities array creates a wildcard token.",
@@ -2227,6 +2230,207 @@
       "response_404": {
         "message": "Account not found."
       }
+    },
+    {
+      "name": "api.projects.index",
+      "method": "GET",
+      "path": "/api/v1/projects",
+      "controller": "ProjectApiController@index",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view"
+      ],
+      "request": {
+        "query": {
+          "status": "optional project status",
+          "active": "optional boolean"
+        }
+      },
+      "response_200": {
+        "data": [
+          {
+            "id": "integer",
+            "code": "string",
+            "name": "string",
+            "parent_code": "string|null",
+            "kind": "area|project|internal",
+            "status": "pipeline|possible|in_progress|done|lost",
+            "is_active": "boolean",
+            "contact_id": "uuid|null",
+            "responsible_employee_id": "uuid|null",
+            "target_date": "Y-m-d|null",
+            "expected_amount": "string|null",
+            "notes": "string|null",
+            "created_at": "iso8601",
+            "updated_at": "iso8601"
+          }
+        ]
+      },
+      "notes": "Spec 009. Only for organizations with the projects module switched on; otherwise 403."
+    },
+    {
+      "name": "api.projects.store",
+      "method": "POST",
+      "path": "/api/v1/projects",
+      "controller": "ProjectApiController@store",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.manage"
+      ],
+      "request": {
+        "code": "required string max 30, stored upper case",
+        "name": "required string",
+        "parent_code": "optional code of an existing project",
+        "kind": "optional",
+        "status": "optional",
+        "contact_id": "optional contact uuid",
+        "responsible_employee_id": "optional employee uuid",
+        "target_date": "optional Y-m-d",
+        "expected_amount": "optional decimal string",
+        "notes": "optional",
+        "is_active": "optional boolean"
+      },
+      "response_201": {
+        "data": {
+          "id": "integer",
+          "code": "string",
+          "name": "string",
+          "parent_code": "string|null",
+          "kind": "area|project|internal",
+          "status": "pipeline|possible|in_progress|done|lost",
+          "is_active": "boolean",
+          "contact_id": "uuid|null",
+          "responsible_employee_id": "uuid|null",
+          "target_date": "Y-m-d|null",
+          "expected_amount": "string|null",
+          "notes": "string|null",
+          "created_at": "iso8601",
+          "updated_at": "iso8601"
+        }
+      },
+      "notes": "Spec 009. Only for organizations with the projects module switched on; otherwise 403."
+    },
+    {
+      "name": "api.projects.show",
+      "method": "GET",
+      "path": "/api/v1/projects/{project}",
+      "controller": "ProjectApiController@show",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view"
+      ],
+      "request": {},
+      "response_200": {
+        "data": {
+          "id": "integer",
+          "code": "string",
+          "name": "string",
+          "parent_code": "string|null",
+          "kind": "area|project|internal",
+          "status": "pipeline|possible|in_progress|done|lost",
+          "is_active": "boolean",
+          "contact_id": "uuid|null",
+          "responsible_employee_id": "uuid|null",
+          "target_date": "Y-m-d|null",
+          "expected_amount": "string|null",
+          "notes": "string|null",
+          "created_at": "iso8601",
+          "updated_at": "iso8601"
+        }
+      },
+      "notes": "Spec 009. Only for organizations with the projects module switched on; otherwise 403. A project of another organization answers 404."
+    },
+    {
+      "name": "api.projects.update",
+      "method": "PATCH",
+      "path": "/api/v1/projects/{project}",
+      "controller": "ProjectApiController@update",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.manage"
+      ],
+      "request": {
+        "any field of api.projects.store": "optional"
+      },
+      "response_200": {
+        "data": {
+          "id": "integer",
+          "code": "string",
+          "name": "string",
+          "parent_code": "string|null",
+          "kind": "area|project|internal",
+          "status": "pipeline|possible|in_progress|done|lost",
+          "is_active": "boolean",
+          "contact_id": "uuid|null",
+          "responsible_employee_id": "uuid|null",
+          "target_date": "Y-m-d|null",
+          "expected_amount": "string|null",
+          "notes": "string|null",
+          "created_at": "iso8601",
+          "updated_at": "iso8601"
+        }
+      },
+      "notes": "Spec 009. Only for organizations with the projects module switched on; otherwise 403."
+    },
+    {
+      "name": "api.projects.report",
+      "method": "GET",
+      "path": "/api/v1/projects/{project}/report",
+      "controller": "ProjectApiController@report",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view"
+      ],
+      "request": {
+        "query": {
+          "from": "required Y-m-d",
+          "to": "required Y-m-d"
+        }
+      },
+      "response_200": {
+        "data": {
+          "project": "{id, code, name}",
+          "revenue": "[{code, name, amount}]",
+          "expenses": "[{code, name, amount}]",
+          "projects": "[{id, code, name, revenue, expenses, contribution}]",
+          "total_revenue": "string",
+          "total_expenses": "string",
+          "contribution": "string"
+        }
+      },
+      "notes": "Spec 009. Only for organizations with the projects module switched on; otherwise 403. Rolls up sub-projects, leaves out year-end closing entries, counts revenue and expense accounts only."
+    },
+    {
+      "name": "api.journal-entries.allocations",
+      "method": "PUT",
+      "path": "/api/v1/journal-entries/{journalEntry}/allocations",
+      "controller": "JournalAllocationApiController@update",
+      "auth_required": true,
+      "abilities_required": [
+        "accounting.view",
+        "projects.allocate"
+      ],
+      "request": {
+        "headers": {
+          "Idempotency-Key": "required"
+        },
+        "lines": [
+          {
+            "line_id": "integer, from data.lines.*.line_id",
+            "allocations": [
+              {
+                "project_code": "string|null (cost centre code)",
+                "employee_id": "uuid|null",
+                "share": "numeric string, > 0 and <= 100, default 100"
+              }
+            ]
+          }
+        ]
+      },
+      "response_200": {
+        "data": "journal entry as api.journal-entries.show"
+      },
+      "notes": "Spec 009. Only for organizations with the projects module switched on; otherwise 403. Works for every entry, also locked, settled, closed or archived ones; the entry and its revision stay unchanged. Lines not named keep their allocations. Where projects are on, api.journal-entries.index/show/store also answer line_id and allocations [{project_code, employee_id, share}] per line, and explicit lines accept allocations (shorthand lines do not)."
     }
   ],
   "audit_findings": {

@@ -16,6 +16,9 @@ use App\Domains\Api\Controllers\OrgTokenController;
 use App\Domains\Api\Controllers\WebhookApiController;
 use App\Http\Middleware\Api\HandleApiIdempotency;
 use App\Http\Middleware\LogOrgTokenActivity;
+use App\Domains\Projects\Controllers\JournalAllocationApiController;
+use App\Domains\Projects\Controllers\ProjectApiController;
+use App\Http\Middleware\EnsureProjectsModule;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -115,6 +118,16 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
     Route::delete('/journal-entries/{journalEntry}', [JournalEntryApiController::class, 'destroy'])->name('api.journal-entries.destroy');
     Route::get('/journal-entries/{journalEntry}/revisions', [JournalEntryRevisionApiController::class, 'forEntry'])->name('api.journal-entries.revisions');
     Route::get('/journal-entry-revisions', [JournalEntryRevisionApiController::class, 'index'])->name('api.journal-entry-revisions.index');
+
+    // Projects and line allocations (spec 009), only where the module is on
+    Route::middleware(EnsureProjectsModule::class)->group(function () {
+        Route::get('/projects', [ProjectApiController::class, 'index'])->name('api.projects.index');
+        Route::post('/projects', [ProjectApiController::class, 'store'])->name('api.projects.store');
+        Route::get('/projects/{project}', [ProjectApiController::class, 'show'])->name('api.projects.show');
+        Route::patch('/projects/{project}', [ProjectApiController::class, 'update'])->name('api.projects.update');
+        Route::get('/projects/{project}/report', [ProjectApiController::class, 'report'])->name('api.projects.report');
+        Route::put('/journal-entries/{journalEntry}/allocations', [JournalAllocationApiController::class, 'update'])->name('api.journal-entries.allocations');
+    });
 
     // Accounts (read-only)
     Route::get('/accounts', [AccountApiController::class, 'index'])->name('api.accounts.index');

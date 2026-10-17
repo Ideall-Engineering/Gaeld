@@ -15,6 +15,16 @@ class TransactionLineResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            // Spec 009: only where projects are switched on (the allocations
+            // are loaded then); elsewhere the answer stays as it was.
+            $this->mergeWhen($this->relationLoaded('allocations'), fn () => [
+                'line_id' => $this->id,
+                'allocations' => $this->allocations->sortBy('id')->values()->map(fn ($allocation) => [
+                    'project_code' => $allocation->project?->code,
+                    'employee_id' => $allocation->employee_id,
+                    'share' => (string) $allocation->share,
+                ])->all(),
+            ]),
             'account' => [
                 'id' => $this->account?->uuid,
                 'code' => $this->account?->code,

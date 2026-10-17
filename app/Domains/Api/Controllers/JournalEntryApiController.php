@@ -28,6 +28,8 @@ use App\Domains\Api\Services\ApiIdempotencyService;
 use App\Domains\Api\Services\JournalEntryApiMapper;
 use App\Domains\Api\Support\ApiIdempotencyReservation;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Support\ProjectsModule;
 use App\Http\Controllers\Controller;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -50,7 +52,7 @@ class JournalEntryApiController extends Controller
 
         $perPage = min(max((int) $request->input('per_page', 20), 1), 100);
         $entries = JournalEntry::query()
-            ->with('lines.account')
+            ->with($this->lineRelations())
             ->when($request->input('status'), function ($query, string $status): void {
                 $query->where('is_posted', $status === 'posted');
             })
@@ -79,7 +81,7 @@ class JournalEntryApiController extends Controller
         $this->ensureOrganization($journalEntry, $currentOrganization->id());
         $this->authorize('view', $journalEntry);
 
-        return new JournalEntryResource($journalEntry->load('lines.account'));
+        return new JournalEntryResource($journalEntry->load($this->lineRelations()));
     }
 
     /**
@@ -117,12 +119,12 @@ class JournalEntryApiController extends Controller
                 return $idempotency->replay($reservation);
             }
 
-            $entryData = $mapper->toData($validated, $currentOrganization->id());
+            $entryData = $mapper->toData($validated, $currentOrganization->id(), $this->mayAllocate($request));
             $entry = $request->string('status')->value() === 'posted'
                 ? $ledger->postEntry($currentOrganization->id(), $entryData)
                 : $ledger->createDraft($currentOrganization->id(), $entryData);
 
-            $response = (new JournalEntryResource($entry->load('lines.account')))
+            $response = (new JournalEntryResource($entry->load($this->lineRelations())))
                 ->response()
                 ->setStatusCode(201);
 
@@ -172,7 +174,7 @@ class JournalEntryApiController extends Controller
                 }
 
                 $validated = $request->validated();
-                $data = $mapper->toData($validated, $currentOrganization->id());
+                $data = $mapper->toData($validated, $currentOrganization->id(), $this->mayAllocate($request));
 
                 $entry = $amend->execute($journalEntry, $data, new JournalEntryChangeContext(
                     expectedRevision: $expectedRevision,
@@ -184,7 +186,7 @@ class JournalEntryApiController extends Controller
                     acknowledgeBankAmountChange: (bool) ($validated['acknowledge_bank_amount_change'] ?? false),
                 ));
 
-                return (new JournalEntryResource($entry->load('lines.account')))
+                return (new JournalEntryResource($entry->load($this->lineRelations())))
                     ->response()
                     ->setStatusCode(200);
             },
@@ -225,7 +227,7 @@ class JournalEntryApiController extends Controller
 
                 $entry = $ledger->postDraft($journalEntry);
 
-                return (new JournalEntryResource($entry->load('lines.account')))
+                return (new JournalEntryResource($entry->load($this->lineRelations())))
                     ->response()
                     ->setStatusCode(200);
             },
@@ -256,12 +258,12 @@ class JournalEntryApiController extends Controller
             $idempotency,
             function () use ($request, $journalEntry, $ledger): JsonResponse {
                 $entry = $ledger->reverseEntry(
-                    $journalEntry->load('lines.account'),
+                    $journalEntry->load($this->lineRelations()),
                     $request->validated()['description'] ?? null,
                     'api',
                 );
 
-                return (new JournalEntryResource($entry->load('lines.account')))
+                return (new JournalEntryResource($entry->load($this->lineRelations())))
                     ->response()
                     ->setStatusCode(200);
             },
@@ -402,6 +404,30 @@ class JournalEntryApiController extends Controller
         $key = trim((string) $request->header('Idempotency-Key'));
 
         return $key === '' ? null : $key;
+    }
+
+    /**
+     * Line relations to answer with; allocations only where projects are
+     * switched on (spec 009), so other organizations see no change.
+     *
+     * @return array<int, string>
+     */
+    private function lineRelations(): array
+    {
+        $org = app(CurrentOrganization::class);
+
+        return $org->isBound() && ProjectsModule::enabledFor($org->get())
+            ? ['lines.account', 'lines.allocations.project:id,code']
+            : ['lines.account'];
+    }
+
+    private function mayAllocate(Request $request): bool
+    {
+        $org = app(CurrentOrganization::class);
+
+        return $org->isBound()
+            && ProjectsModule::enabledFor($org->get())
+            && ($request->user()?->can('allocate', Project::class) ?? false);
     }
 
     private function ensureOrganization(JournalEntry $journalEntry, string $organizationId): void

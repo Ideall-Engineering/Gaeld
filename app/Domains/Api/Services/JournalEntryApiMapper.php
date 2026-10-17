@@ -5,6 +5,7 @@ namespace App\Domains\Api\Services;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Support\VatCodeResolver;
+use App\Domains\Projects\Support\ApiAllocations;
 
 final class JournalEntryApiMapper
 {
@@ -15,8 +16,9 @@ final class JournalEntryApiMapper
 
     /**
      * @param  array<string, mixed>  $validated
+     * @param  bool  $withAllocations  read `allocations` of explicit lines (spec 009)
      */
-    public function toData(array $validated, string $organizationId): JournalEntryData
+    public function toData(array $validated, string $organizationId, bool $withAllocations = false): JournalEntryData
     {
         $lines = [];
 
@@ -33,6 +35,9 @@ final class JournalEntryApiMapper
                     vatAmount: isset($explicit['vat_amount']) ? (string) $explicit['vat_amount'] : null,
                     vatType: $explicit['vat_type'] ?? null,
                     vatFigure: $explicit['vat_figure'] ?? null,
+                    allocations: $withAllocations && array_key_exists('allocations', $explicit)
+                        ? ApiAllocations::toData((array) ($explicit['allocations'] ?? []))
+                        : null,
                 );
             }
         }
