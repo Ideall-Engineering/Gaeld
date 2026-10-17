@@ -54,6 +54,16 @@ return [
         'total_expenses' => 'Totale costi',
         'net_profit_loss' => 'Utile netto / (Perdita)',
     ],
+    'project_report' => [
+        'title' => 'Rapporto di progetto',
+        'period' => 'Rapporto di progetto, dal :from al :to',
+        'revenue' => 'Ricavi',
+        'total_revenue' => 'Totale ricavi',
+        'expenses' => 'Costi',
+        'total_expenses' => 'Totale costi',
+        'contribution' => 'Margine di contribuzione',
+        'project' => 'Progetto',
+    ],
     'cash_flow' => [
         'title' => 'Rendiconto finanziario',
         'period' => 'Rendiconto finanziario (metodo indiretto) — da :from a :to',

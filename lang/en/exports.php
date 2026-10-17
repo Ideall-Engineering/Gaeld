@@ -54,6 +54,16 @@ return [
         'total_expenses' => 'Total Expenses',
         'net_profit_loss' => 'Net Profit / (Loss)',
     ],
+    'project_report' => [
+        'title' => 'Project report',
+        'period' => 'Project report, :from to :to',
+        'revenue' => 'Revenue',
+        'total_revenue' => 'Total revenue',
+        'expenses' => 'Expenses',
+        'total_expenses' => 'Total expenses',
+        'contribution' => 'Contribution margin',
+        'project' => 'Project',
+    ],
     'cash_flow' => [
         'title' => 'Cash Flow Statement',
         'period' => 'Cash Flow Statement (Indirect Method) — :from to :to',

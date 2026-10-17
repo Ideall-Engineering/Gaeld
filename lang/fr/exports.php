@@ -54,6 +54,16 @@ return [
         'total_expenses' => 'Total charges',
         'net_profit_loss' => 'Résultat net / (Perte)',
     ],
+    'project_report' => [
+        'title' => 'Rapport de projet',
+        'period' => 'Rapport de projet, du :from au :to',
+        'revenue' => 'Produits',
+        'total_revenue' => 'Total des produits',
+        'expenses' => 'Charges',
+        'total_expenses' => 'Total des charges',
+        'contribution' => 'Marge de contribution',
+        'project' => 'Projet',
+    ],
     'cash_flow' => [
         'title' => 'Tableau des flux de trésorerie',
         'period' => 'Tableau des flux de trésorerie (méthode indirecte) — du :from au :to',

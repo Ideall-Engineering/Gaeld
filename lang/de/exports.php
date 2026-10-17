@@ -54,6 +54,16 @@ return [
         'total_expenses' => 'Total Aufwand',
         'net_profit_loss' => 'Reingewinn / (Verlust)',
     ],
+    'project_report' => [
+        'title' => 'Projektauswertung',
+        'period' => 'Projektauswertung, :from bis :to',
+        'revenue' => 'Ertrag',
+        'total_revenue' => 'Total Ertrag',
+        'expenses' => 'Aufwand',
+        'total_expenses' => 'Total Aufwand',
+        'contribution' => 'Deckungsbeitrag',
+        'project' => 'Projekt',
+    ],
     'cash_flow' => [
         'title' => 'Geldflussrechnung',
         'period' => 'Geldflussrechnung (indirekte Methode) — :from bis :to',
