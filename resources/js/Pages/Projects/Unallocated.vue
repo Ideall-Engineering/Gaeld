@@ -82,7 +82,7 @@ function apply() {
         <p v-if="lines.length >= limit" class="mb-4 text-sm text-amber-700">{{ t('unallocated_limited', { count: limit }) }}</p>
         <EmptyState v-if="lines.length === 0" :icon="ListTodo" :title="t('unallocated_empty_title')" :description="t('unallocated_empty_desc')" />
         <div v-else class="overflow-x-auto">
-          <table class="w-full text-sm">
+          <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
             <thead>
               <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
                 <th class="w-8 pb-2"></th>
@@ -99,7 +99,7 @@ function apply() {
                 <td class="py-2"><input v-model="selected[line.line_id]" type="checkbox" class="h-4 w-4 rounded border-[hsl(var(--input))]" :aria-label="t('select')" /></td>
                 <td class="py-2 whitespace-nowrap">{{ formatDate(line.date) }}</td>
                 <td class="py-2"><Link :href="`/accounting/journal-entries/${line.entry_id}`" class="hover:underline">{{ line.reference || t('journal_entry') }}</Link></td>
-                <td class="py-2">{{ line.description }}<div v-if="line.line_description" class="text-xs text-[hsl(var(--muted-foreground))]">{{ line.line_description }}</div></td>
+                <td class="py-2">{{ line.description }}<div v-if="line.line_description && line.line_description !== line.description" class="text-xs text-[hsl(var(--muted-foreground))]">{{ line.line_description }}</div></td>
                 <td class="py-2">{{ line.account }}</td>
                 <td class="py-2 text-right tabular-nums whitespace-nowrap">{{ formatCurrency(line.amount) }}</td>
                 <td class="py-2 pl-4">
