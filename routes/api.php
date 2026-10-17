@@ -14,6 +14,7 @@ use App\Domains\Api\Controllers\JournalEntryApiController;
 use App\Domains\Api\Controllers\JournalEntryRevisionApiController;
 use App\Domains\Api\Controllers\OrgTokenController;
 use App\Domains\Api\Controllers\WebhookApiController;
+use App\Domains\Projects\Controllers\BudgetGroupApiController;
 use App\Domains\Projects\Controllers\JournalAllocationApiController;
 use App\Domains\Projects\Controllers\ProjectApiController;
 use App\Http\Middleware\Api\HandleApiIdempotency;
@@ -126,6 +127,8 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
         Route::get('/projects/{project}', [ProjectApiController::class, 'show'])->name('api.projects.show');
         Route::patch('/projects/{project}', [ProjectApiController::class, 'update'])->name('api.projects.update');
         Route::get('/projects/{project}/report', [ProjectApiController::class, 'report'])->name('api.projects.report');
+        Route::get('/budget-groups', [BudgetGroupApiController::class, 'index'])->name('api.budget-groups.index');
+        Route::post('/budget-groups', [BudgetGroupApiController::class, 'store'])->name('api.budget-groups.store');
         Route::put('/journal-entries/{journalEntry}/allocations', [JournalAllocationApiController::class, 'update'])->name('api.journal-entries.allocations');
     });
 

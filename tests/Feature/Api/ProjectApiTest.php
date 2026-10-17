@@ -221,6 +221,24 @@ class ProjectApiTest extends SecurityTestCase
         $this->assertSame(0, JournalEntry::query()->where('reference', 'API-FORBIDDEN')->count());
     }
 
+    public function test_cost_blocks_are_created_and_read_over_the_api(): void
+    {
+        $this->api()->withHeaders(['Idempotency-Key' => 'block-1'])
+            ->postJson('/api/v1/budget-groups', ['year' => 2026, 'name' => 'Rent', 'plan_amount' => '3000.00', 'account_codes' => ['6000']])
+            ->assertCreated()
+            ->assertJsonPath('data.account_codes', ['6000']);
+
+        $this->api()->withHeaders(['Idempotency-Key' => 'block-2'])
+            ->postJson('/api/v1/budget-groups', ['year' => 2026, 'name' => 'Again', 'account_codes' => ['6000']])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'account_taken');
+
+        $this->api()->getJson('/api/v1/budget-groups?year=2026')
+            ->assertOk()
+            ->assertJsonPath('data.groups.0.name', 'Rent')
+            ->assertJsonPath('data.groups.0.plan', '3000.00');
+    }
+
     private function api(): static
     {
         return $this->withToken($this->tokenA);

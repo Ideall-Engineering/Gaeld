@@ -206,7 +206,10 @@ const navigation = computed(() => {
       ] : []),
     ]},
     ...(features.value.projects && can('projects.view') ? [
-      { key: 'projects', href: '/projects', icon: FolderKanban },
+      { key: 'projects', href: '/projects', icon: FolderKanban, children: [
+        { key: 'projects', href: '/projects' },
+        { key: 'budget_groups', href: '/projects/plan' },
+      ]},
     ] : []),
     // ── Payroll ──
     { type: 'group', label: 'nav_payroll' },

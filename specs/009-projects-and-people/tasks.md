@@ -106,3 +106,14 @@ description: "Gäld task list: Projekte und Zuordnung von Buchungszeilen, Etappe
 - [x] T050 UI-Durchgang Etappe 2
 - [x] T051 Lokales Importskript für das Excel (ausserhalb des Repositorys), Probelauf
 - [x] T052 Alle Suiten, Review
+
+---
+
+# Tasks: Etappe 3, Plan gegen Ist
+
+- [x] T053 Migration `create_budget_groups_tables`, Modell `BudgetGroup` mit Policy, Enum `BudgetGroupKind`
+- [x] T054 `PlanActualService` (Plan aus Betrag oder Kontobudgets, Ist ohne Kundenprojekte, Rest, Hochrechnung, Konten ohne Block, Vorjahr übernehmen)
+- [x] T055 Seite „Plan gegen Ist“ mit Formular, CSV; API zum Lesen und Anlegen
+- [x] T056 Tests `PlanActualTest`, API-Test
+- [x] T057 Importskript liest auch „Interne Aufwände“ (ausserhalb des Repositorys)
+- [ ] T058 UI-Durchgang, alle Suiten

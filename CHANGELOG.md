@@ -34,6 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   touching the invoice. A "not allocated" list shows revenue and expense lines
   without a project with suggestions from the invoice, the customer or the
   last allocation of the same account and text, and takes over what is chosen.
+- **Plan against actual per cost block:** group several accounts into a
+  cost block of a year (for example software 6031 to 6035), plan it once or
+  let the plan follow the account budgets, and follow actual, rest and a
+  projection to year end; running costs are projected, one-off expenses are
+  not, and shares allocated to customer projects are shown apart rather than
+  counted as internal. Expense accounts outside any block are listed so
+  nothing slips through, a block set can be carried over from the year
+  before, and blocks are available as CSV and over the API.
 - **Follow a figure in the profit and loss statement:** clicking an account
   there opens its statement for the report's own period — every posted movement
   with its counter account, and a way back to the report rather than to a

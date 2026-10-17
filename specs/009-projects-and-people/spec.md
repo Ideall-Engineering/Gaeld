@@ -210,3 +210,39 @@ Die Liste zeigt pro Projekt Bereich, Verantwortlich, Status, Zieltermin mit Ampe
 - **FR-013**: Tabelle `invoice_projects` und Spalte `cost_centers.billing_month`, beide optional; ohne Modul ungenutzt. Rechnungen selbst werden nicht beschrieben.
 - **FR-014**: Ein Projekt mit Rechnungen oder Kundenbezug lässt sich nicht löschen.
 - **FR-015**: Jede Übernahme von Vorschlägen ist protokolliert wie jede andere Zuordnung.
+
+---
+
+# Etappe 3: Plan gegen Ist
+
+**Status**: in Arbeit
+
+**Ziel**: Das Blatt „Interne Aufwände“ wird überflüssig. Kostenblöcke fassen mehrere Konten zusammen, zum Beispiel „Software 6031 bis 6035“. Der Plan wird einmal erfasst, das Ist kommt laufend aus der Buchhaltung.
+
+## Entscheide Etappe 3
+
+| Frage | Entscheid |
+|---|---|
+| Wo liegen die Kostenblöcke? | Neue Tabellen `budget_groups` (pro Jahr) und `budget_group_accounts`. Die bestehenden Budgets pro Konto bleiben unverändert. |
+| Plan | Betrag am Kostenblock; fehlt er, gilt die Summe der Kontobudgets des Jahres (Monatsbetrag mal 12). |
+| Ist | Saldo der Konten des Blocks im Jahr bis heute, nur verbuchte Buchungen, ohne Abschlussbuchungen. Was einem Kundenprojekt zugeordnet ist, zählt nicht als interner Aufwand und wird separat ausgewiesen. |
+| Hochrechnung | Laufende Kosten: Ist hochgerechnet auf das ganze Jahr. Einmalige Ausgaben: das Ist. Liegt die Hochrechnung über dem Plan, wird der Block markiert. |
+| Konten ohne Block | Erfolgskonten mit Aufwand im Jahr, die keinem Block angehören, erscheinen in einer eigenen Liste, damit nichts übersehen wird. |
+| Folgejahr | „Vorjahr übernehmen“ kopiert die Blöcke samt Konten und Plan. |
+| Verteilung auf Personen | Folgt in Etappe 5 (Tragschlüssel und Gutschrift pro Block). |
+
+## User Story 10: Plan gegen Ist (P1)
+
+**Acceptance Scenarios**:
+
+1. **Given** ein Block „Software“ mit den Konten 6031 und 6034, Plan 1800, gebucht 600 und 300, **When** die Ansicht geöffnet wird, **Then** zeigt sie Ist 900 und Rest 900.
+2. **Given** ein Block ohne Planbetrag und Kontobudgets von monatlich 100 und 50, **Then** ist der Plan 1800.
+3. **Given** ein Aufwand von 200, davon 50 % einem Kundenprojekt zugeordnet, **Then** ist das interne Ist 100 und die Spalte „davon Kundenprojekte“ zeigt 100.
+4. **Given** der 1. Juli und ein laufender Block mit Ist 1000, **Then** beträgt die Hochrechnung rund 2000; bei einmaliger Ausgabe 1000.
+5. **Given** ein Aufwandskonto mit Buchungen, das keinem Block angehört, **Then** erscheint es unter „Ohne Kostenblock“.
+6. **Given** Blöcke im Vorjahr, **When** „Vorjahr übernehmen“ gewählt wird, **Then** stehen dieselben Blöcke im gewählten Jahr, bereits vorhandene werden nicht doppelt angelegt.
+
+## Requirements Etappe 3
+
+- **FR-016**: Kostenblöcke anlegen, ändern, löschen (Recht `projects.manage`), ansehen (Recht `projects.view`); ein Konto gehört pro Jahr höchstens einem Block an.
+- **FR-017**: CSV-Export und API zum Lesen und Anlegen von Kostenblöcken (für den einmaligen Import).

@@ -2431,6 +2431,52 @@
         "data": "journal entry as api.journal-entries.show"
       },
       "notes": "Spec 009. Only for organizations with the projects module switched on; otherwise 403. Works for every entry, also locked, settled, closed or archived ones; the entry and its revision stay unchanged. Lines not named keep their allocations. Where projects are on, api.journal-entries.index/show/store also answer line_id and allocations [{project_code, employee_id, share}] per line, and explicit lines accept allocations (shorthand lines do not)."
+    },
+    {
+      "name": "api.budget-groups.index",
+      "method": "GET",
+      "path": "/api/v1/budget-groups",
+      "controller": "BudgetGroupApiController@index",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view"
+      ],
+      "request": {
+        "query": {
+          "year": "required integer"
+        }
+      },
+      "response_200": {
+        "data": {
+          "groups": "[{id, name, kind, accounts, plan, plan_from_budgets, actual, customer_projects, rest, projection, over_plan, progress}]",
+          "ungrouped": "[{id, code, name, actual}]",
+          "totals": "{plan, actual, customer_projects, rest, projection}",
+          "elapsed": "share of the year passed"
+        }
+      },
+      "notes": "Spec 009, stage 3. Only for organizations with the projects module switched on; otherwise 403. Actual leaves out year-end closing and shares allocated to customer projects."
+    },
+    {
+      "name": "api.budget-groups.store",
+      "method": "POST",
+      "path": "/api/v1/budget-groups",
+      "controller": "BudgetGroupApiController@store",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.manage"
+      ],
+      "request": {
+        "year": "required integer",
+        "name": "required string, unique per year",
+        "kind": "running|one_off, default running",
+        "plan_amount": "optional decimal string; empty = sum of the account budgets",
+        "notes": "optional",
+        "account_codes": "optional array of account codes; an account belongs to one block per year"
+      },
+      "response_201": {
+        "data": "{id, year, name, kind, plan_amount, account_codes}"
+      },
+      "notes": "Spec 009, stage 3. Only for organizations with the projects module switched on; otherwise 403. An account already in another block of the year answers 422 account_taken."
     }
   ],
   "audit_findings": {

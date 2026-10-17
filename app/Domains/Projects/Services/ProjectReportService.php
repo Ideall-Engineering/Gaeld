@@ -114,6 +114,27 @@ class ProjectReportService
     }
 
     /**
+     * The part of each account allocated to the given projects, by account
+     * code; positive is a cost for expenses and income for revenue.
+     *
+     * @param  array<int, int>  $projectIds
+     * @return array<string, string>
+     */
+    public function totalsByAccount(string $organizationId, string $from, string $to, array $projectIds): array
+    {
+        if ($projectIds === []) {
+            return [];
+        }
+
+        $totals = [];
+        foreach ($this->allocatedParts($organizationId, $from, $to, $projectIds) as $part) {
+            $totals[$part['code']] = Money::add($totals[$part['code']] ?? '0.00', $part['amount']);
+        }
+
+        return $totals;
+    }
+
+    /**
      * What each allocation of a posted revenue or expense line in the period
      * stands for. Positive is good for revenue and a cost for expenses. All
      * allocations of a line take part in the split, so the rounding lands on
