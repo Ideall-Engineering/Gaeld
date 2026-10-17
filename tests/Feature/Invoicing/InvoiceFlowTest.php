@@ -12,6 +12,7 @@ use App\Domains\Invoicing\Actions\CancelInvoiceAction;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\Actions\DuplicateInvoiceAction;
 use App\Domains\Invoicing\Actions\FinalizeInvoiceAction;
+use App\Domains\Invoicing\Actions\UpdatePaymentDateAction;
 use App\Domains\Invoicing\DTOs\CreateInvoiceData;
 use App\Domains\Invoicing\DTOs\InvoiceLineData;
 use App\Domains\Invoicing\DTOs\RecordPaymentData;
@@ -234,6 +235,105 @@ class InvoiceFlowTest extends TestCase
         $this->assertEquals(InvoiceStatus::Paid, $invoice->status);
         $this->assertEquals((float) $invoice->total, (float) $payment->amount);
         $this->assertNotNull($payment->journal_entry_id);
+    }
+
+    public function test_payment_date_can_be_corrected_with_a_traceable_ledger_reversal(): void
+    {
+        $invoice = $this->createInvoice(['number' => 'INV-2026-DATE']);
+        $invoice = app(FinalizeInvoiceAction::class)->execute($invoice);
+
+        $payment = app(InvoiceAccountingService::class)->recordPayment($invoice, new RecordPaymentData(
+            amount: (string) $invoice->total,
+            paymentDate: '2026-04-01',
+            paymentMethod: PaymentMethod::Bank,
+            reference: null,
+        ));
+        $originalJournalEntryId = $payment->journal_entry_id;
+
+        $updatedPayment = app(UpdatePaymentDateAction::class)->execute(
+            $invoice,
+            $payment,
+            '2026-04-15',
+        );
+
+        $this->assertSame('2026-04-15', $updatedPayment->payment_date->toDateString());
+        $this->assertNotSame($originalJournalEntryId, $updatedPayment->journal_entry_id);
+        $this->assertSame((string) $invoice->total, (string) $updatedPayment->amount);
+        $this->assertSame(InvoiceStatus::Paid, $invoice->refresh()->status);
+        $this->assertDatabaseHas('journal_entries', [
+            'organization_id' => $this->org->id,
+            'reference' => 'REV-PAY-INV-2026-DATE-1',
+            'type' => 'payment_date_correction',
+            'is_posted' => true,
+        ]);
+        $this->assertDatabaseHas('journal_entries', [
+            'id' => $updatedPayment->journal_entry_id,
+            'date' => '2026-04-15',
+            'is_posted' => true,
+        ]);
+    }
+
+    public function test_payment_date_can_be_corrected_through_the_invoice_page(): void
+    {
+        $invoice = $this->createInvoice(['number' => 'INV-2026-HTTP-DATE']);
+        $invoice = app(FinalizeInvoiceAction::class)->execute($invoice);
+        $payment = app(InvoiceAccountingService::class)->recordPayment($invoice, new RecordPaymentData(
+            amount: (string) $invoice->total,
+            paymentDate: '2026-04-01',
+            paymentMethod: PaymentMethod::Bank,
+            reference: null,
+        ));
+
+        $response = $this->actAsOrg()->patch(
+            route('invoices.payments.date', [$invoice, $payment]),
+            ['payment_date' => '2026-04-15'],
+        );
+
+        $response->assertRedirect(route('invoices.show', $invoice));
+        $response->assertSessionHas('success', __('app.payment_date_updated'));
+        $this->assertSame('2026-04-15', $payment->refresh()->payment_date->toDateString());
+    }
+
+    public function test_zero_total_invoice_cannot_be_finalized(): void
+    {
+        $invoice = $this->createInvoice(lines: [[
+            'description' => 'Free line',
+            'quantity' => 1,
+            'unit_price' => 0,
+            'vat_rate_id' => $this->vatRate->id,
+        ]]);
+
+        $response = $this->actAsOrg()
+            ->from(route('invoices.show', $invoice))
+            ->post(route('invoices.finalize', $invoice));
+
+        $response->assertRedirect(route('invoices.show', $invoice));
+        $response->assertSessionHas('error', __('app.invoice_total_must_not_be_zero'));
+        $this->assertSame(InvoiceStatus::Draft, $invoice->refresh()->status);
+        $this->assertNull($invoice->journal_entry_id);
+    }
+
+    public function test_zero_total_invoice_is_rejected_before_immediate_finalization(): void
+    {
+        $response = $this->actAsOrg()->post(route('invoices.store'), [
+            'customer_id' => $this->customer->id,
+            'issue_date' => '2026-03-16',
+            'due_date' => '2026-04-15',
+            'finalize' => true,
+            'lines' => [[
+                'description' => 'Free line',
+                'quantity' => 1,
+                'unit_price' => 0,
+                'vat_rate_id' => $this->vatRate->id,
+            ]],
+        ]);
+
+        $response->assertSessionHasErrors([
+            'lines' => __('app.invoice_total_must_be_positive'),
+        ]);
+        $this->assertDatabaseMissing('invoices', [
+            'organization_id' => $this->org->id,
+        ]);
     }
 
     public function test_discounted_invoice_posts_a_balanced_journal_entry(): void

@@ -364,7 +364,7 @@ class InvoiceApiController extends Controller
      */
     public function reminder(Invoice $invoice, InvoiceMailerService $mailerService): InvoiceResource|JsonResponse
     {
-        $this->authorize('send', $invoice);
+        $this->authorize('sendReminder', $invoice);
 
         try {
             $mailerService->sendReminder($invoice);
@@ -435,7 +435,7 @@ class InvoiceApiController extends Controller
             'issue_date' => $validated['issue_date'] ?? $invoice->issue_date->toDateString(),
             'due_date' => array_key_exists('due_date', $validated)
                 ? $validated['due_date']
-                : $invoice->due_date->toDateString(),
+                : $invoice->due_date?->toDateString(),
             'currency' => $validated['currency'] ?? $invoice->currency,
             'notes' => array_key_exists('notes', $validated)
                 ? $validated['notes']

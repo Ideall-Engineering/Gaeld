@@ -17,7 +17,7 @@ import FormSelect from '@/Components/UI/FormSelect.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 import { ref, computed } from 'vue'
-import { Pencil, Trash2, Copy, Download, Paperclip, Ban, FileMinus, Bell, Mail, Eye, X, RotateCcw, FileText } from 'lucide-vue-next'
+import { Pencil, Trash2, Copy, Download, Paperclip, Ban, FileMinus, Bell, Mail, Eye, X, RotateCcw, FileText, RefreshCw } from 'lucide-vue-next'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import HelpText from '@/Components/HelpText.vue'
 
@@ -26,8 +26,11 @@ const props = defineProps({
   canForceDelete: { type: Boolean, default: false },
   canDelete: { type: Boolean, default: false },
   canRecordPayment: { type: Boolean, default: false },
+  canUpdatePayment: { type: Boolean, default: false },
   canSend: { type: Boolean, default: false },
+  canSendReminder: { type: Boolean, default: false },
   canRevertToDraft: { type: Boolean, default: false },
+  canRefreshCustomerSnapshot: { type: Boolean, default: false },
   justificatifUrl: { type: String, default: null },
   bankAccounts: { type: Array, default: () => [] },
   creditNotes: { type: Array, default: () => [] },
@@ -41,9 +44,12 @@ const { t } = useTranslations()
 const { formatCurrency, formatDate } = useFormatters()
 
 const showPaymentModal = ref(false)
+const paymentToEdit = ref(null)
 const showDeleteDialog = ref(false)
+const showReminderDialog = ref(false)
 const showCancelDialog = ref(false)
 const showRevertToDraftDialog = ref(false)
+const showRefreshCustomerSnapshotDialog = ref(false)
 const showPurgeDialog = ref(false)
 const showJustificatifPreview = ref(false)
 const deleting = ref(false)
@@ -54,6 +60,21 @@ const purging = ref(false)
 const creditNoteForm = useForm({})
 const sendForm = useForm({})
 const reminderForm = useForm({})
+const refreshCustomerSnapshotForm = useForm({})
+
+function requestCustomerSnapshotRefresh() {
+  refreshCustomerSnapshotForm.clearErrors()
+  showRefreshCustomerSnapshotDialog.value = true
+}
+
+function refreshCustomerSnapshot() {
+  refreshCustomerSnapshotForm.post(`/invoices/${props.invoice.id}/refresh-customer-snapshot`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showRefreshCustomerSnapshotDialog.value = false
+    },
+  })
+}
 
 function createCreditNote() {
   creditNoteForm.post(`/invoices/${props.invoice.id}/credit-note`)
@@ -64,7 +85,15 @@ function sendInvoice() {
 }
 
 function sendReminder() {
-  reminderForm.post(`/invoices/${props.invoice.id}/reminder`)
+  reminderForm.post(`/invoices/${props.invoice.id}/reminder`, {
+    onSuccess: () => {
+      showReminderDialog.value = false
+    },
+  })
+}
+
+function requestReminder() {
+  showReminderDialog.value = true
 }
 
 const finalizeForm = useForm({})
@@ -75,6 +104,7 @@ const paymentForm = useForm({
   reference: '',
   bank_account_code: '',
 })
+const paymentDateForm = useForm({ payment_date: '' })
 
 const amountDue = computed(() => {
   return Math.max(0, parseFloat(props.invoice?.total || 0) - amountPaid.value)
@@ -124,6 +154,23 @@ function openPaymentModal() {
   paymentForm.bank_account_code = ''
   paymentForm.clearErrors()
   showPaymentModal.value = true
+}
+
+function openPaymentDateModal(payment) {
+  paymentToEdit.value = payment
+  paymentDateForm.payment_date = payment.payment_date?.slice(0, 10) ?? ''
+  paymentDateForm.clearErrors()
+}
+
+function updatePaymentDate() {
+  if (!paymentToEdit.value) return
+
+  paymentDateForm.patch(`/invoices/${props.invoice.id}/payments/${paymentToEdit.value.id}/date`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      paymentToEdit.value = null
+    },
+  })
 }
 
 function duplicate() {
@@ -192,6 +239,7 @@ const paymentColumns = computed(() => [
   { key: 'amount', label: t('amount'), class: 'text-right', format: (v) => formatCurrency(v) },
   { key: 'payment_method', label: t('payment_method'), format: (v) => paymentMethodOptions.find(o => o.value === v)?.label || v },
   { key: 'reference', label: t('reference') },
+  { key: 'actions', label: '', class: 'text-right w-auto' },
 ])
 
 const statusVariant = {
@@ -241,7 +289,7 @@ const bankAccountOptions = computed(() =>
               {{ t('invoice_tax_treatment_reverse_charge') }}
             </Badge>
             <p class="text-sm text-[hsl(var(--muted-foreground))]">
-              {{ invoice?.customer?.name }} &middot; {{ t('issued') }} {{ formatDate(invoice?.issue_date) }} &middot; {{ t('due') }} {{ formatDate(invoice?.due_date) }}
+              {{ invoice?.customer_snapshot?.name ?? invoice?.customer?.name }} &middot; {{ t('issued') }} {{ formatDate(invoice?.issue_date) }} &middot; {{ t('due') }} {{ formatDate(invoice?.due_date) }}
             </p>
           </div>
         </div>
@@ -303,6 +351,15 @@ const bankAccountOptions = computed(() =>
                 {{ t('duplicate') }}
               </button>
               <button
+                v-if="canRefreshCustomerSnapshot"
+                class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]"
+                :disabled="refreshCustomerSnapshotForm.processing"
+                @click="requestCustomerSnapshotRefresh(); close()"
+              >
+                <RefreshCw class="h-4 w-4 shrink-0" />
+                {{ t('refresh_customer_snapshot') }}
+              </button>
+              <button
                 v-if="canSend"
                 class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]"
                 :disabled="sendForm.processing"
@@ -312,10 +369,10 @@ const bankAccountOptions = computed(() =>
                 {{ t('send_invoice_email') }}
               </button>
               <button
-                v-if="isOverdue && !invoice?.archived_at"
+                v-if="canSendReminder"
                 class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]"
                 :disabled="reminderForm.processing"
-                @click="sendReminder(); close()"
+                @click="requestReminder(); close()"
               >
                 <Bell class="h-4 w-4 shrink-0" />
                 {{ t('send_reminder') }}
@@ -420,7 +477,20 @@ const bankAccountOptions = computed(() =>
           <CardDescription v-else>{{ t('amount_due') }} {{ formatCurrency(amountDue) }}</CardDescription>
         </CardHeader>
         <CardContent>
-          <DataTable v-if="invoice?.payments?.length" :columns="paymentColumns" :rows="invoice.payments" />
+          <DataTable v-if="invoice?.payments?.length" :columns="paymentColumns" :rows="invoice.payments">
+            <template #cell-actions="{ row }">
+              <Button
+                v-if="canUpdatePayment"
+                variant="ghost"
+                size="icon"
+                :aria-label="t('edit_payment_date')"
+                :title="t('edit_payment_date')"
+                @click.stop="openPaymentDateModal(row)"
+              >
+                <Pencil class="h-4 w-4" />
+              </Button>
+            </template>
+          </DataTable>
           <p v-else class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('no_payments_recorded') }}</p>
         </CardContent>
       </Card>
@@ -574,7 +644,56 @@ const bankAccountOptions = computed(() =>
       </form>
     </Modal>
 
+    <Modal :open="!!paymentToEdit" :title="t('edit_payment_date')" @close="paymentToEdit = null">
+      <form class="space-y-6" @submit.prevent="updatePaymentDate">
+        <p class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('edit_payment_date_hint') }}</p>
+        <FormInput
+          id="edit-payment-date"
+          v-model="paymentDateForm.payment_date"
+          type="date"
+          :label="t('payment_date')"
+          :error="paymentDateForm.errors.payment_date"
+          required
+        />
+        <div class="flex justify-end gap-3">
+          <Button type="button" variant="outline" @click="paymentToEdit = null">{{ t('cancel') }}</Button>
+          <Button type="submit" :disabled="paymentDateForm.processing">{{ t('save_changes') }}</Button>
+        </div>
+      </form>
+    </Modal>
+
+    <ConfirmDialog
+      :open="showRefreshCustomerSnapshotDialog"
+      :title="t('refresh_customer_snapshot')"
+      :message="t('refresh_customer_snapshot_confirm', { number: invoice?.number })"
+      :confirm-label="t('refresh_customer_snapshot')"
+      confirm-variant="default"
+      :processing="refreshCustomerSnapshotForm.processing"
+      :errors="refreshCustomerSnapshotForm.errors"
+      @confirm="refreshCustomerSnapshot"
+      @cancel="showRefreshCustomerSnapshotDialog = false"
+    />
+
     <!-- Delete Confirmation -->
+    <ConfirmDialog
+      :open="showReminderDialog"
+      :title="t('send_reminder')"
+      :message="t('send_reminder_confirm', {
+        name: invoice?.customer?.name,
+        email: invoice?.customer?.email,
+        organization: invoice?.organization?.name,
+        number: invoice?.number,
+        amount: formatCurrency(amountDue),
+        dueDate: formatDate(invoice?.due_date),
+        days: Math.max(0, Math.floor((Date.now() - new Date(invoice?.due_date).getTime()) / 86400000)),
+      })"
+      :confirm-label="t('send_reminder')"
+      :processing="reminderForm.processing"
+      :errors="reminderForm.errors"
+      @confirm="sendReminder"
+      @cancel="showReminderDialog = false"
+    />
+
     <ConfirmDialog
       :open="showDeleteDialog"
       :title="t('delete_invoice')"

@@ -5,6 +5,140 @@ GitLab CE mirror, and the private Enterprise Edition (EE) plugin. It prepares
 release commits and commands locally; it does not push or create tags by
 itself.
 
+## v3.8.27 Coordinated Candidate
+
+This patch preserves each invoice's stored customer details and adds an
+authorized, audited action to refresh that snapshot from its current contact.
+The action updates only the selected invoice, rejects archived invoices, and
+preserves accounting entries and amounts. Contacts gain nullable `salutation`
+and `country_name` fields. PDFs print the full country name entered by the user
+and retain the ISO country code for Swiss QR payment data. Older snapshots
+without a country name need an explicit refresh to display that new field.
+
+The release includes the compatible security updates to Laravel `13.30.0`,
+Commonmark `2.10.2`, Flysystem `3.35.3`, brace-expansion `5.0.12`, and
+source-map-js `1.2.2`. Public CI enforces the complete Composer and pnpm audits
+and installs the frozen JavaScript lockfile.
+
+The exact intended pair is CE `v3.8.27` with private EE `v2.9.31`. Validate that
+pair on staging before production promotion. The private deployment must
+select the EE tag and expected commit explicitly, verify edition compatibility
+before activation, and retain build assets within each release. Roll back by
+selecting the previous complete CE/EE release; do not roll back additive
+database migrations.
+
+Local validation: full CE suites passed (1,566 passed, 26 conditional skips),
+EE `v2.9.31` passed (123 passed, one private registry-consumer skip), and the
+clean CE installation passed 25 acceptance tests. Composer and pnpm audits,
+PHPStan, Pint, frontend builds with and without EE, source and built-artifact
+boundary audits, API contract parsing, and edition compatibility checks passed.
+
+## v3.8.25 Staging Candidate
+
+This candidate introduces the first structured category/account foundation for
+expenses. Categories receive stable system codes and localized labels, while
+expenses and recurring expenses gain organization-scoped references to their
+category and active expense account. Existing category names and account codes
+remain available as compatibility fallbacks, and the migration only backfills
+safe matches without rewriting historical ledger data.
+
+The expense form now shows the account suggested by the selected category. The
+exact staging pair is CE `v3.8.25` with EE `v2.9.31`.
+
+Validation for this candidate: 52 focused Expenses/API tests passed with 211
+assertions; PHPStan, Pint, and the frontend production build passed.
+
+## v3.8.24 Staging Candidate
+
+This patch fixes the visibility of the standard resale expense category. The
+category remains stored under its canonical internal value, but users now see
+the correct localized label, including French « Achats de marchandises
+destinées à la revente », in all expense entry, recurring, Quick Receipt, list,
+and detail views.
+
+The exact staging pair is CE `v3.8.24` with EE `v2.9.31`.
+
+## v3.8.23 Staging Candidate
+
+This patch lets authorized users correct an incorrectly entered invoice payment
+date directly from the invoice payment history. Gäld preserves the original
+accounting trail by posting a reversal for the original payment entry and a new
+payment entry on the corrected date. The amount and payment method remain
+unchanged. Corrections are rejected when the affected VAT period or fiscal year
+is closed or archived.
+
+The exact staging pair is CE `v3.8.23` with EE `v2.9.31`. This is a staging
+release only until the invoice payment correction workflow is accepted.
+
+Validation for this candidate: 71 Invoicing tests passed with 217 assertions;
+Pint, PHPStan, and the frontend production build passed.
+
+## v3.8.22 Staging Candidate
+
+This candidate makes TTC the default entry basis for ordinary and recurring
+expenses while keeping the normalized ledger representation as net amount plus
+input VAT. It adds explicit net/gross API fields, direct expense posting for
+authorized users, and traceable cancellation through a posted reversal entry.
+Unposted expenses remain deletable within the existing organization and
+self-service permission boundaries.
+
+The exact staging pair is CE `v3.8.22` with EE `v2.9.31`. The CE commit and
+tag must be pushed to both GitHub and the internal GitLab CE mirror before
+deployment. This is a staging release only; production promotion requires
+staging acceptance of the TTC calculation, direct posting, cancellation,
+recurring expenses, Quick Receipt, and employee permissions.
+
+Validation for this candidate: 1,540 API tests passed, 13 skipped, 5,768
+assertions; Pint and PHPStan passed; the frontend production build passed.
+
+## v3.8.21 Staging Candidate
+
+This candidate removes the global 120-second timeout from PDF exports and keeps
+CE organization pages independent from EE subscription tables when SaaS mode is
+disabled. It is paired with private EE `v2.9.31`, which fixes mixed-installation
+migrations after the CE `customers` to `contacts` merge and preserves
+`contacts.peppol_id`.
+
+The full API suite passed 1,531 tests with 13 skipped tests and 5,738
+assertions. Deploy this exact CE/EE pair to staging, then run the disposable
+account QA runner before any production promotion.
+
+## v3.8.20 Staging Candidate
+
+This candidate includes PR #62 for analytics-aware cookie consent and removes
+the duplicate user navigation from the sidebar. Impact Accounting remains on
+its separate `feature/impact-accounting` branch and is intentionally excluded
+from this release.
+
+## v3.8.19 Staging Candidate
+
+This candidate integrates [PR #60](https://github.com/Scanix/Gaeld/pull/60),
+which fixes `GET /api/v1/invoices` for organizations with multiple invoices
+containing VAT-rated lines. The matching EE artifact remains `v2.9.30`.
+
+## v3.8.18 Staging Patch
+
+This patch resolves the `/profile/sessions` route collision found during the
+`v3.8.17` staging acceptance pass. The page route now renders the profile
+Sessions section while device data loads from a dedicated JSON endpoint. EE
+remains pinned to `v2.9.29`.
+
+## v3.8.17 Staging Candidate
+
+This candidate combines the validation-exception hotfix with streamlined
+organization and user-account navigation. Customer-facing SaaS plan management
+is labeled “Subscription”; EE `v2.9.29` adds a local, non-sensitive payment
+method snapshot and keeps Stripe identifiers out of Inertia props.
+
+The candidate must be deployed to staging with exact CE `v3.8.17` and EE
+`v2.9.29` tags. Production promotion remains blocked until the focused billing,
+profile, static-analysis, build, migration, and browser checks pass on staging.
+
+## v3.8.15 Staging Patch
+
+This patch simplifies the 500 error page actions and keeps retry/sign-out
+actions readable on narrow screens.
+
 ## v3.8.14 Staging Navigation Release
 
 This staging release introduces the organization context switcher, the
@@ -71,7 +205,7 @@ EE_SHA=8d91d37
 must not be inferred from the CE version or copied into the public repository.
 The deployment pair and the tested commit SHAs belong in the release record.
 
-The current coordinated production release (2026-09-03) is CE `v3.8.2` at
+The historical coordinated production release (2026-09-03) was CE `v3.8.2` at
 `29e657e` with deployment commit `8efc7313`, using EE `v2.9.20` at `3cdfd8d`.
 It is deployed as API release `257`, with web `v2.14.3` at `1e47ae3` and the
 documentation site at `v2.12.3` at `fd97bee`.

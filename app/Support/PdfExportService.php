@@ -12,8 +12,6 @@ class PdfExportService
 {
     private const LARGE_REPORT_MEMORY_LIMIT = '512M';
 
-    private const LARGE_REPORT_TIME_LIMIT = 120;
-
     public function __construct(
         private string $paperSize = 'A4',
         private string $orientation = 'portrait',
@@ -51,15 +49,6 @@ class PdfExportService
 
     private function ensureMemoryLimit(): void
     {
-        // Web requests only. On the CLI the limit is unlimited by default, and
-        // setting it here restarts the clock for the whole process: a test run
-        // that renders a PDF would get 120 seconds for everything that follows
-        // and die mid-suite with a fatal error that looks like a test failure.
-        // Queue workers rendering large reports have the same problem.
-        if (! app()->runningInConsole()) {
-            set_time_limit(self::LARGE_REPORT_TIME_LIMIT);
-        }
-
         $currentLimit = (string) ini_get('memory_limit');
 
         if ($currentLimit === '' || $currentLimit === '-1') {

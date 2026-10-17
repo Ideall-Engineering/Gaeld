@@ -107,8 +107,6 @@ const navigation = computed(() => {
     return [
       { key: 'expenses', href: '/expenses', icon: Receipt },
       { key: 'salary_slips', href: '/payroll/salary-slips', icon: Briefcase },
-      { type: 'group', label: 'nav_administration' },
-      { key: 'organizations', href: '/organizations', icon: Building2 },
     ]
   }
 
@@ -224,7 +222,6 @@ const navigation = computed(() => {
     ] : []),
     // ── Organization administration ──
     { type: 'group', label: 'nav_administration' },
-    { key: 'organizations', href: '/organizations', icon: Building2 },
     ...(can('organization.edit') ? [{ key: 'organization_settings_nav', href: '/settings', icon: Settings, children: [
       { key: 'settings_general', href: '/settings' },
       ...(currentOrg.value?.id ? [
@@ -247,21 +244,21 @@ const navigation = computed(() => {
       { key: 'api_tokens', href: '/settings/api-tokens', icon: KeyRound },
     ] : []),
     ...(features.value.saas && currentRole.value !== 'employee' ? [
-      { key: 'billing', href: '/billing', icon: CreditCard },
+      { key: 'subscription', href: '/billing', icon: CreditCard },
     ] : []),
   ]
 })
 
-function isActive(href) {
+function isActive(href, exact = false) {
   const currentPath = (page.url || '/').split('?')[0]
-  if (href === '/') return currentPath === '/'
+  if (href === '/' || exact) return currentPath === href
 
   return currentPath === href || currentPath.startsWith(`${href}/`)
 }
 
 function isGroupActive(item) {
   if (item.children) {
-    return item.children.some(c => isActive(c.href))
+    return item.children.some(c => isActive(c.href, c.exact))
   }
   return isActive(item.href)
 }

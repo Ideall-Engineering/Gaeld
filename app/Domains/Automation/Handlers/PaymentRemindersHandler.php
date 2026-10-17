@@ -16,9 +16,9 @@ use Illuminate\Support\Facades\Log;
 /**
  * Sends payment reminders to customers.
  *
- * This automation exists to be *off*. Until it was introduced, reminders went
- * out unconditionally every night from SendPaymentRemindersJob; putting that
- * behaviour behind a switch that defaults to off is the point of the change,
+ * This automation exists to be *off*. Reminders used to go out unconditionally
+ * every night from a scheduled job, which is gone; reminders are now sent by
+ * hand from the invoice, or by this switch, which defaults to off,
  * because a reminder is a letter to a customer and the wrong one cannot be
  * recalled. OverdueInvoicesHandler reports the same invoices without writing to
  * anybody, and that is what runs in the meantime.
@@ -85,8 +85,6 @@ class PaymentRemindersHandler implements AutomationHandler
 
     /**
      * Overdue invoices that are ready for another reminder.
-     *
-     * Shared with the legacy scheduled job so both agree on the cooldown.
      *
      * @return Collection<int, Invoice>
      */

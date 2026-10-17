@@ -143,6 +143,57 @@ class TaxTreatmentEntryTest extends TestCase
         $this->assertSame('81.00', (string) $lines->firstWhere('account_id', $accountId('2202'))->credit);
     }
 
+    /**
+     * The form defaults to entering the amount paid including VAT. A supplier
+     * billing under acquisition tax charged no VAT, so what was paid is net
+     * and no VAT share may be carved out of it.
+     */
+    public function test_an_amount_paid_under_acquisition_tax_is_never_split_as_gross(): void
+    {
+        $this->actAsOrg()
+            ->post('/expenses', $this->payload([
+                'amount_basis' => 'gross',
+                'tax_treatment' => ExpenseTaxTreatment::ReverseCharge->value,
+            ]))
+            ->assertRedirect();
+
+        $expense = Expense::firstOrFail();
+
+        $this->assertSame('1000.00', (string) $expense->amount);
+        $this->assertSame('81.00', (string) $expense->vat_amount);
+        $this->assertSame('1000.00', $expense->gross_amount);
+    }
+
+    public function test_an_amount_paid_to_a_swiss_supplier_is_still_split_as_gross(): void
+    {
+        $this->actAsOrg()
+            ->post('/expenses', $this->payload(['amount_basis' => 'gross']))
+            ->assertRedirect();
+
+        $expense = Expense::firstOrFail();
+
+        $this->assertSame('925.07', (string) $expense->amount);
+        $this->assertSame('74.93', (string) $expense->vat_amount);
+        $this->assertSame('1000.00', $expense->gross_amount);
+    }
+
+    public function test_switching_to_acquisition_tax_reads_the_amount_as_net_on_update(): void
+    {
+        $this->actAsOrg()->post('/expenses', $this->payload(['amount_basis' => 'gross']))->assertRedirect();
+        $expense = Expense::firstOrFail();
+
+        $this->actAsOrg()
+            ->put("/expenses/{$expense->id}", $this->payload([
+                'amount_basis' => 'gross',
+                'tax_treatment' => ExpenseTaxTreatment::ReverseCharge->value,
+            ]))
+            ->assertRedirect();
+
+        $expense->refresh();
+        $this->assertSame('1000.00', (string) $expense->amount);
+        $this->assertSame('81.00', (string) $expense->vat_amount);
+    }
+
     public function test_the_detail_page_shows_the_treatment(): void
     {
         $this->actAsOrg()->post('/expenses', $this->payload([

@@ -75,6 +75,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot drift between them.
 
 ### Fixed
+- **Expense amounts under acquisition tax:** an amount entered as paid
+  including VAT is read as net when the supplier charged no Swiss VAT
+  (acquisition tax, import VAT, no VAT), so no VAT share is carved out of it,
+  and the gross amount shown is what the supplier is paid.
+- **Payment reminders:** the nightly reminder job is gone with v3.8.21;
+  reminders are sent by hand from the invoice or by the opt-in automation.
 - **A tax return is summarised over the fiscal year it names.** The figures were
   gathered by calendar year, so an organization running July to June — or one
   with a long first year — was summarised over twelve months that were not its
@@ -168,6 +174,179 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Translations:** supply the English strings missing from the VAT work.
 - **Git hooks:** run Pint and PHPStan inside the container when the host has no
   PHP, instead of reporting the missing interpreter as a style violation.
+
+## [3.8.27] - 2026-10-08
+
+### Fixed
+- **Invoice customer details:** preserve archived customer snapshots and allow
+  authorized users to explicitly refresh the details on one invoice, with an
+  audit trail and no change to its financial entries.
+- **Contact addresses:** support optional salutations and freely entered full
+  country names in forms, API payloads, and invoice PDFs. Swiss QR data keeps
+  its ISO country code.
+
+### Security
+- Update Laravel to `13.30.0`, Commonmark to `2.10.2`, Flysystem to `3.35.3`,
+  brace-expansion to `5.0.12`, and source-map-js to `1.2.2`.
+- Enforce Composer and pnpm security audits in public CI and install the frozen
+  JavaScript dependency lockfile.
+
+### Validation
+- Full CE suites: 1,566 passed and 26 conditional tests skipped.
+- EE `v2.9.31`: 123 passed and one private registry-consumer test skipped.
+- Clean CE acceptance: 25 passed, with standalone frontend build and source and
+  built-artifact boundary audits passing.
+- Composer and pnpm audits, PHPStan, Pint, API contract parsing, and edition
+  compatibility checks passed.
+
+## [3.8.26] - 2026-09-30
+
+### Fixed
+- **Nullable invoice due dates:** prevent sent or overdue invoices without a
+  due date from crashing authorization, API, reporting, banking, PDF, email,
+  and accounting export flows.
+- **Invoice finalization:** reject drafts without a due date before posting
+  them as sent invoices.
+
+### Validation
+- Focused nullable due-date regression suite: 46 passed, 163 assertions.
+- PHPStan, Pint, and `git diff --check` passed.
+- Production audit found one existing sent invoice without a due date; no
+  automatic business-data backfill was applied.
+
+## [3.8.25] - 2026-09-23
+
+### Changed
+- **Expense categories:** add stable category codes, localized labels, and
+  organization-scoped category/account references.
+- **Account mapping:** resolve the active expense account from the selected
+  category while preserving legacy category names and account codes.
+- **Recurring expenses and API:** propagate structured category/account
+  references without changing existing payload semantics.
+
+### Fixed
+- **Expense UX:** show the suggested expense account alongside the category in
+  entry, detail, and organization settings views.
+- **Data migration:** backfill safe category and account matches for existing
+  expenses without rewriting historical text or ledger entries.
+
+### Validation
+- Focused Expenses/API tests: 52 passed, 211 assertions.
+- PHPStan, Pint, and frontend production build passed.
+- Staging deployment target: CE `v3.8.25` with EE `v2.9.31`.
+
+## [3.8.24] - 2026-09-23
+
+### Fixed
+- **Expense category labels:** translate the standard resale category as
+  « Achats de marchandises destinées à la revente » in French, while keeping
+  the canonical stored value and account mapping unchanged.
+- **Expense surfaces:** apply the localized category label consistently in
+  ordinary expenses, recurring expenses, Quick Receipt, lists, and details.
+
+### Validation
+- Frontend production build passed.
+- Staging deployment target: CE `v3.8.24` with EE `v2.9.31`.
+
+## [3.8.23] - 2026-09-23
+
+### Fixed
+- **Invoice payment dates:** allow authorized users to correct an incorrectly
+  entered payment date from the invoice payment history.
+- **Accounting traceability:** reverse the original payment entry and repost it
+  on the corrected date instead of changing the ledger silently.
+- **Period protection:** reject payment-date corrections in closed VAT periods
+  or fiscal years.
+
+### Validation
+- Invoicing suite: 71 passed, 217 assertions.
+- PHPStan, Pint, and frontend build passed.
+- Staging deployment target: CE `v3.8.23` with EE `v2.9.31`.
+
+## [3.8.22] - 2026-09-22
+
+### Changed
+- **Expense entry:** use the paid amount including VAT by default, with an
+  explicit net-amount option. Persisted accounting values remain net amount
+  plus input VAT.
+- **Recurring expenses and receipts:** normalize gross/net input consistently
+  and expose the net, VAT, and gross breakdown.
+- **Expense lifecycle:** allow direct posting for authorized users and add a
+  traceable cancellation flow using a posted ledger reversal.
+
+### Fixed
+- **Expense deletion:** keep unposted expenses deletable by their authorized
+  creator or a responsible user while preserving employee self-service limits.
+- **Expense API:** expose explicit net and gross amounts and document the
+  backward-compatible net default for API clients.
+
+### Validation
+- Full API suite: 1,540 passed, 13 skipped, 5,768 assertions.
+- PHPStan, Pint, focused Expenses/API tests, and frontend build passed.
+- Staging deployment target: CE `v3.8.22` with EE `v2.9.31`.
+
+## [3.8.21] - 2026-09-18
+
+### Fixed
+- **PDF exports:** remove the per-export 120-second execution-time override so
+  large report and archive exports can use the configured worker limit.
+- **CE/EE boundary:** keep community organization pages from resolving EE
+  subscription relations when SaaS mode is disabled.
+- **EE migration compatibility:** pair with EE `v2.9.31`, which supports both
+  the legacy `customers` schema and the merged `contacts` schema.
+
+### Validation
+- Full API suite: 1,531 passed, 13 skipped, 5,738 assertions.
+- Staging acceptance is required before production promotion.
+
+## [3.8.20] - 2026-09-14
+
+### Changed
+- **Account navigation:** keep profile, security, preferences, and sessions in
+  the topbar account menu instead of duplicating them in the sidebar.
+
+### Fixed
+- **Cookie consent:** load the consent banner and Google Tag Manager only when
+  analytics is configured, avoiding an unnecessary consent prompt on
+  self-hosted instances.
+
+## [3.8.19] - 2026-09-13
+
+### Fixed
+- **Invoice API list:** eager-load VAT rates for invoice lines so listing
+  multiple invoices does not trigger lazy-loading failures or N+1 queries.
+
+## [3.8.18] - 2026-09-12
+
+### Fixed
+- **Profile sessions navigation:** separate the Sessions page route from its
+  device-session JSON endpoint so account navigation renders the profile page.
+
+## [3.8.17] - 2026-09-12
+
+### Changed
+- **Account navigation:** move personal profile destinations into a dedicated
+  sidebar submenu and keep organization switching as the sole entry point to
+  the organization list.
+- **Subscription terminology:** use “Subscription” for customer-facing SaaS
+  plan management while preserving billing terminology for accounting and
+  SaaS administration.
+
+### Fixed
+- **Form validation:** preserve Laravel validation responses instead of
+  rendering them as generic Inertia 500 errors.
+
+## [3.8.16] - 2026-09-11
+
+### Fixed
+- **Staging smoke tests:** align plan checks with the public capability
+  contract used by the staged application.
+
+## [3.8.15] - 2026-09-11
+
+### Fixed
+- **Error page actions:** simplify service-error actions so retry, sign-out,
+  and navigation do not render as a crowded set of competing buttons.
 
 ## [3.8.14] - 2026-09-10
 

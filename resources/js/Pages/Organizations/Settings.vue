@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, onMounted } from 'vue'
 import { useForm, usePage, router, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
@@ -22,6 +22,7 @@ const props = defineProps({
   organization: Object,
   hasLogo: Boolean,
   expenseCategories: { type: Array, default: () => [] },
+  expenseAccounts: { type: Array, default: () => [] },
   catalogItems: { type: Array, default: () => [] },
   vatRates: { type: Array, default: () => [] },
   modules: { type: Array, default: () => [] },
@@ -29,7 +30,7 @@ const props = defineProps({
   pendingFiscalYearChange: { type: Object, default: null },
 })
 
-const { t } = useTranslations()
+const { t, expenseCategoryLabel } = useTranslations()
 const page = usePage()
 
 // --- Tabs ---
@@ -42,6 +43,13 @@ const tabs = [
   { key: 'modules', label: 'settings_modules' },
 ]
 const tabButtons = ref([])
+
+onMounted(() => {
+  const requestedTab = new URLSearchParams(window.location.search).get('tab')
+  if (tabs.some(tab => tab.key === requestedTab)) {
+    activeTab.value = requestedTab
+  }
+})
 
 function setTabRef(element, index) {
   if (element) tabButtons.value[index] = element
@@ -181,6 +189,7 @@ function deleteLogo() {
 const commsForm = useForm({
   invoice_email_subject: props.organization.invoice_email_subject || '',
   invoice_email_body: props.organization.invoice_email_body || '',
+  contact_email: props.organization.contact_email || '',
 })
 
 function submitCommunications() {
@@ -226,19 +235,42 @@ function submitPostedEntryMode() {
 
 // --- Expense categories ---
 const newCategoryName = ref('')
+const newCategoryDefaultAccountId = ref('')
 const addingCategory = ref(false)
 const categoryToDelete = ref(null)
+
+const expenseAccountOptions = computed(() => [
+  { value: '', label: t('no_default_expense_account') },
+  ...props.expenseAccounts
+    .slice()
+    .sort((a, b) => String(a.code).localeCompare(String(b.code)))
+    .map(account => ({
+      value: String(account.id),
+      label: `${account.code} — ${account.display_name ?? account.name}`,
+    })),
+])
 
 function addCategory() {
   if (!newCategoryName.value.trim()) return
   addingCategory.value = true
-  router.post('/settings/expense-categories', { name: newCategoryName.value.trim() }, {
+  router.post('/settings/expense-categories', {
+    name: newCategoryName.value.trim(),
+    default_expense_account_id: newCategoryDefaultAccountId.value || null,
+  }, {
     preserveScroll: true,
     onFinish: () => {
       newCategoryName.value = ''
+      newCategoryDefaultAccountId.value = ''
       addingCategory.value = false
     },
   })
+}
+
+function updateCategory(category) {
+  router.put(`/settings/expense-categories/${category.id}`, {
+    name: category.name,
+    default_expense_account_id: category.default_expense_account_id || null,
+  }, { preserveScroll: true })
 }
 
 function confirmRemoveCategory(cat) {
@@ -732,6 +764,15 @@ const businessTypeOptions = [
           <CardContent>
             <form class="space-y-6" @submit.prevent="submitCommunications">
               <FormInput
+                id="contact_email"
+                v-model="commsForm.contact_email"
+                type="email"
+                :label="t('settings_contact_email')"
+                :error="commsForm.errors.contact_email"
+                :placeholder="t('settings_contact_email_placeholder')"
+              />
+
+              <FormInput
                 id="invoice_email_subject"
                 v-model="commsForm.invoice_email_subject"
                 :label="t('settings_email_subject')"
@@ -775,15 +816,30 @@ const businessTypeOptions = [
           <CardHeader>
             <CardTitle>{{ t('settings_expense_categories_title') }}</CardTitle>
             <CardDescription>{{ t('settings_expense_categories_desc') }}</CardDescription>
+            <Link href="/accounting/chart-of-accounts" class="text-sm text-[hsl(var(--primary))] underline underline-offset-2">
+              {{ t('manage_expense_accounts') }}
+            </Link>
           </CardHeader>
           <CardContent>
             <ul class="divide-y divide-[hsl(var(--border))]">
               <li
                 v-for="cat in expenseCategories"
                 :key="cat.id"
-                class="flex items-center justify-between py-2"
+                class="grid gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(14rem,auto)_auto] sm:items-center"
               >
-                <span class="text-sm">{{ cat.name }}</span>
+                <div>
+                  <span class="text-sm">{{ cat.label ?? expenseCategoryLabel(cat.name) }}</span>
+                  <p v-if="cat.default_expense_account" class="text-xs text-[hsl(var(--muted-foreground))]">
+                    {{ cat.default_expense_account.code }} — {{ cat.default_expense_account.display_name ?? cat.default_expense_account.name }}
+                  </p>
+                </div>
+                <FormSelect
+                  :id="`category-account-${cat.id}`"
+                  v-model="cat.default_expense_account_id"
+                  :label="t('default_expense_account')"
+                  :options="expenseAccountOptions"
+                  @update:model-value="updateCategory(cat)"
+                />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -795,13 +851,19 @@ const businessTypeOptions = [
                 </Button>
               </li>
             </ul>
-            <div class="mt-4 flex gap-2">
+            <div class="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(14rem,auto)_auto] sm:items-end">
               <FormInput
                 id="new_category"
                 v-model="newCategoryName"
                 :placeholder="t('new_category_placeholder')"
                 class="flex-1"
                 @keydown.enter.prevent="addCategory"
+              />
+              <FormSelect
+                id="new_category_account"
+                v-model="newCategoryDefaultAccountId"
+                :label="t('default_expense_account')"
+                :options="expenseAccountOptions"
               />
               <Button :disabled="addingCategory || !newCategoryName.trim()" @click="addCategory">
                 <Plus class="mr-1 h-4 w-4" />

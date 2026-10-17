@@ -18,12 +18,10 @@ use App\Domains\Contacts\Models\Contact;
 use App\Domains\Expenses\Enums\ExpenseTaxTreatment;
 use App\Domains\Expenses\Models\Expense;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
-use App\Domains\Invoicing\Jobs\SendPaymentRemindersJob;
 use App\Domains\Invoicing\Models\Invoice;
-use App\Domains\Invoicing\Services\InvoiceMailerService;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
-use Mockery;
 use Tests\TestCase;
 use Tests\Traits\WithAuthenticatedOrganization;
 
@@ -258,28 +256,12 @@ class AutomationHandlersTest extends TestCase
     //  The reminder behaviour change
     // ──────────────────────────────────────────────────────────────
 
-    public function test_the_nightly_reminder_job_stands_down_while_automation_is_on(): void
+    public function test_no_scheduled_task_sends_reminders_on_its_own(): void
     {
-        $this->invoice('555', '400.00');
+        $tasks = collect(app(Schedule::class)->events())
+            ->map(fn ($event): string => (string) ($event->description ?? '').' '.(string) ($event->command ?? ''));
 
-        $mailer = Mockery::mock(InvoiceMailerService::class);
-        $mailer->shouldNotReceive('sendReminder');
-
-        (new SendPaymentRemindersJob)->handle($mailer);
-
-        $this->assertTrue(true);
-    }
-
-    public function test_the_nightly_reminder_job_still_works_without_the_automation_module(): void
-    {
-        Config::set('features.automation', false);
-        $this->invoice('666', '400.00');
-
-        $mailer = Mockery::mock(InvoiceMailerService::class);
-        $mailer->shouldReceive('sendReminder')->once();
-
-        (new SendPaymentRemindersJob)->handle($mailer);
-
-        $this->assertTrue(true);
+        $this->assertTrue($tasks->contains(fn (string $task): bool => str_contains($task, 'gaeld:run-automations')));
+        $this->assertFalse($tasks->contains(fn (string $task): bool => str_contains(strtolower($task), 'reminder')));
     }
 }

@@ -62,10 +62,17 @@ class FeatureFlagTest extends TestCase
 
     public function test_cookie_consent_bundle_is_left_out_when_the_flag_is_off(): void
     {
-        config(['features.cookie_consent' => true]);
+        config(['services.google.gtm_id' => 'GTM-TEST', 'features.cookie_consent' => true]);
         $this->get('/login')->assertSee('cookieConsent', escape: false);
 
         config(['features.cookie_consent' => false]);
+        $this->get('/login')->assertDontSee('cookieConsent', escape: false);
+    }
+
+    public function test_cookie_consent_bundle_is_left_out_without_analytics(): void
+    {
+        config(['services.google.gtm_id' => null, 'features.cookie_consent' => true]);
+
         $this->get('/login')->assertDontSee('cookieConsent', escape: false);
     }
 
