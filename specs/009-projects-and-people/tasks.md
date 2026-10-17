@@ -116,4 +116,4 @@ description: "Gäld task list: Projekte und Zuordnung von Buchungszeilen, Etappe
 - [x] T055 Seite „Plan gegen Ist“ mit Formular, CSV; API zum Lesen und Anlegen
 - [x] T056 Tests `PlanActualTest`, API-Test
 - [x] T057 Importskript liest auch „Interne Aufwände“ (ausserhalb des Repositorys)
-- [ ] T058 UI-Durchgang, alle Suiten
+- [x] T058 UI-Durchgang, alle Suiten
