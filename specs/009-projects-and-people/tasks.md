@@ -127,4 +127,4 @@ description: "Gäld task list: Projekte und Zuordnung von Buchungszeilen, Etappe
 - [x] T061 Seite „Anschaffungen“ mit Filter, Formular, CSV; API mit Personenliste
 - [x] T062 Tests `AcquisitionTest`, API-Test
 - [x] T063 Importskript liest auch „Anschaffungen“ und verbindet Buchungen (ausserhalb des Repositorys)
-- [ ] T064 UI-Durchgang, alle Suiten
+- [x] T064 UI-Durchgang, alle Suiten
