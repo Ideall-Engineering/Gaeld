@@ -80,7 +80,7 @@ const employeeOptions = computed(() => [{ value: '', label: t('none') }, ...prop
 const showForm = ref(false)
 const editing = ref(null)
 
-const form = useForm({
+const blankProject = () => ({
   code: '',
   name: '',
   parent_id: '',
@@ -94,9 +94,13 @@ const form = useForm({
   is_active: true,
 })
 
+const form = useForm(blankProject())
+
+// Assigned field by field: after a save Inertia keeps the submitted values
+// as the form's defaults, so reset() would bring back the last project.
 function openCreate() {
   editing.value = null
-  form.reset()
+  Object.assign(form, blankProject())
   form.clearErrors()
   showForm.value = true
 }

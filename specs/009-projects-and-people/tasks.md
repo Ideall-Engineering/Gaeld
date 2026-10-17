@@ -86,7 +86,7 @@ description: "Gäld task list: Projekte und Zuordnung von Buchungszeilen, Etappe
 - [x] T035 Vergleichstest `tests/Feature/Projects/AllocationLedgerInvarianceTest.php` (siehe plan.md)
 - [x] T036 Texte in allen vier Sprachen, Übersetzungskontrolle
 - [x] T037 `CiWorkflowCoverageTest`: neue Testdateien in die CI-Gruppen
-- [ ] T038 Pint, PHPStan, alle Suiten über `gaeld-test`
-- [ ] T039 UI-Durchgang im Browser mit eingeschaltetem und ausgeschaltetem Modul
+- [x] T038 Pint, PHPStan, alle Suiten über `gaeld-test`
+- [x] T039 UI-Durchgang im Browser mit eingeschaltetem und ausgeschaltetem Modul
 - [x] T040 `CHANGELOG.md` (Unreleased) und Domain-README
 - [ ] T041 Review, Merge nach `deployment`, Rollout nach Freigabe
