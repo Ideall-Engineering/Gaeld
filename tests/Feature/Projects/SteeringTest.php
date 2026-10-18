@@ -121,6 +121,18 @@ class SteeringTest extends TestCase
         $this->assertSame('-800.00', $people['Ben B']['effect']);
     }
 
+    public function test_open_jobs_count_but_not_in_the_safe_room(): void
+    {
+        $open = $this->makeProject('O', Project::query()->where('code', 'AREA')->first());
+        $open->update(['status' => ProjectStatus::Pipeline, 'expected_amount' => '200.00', 'billing_month' => '2026-10-01']);
+
+        $people = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['people'])->keyBy('name');
+
+        $this->assertSame('100.00', $people['Anna A']['by_status']['pipeline']);
+        $this->assertSame('-250.00', $people['Anna A']['play']);
+        $this->assertSame('-600.00', $people['Anna A']['play_without_possible']);
+    }
+
     public function test_each_block_shows_how_its_numbers_come_about(): void
     {
         $budgeted = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Office', 'kind' => 'running']);

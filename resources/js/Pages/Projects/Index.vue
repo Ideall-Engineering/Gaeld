@@ -37,7 +37,7 @@ const props = defineProps({
 
 const { t } = useTranslations()
 
-const statusVariant = { possible: 'info', in_progress: 'warning', done: 'success', lost: 'destructive' }
+const statusVariant = { pipeline: 'secondary', possible: 'info', in_progress: 'warning', done: 'success', lost: 'destructive' }
 const statusLabel = value => props.statuses.find(s => s.value === value)?.label ?? value
 
 const yearOptions = computed(() => {

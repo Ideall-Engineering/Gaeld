@@ -34,7 +34,7 @@ const { t } = useTranslations()
 const { formatCurrency, formatDate } = useFormatters()
 
 const isGroup = computed(() => props.project.kind === 'area')
-const statusVariant = { possible: 'info', in_progress: 'warning', done: 'success', lost: 'destructive' }
+const statusVariant = { pipeline: 'secondary', possible: 'info', in_progress: 'warning', done: 'success', lost: 'destructive' }
 const statusLabel = value => props.options.statuses.find(s => s.value === value)?.label ?? value
 
 // A year is what people pick; a free period stays possible under "more".

@@ -210,6 +210,19 @@ class QuoteFlowTest extends TestCase
         $this->assertSame(ProjectStatus::InProgress, $job->refresh()->status);
     }
 
+    public function test_an_open_job_moves_on_when_its_quote_goes_out(): void
+    {
+        $this->enableProjects();
+        $job = $this->makeProject('P26-92');
+        $job->update(['status' => ProjectStatus::Pipeline]);
+
+        $quote = $this->storeQuote(['project_id' => $job->id]);
+        $this->assertSame(ProjectStatus::Pipeline, $job->refresh()->status, 'A draft leaves the job open.');
+
+        $this->actAsOrg()->post("/quotes/{$quote->id}/status", ['status' => 'sent']);
+        $this->assertSame(ProjectStatus::Possible, $job->refresh()->status);
+    }
+
     public function test_a_done_job_is_left_alone(): void
     {
         $this->enableProjects();

@@ -216,7 +216,8 @@ class SteeringService
                 'drawn' => $drawn,
                 'booked_salary' => $salaries[$id] ?? '0.00',
                 'play' => $play,
-                'play_without_possible' => Money::subtract($play, $byStatus[ProjectStatus::Possible->value][$id]),
+                // Without what is only in prospect: open jobs and quotes still out.
+                'play_without_possible' => Money::subtract($play, Money::add($byStatus[ProjectStatus::Pipeline->value][$id], $byStatus[ProjectStatus::Possible->value][$id])),
             ];
         }
 

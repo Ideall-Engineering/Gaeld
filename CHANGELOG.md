@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Open job status is back:** "Open" marks a job in prospect that still
+  needs work before a quote can go out. Sending its quote moves it to "quote
+  sent". The steering line without prospects now leaves out open jobs too.
 - **Steering shows its workings:** each general cost block opens to show where
   its plan comes from (fixed amount, or monthly budget × 12 per account) and
   each person's carry and credit percentage. Drawings are grouped per person

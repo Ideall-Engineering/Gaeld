@@ -10,7 +10,7 @@ use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Support\ProjectsModule;
 
 /**
- * A job follows its quotes: a sent quote makes it "quote sent", an accepted
+ * A job follows its quotes: a sent quote makes an open job "quote sent", an accepted
  * one "in progress", a declined one "lost". Done jobs are left alone, and a
  * job already in progress does not fall back because a further quote goes
  * out or is declined. A job without an expected amount takes the quote's net
@@ -34,9 +34,9 @@ class QuoteJobStatusService
         }
 
         $status = match ($quote->status) {
-            QuoteStatus::Sent => in_array($job->status, [ProjectStatus::Possible, ProjectStatus::Lost], true) ? ProjectStatus::Possible : null,
+            QuoteStatus::Sent => in_array($job->status, [ProjectStatus::Pipeline, ProjectStatus::Possible, ProjectStatus::Lost], true) ? ProjectStatus::Possible : null,
             QuoteStatus::Accepted => ProjectStatus::InProgress,
-            QuoteStatus::Declined => $job->status === ProjectStatus::Possible && ! $this->hasOpenQuote($quote) ? ProjectStatus::Lost : null,
+            QuoteStatus::Declined => in_array($job->status, [ProjectStatus::Pipeline, ProjectStatus::Possible], true) && ! $this->hasOpenQuote($quote) ? ProjectStatus::Lost : null,
             QuoteStatus::Draft => null,
         };
 
