@@ -98,11 +98,13 @@ const accountFilter = ref(list(saved.accounts))
 const projectFilter = ref(list(saved.projects))
 const jobFilter = ref(list(saved.jobs))
 const personFilter = ref(list(saved.people))
+const descriptionFilter = ref(typeof saved.description === 'string' ? saved.description : '')
+const amountFilter = ref(typeof saved.amount === 'string' ? saved.amount : '')
 const defaultSort = { key: 'date', dir: 'asc' }
 const sort = ref(saved.sort && typeof saved.sort === 'object' ? saved.sort : { ...defaultSort })
-watch([accountFilter, projectFilter, jobFilter, personFilter, sort], () => {
+watch([accountFilter, projectFilter, jobFilter, personFilter, descriptionFilter, amountFilter, sort], () => {
   try {
-    localStorage.setItem(FILTER_KEY, JSON.stringify({ accounts: accountFilter.value, projects: projectFilter.value, jobs: jobFilter.value, people: personFilter.value, sort: sort.value }))
+    localStorage.setItem(FILTER_KEY, JSON.stringify({ accounts: accountFilter.value, projects: projectFilter.value, jobs: jobFilter.value, people: personFilter.value, description: descriptionFilter.value, amount: amountFilter.value, sort: sort.value }))
   } catch {
     // Remembering the filter is a convenience only.
   }
@@ -142,13 +144,42 @@ function compare(a, b) {
   return (sort.value.dir === 'desc' ? -order : order) || a.line_id - b.line_id
 }
 
+// "1366", "1'366.00" or "-0,70" find that amount; a minus finds only
+// expenses, without one both sides. ">1000" and "<50" compare the size.
+function amountTest(input) {
+  const raw = input.replace(/[\s'’]/g, '').replace(',', '.')
+  const match = raw.match(/^(<=|>=|<|>)?(-)?(\d+(?:\.\d+)?)$/)
+  if (!match) return null
+  const [, op, minus, digits] = match
+  const target = Math.round(Number(digits) * 100)
+  return (net) => {
+    const cents = Math.round(Number(net) * 100)
+    if (minus && cents > 0) return false
+    const size = Math.abs(cents)
+    switch (op) {
+      case '>': return size > target
+      case '>=': return size >= target
+      case '<': return size < target
+      case '<=': return size <= target
+      default: return size === target
+    }
+  }
+}
+const amountMatches = computed(() => amountTest(amountFilter.value.trim()))
+const amountInvalid = computed(() => amountFilter.value.trim() !== '' && amountMatches.value === null)
+const descriptionWords = computed(() => descriptionFilter.value.trim().toLowerCase().split(/\s+/).filter(Boolean))
+
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase()
+  const words = descriptionWords.value
+  const amountOk = amountMatches.value
   return view.value
     .filter(r => !accountFilter.value.length || accountFilter.value.includes(r.account.code))
     .filter(r => !projectFilter.value.length || projectFilter.value.includes(r.projectKey))
     .filter(r => !jobFilter.value.length || r.jobs.some(j => jobFilter.value.includes(j.project_id)))
     .filter(r => !personFilter.value.length || r.people.some(p => personFilter.value.includes(p.employee_id)))
+    .filter(r => !words.length || words.every(w => (r.description ?? '').toLowerCase().includes(w)))
+    .filter(r => !amountOk || amountOk(r.net))
     .filter(r => !q || [r.reference, r.description, r.account.code, r.account.name, r.debit_account, r.credit_account, r.projectLabel, r.block, ...r.jobs.map(j => `${j.project?.code} ${j.project?.name}`)]
       .some(v => (v ?? '').toLowerCase().includes(q)))
     .sort(compare)
@@ -163,13 +194,15 @@ const shown = ref(PAGE)
 watch(filtered, () => { shown.value = PAGE })
 const visible = computed(() => filtered.value.slice(0, shown.value))
 
-const hasFilter = computed(() => [accountFilter, projectFilter, jobFilter, personFilter].some(f => f.value.length > 0) || search.value !== '')
+const hasFilter = computed(() => [accountFilter, projectFilter, jobFilter, personFilter, descriptionFilter, amountFilter].some(f => f.value.length > 0) || search.value !== '')
 const sorted = computed(() => sort.value.key !== defaultSort.key || sort.value.dir !== defaultSort.dir)
 function clearFilters() {
   accountFilter.value = []
   projectFilter.value = []
   jobFilter.value = []
   personFilter.value = []
+  descriptionFilter.value = ''
+  amountFilter.value = ''
   search.value = ''
   sort.value = { ...defaultSort }
 }
@@ -307,6 +340,14 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
           <Search class="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
           <input v-model="search" type="search" :placeholder="t('search')" :aria-label="t('search')" class="h-9 w-full rounded-md border border-[hsl(var(--input))] bg-transparent pl-8 pr-3 text-sm" />
         </label>
+        <span v-if="descriptionFilter.trim()" class="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-3 py-1">
+          {{ t('description') }}: {{ descriptionFilter.trim() }}
+          <button type="button" :aria-label="t('column_filter_clear')" @click="descriptionFilter = ''"><X class="h-3 w-3" /></button>
+        </span>
+        <span v-if="amountFilter.trim()" class="inline-flex items-center gap-1 rounded-full px-3 py-1" :class="amountInvalid ? 'bg-[hsl(var(--destructive))]/15 text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--muted))]'">
+          {{ t('amount') }}: {{ amountFilter.trim() }}<template v-if="amountInvalid"> ({{ t('journal_amount_filter_invalid') }})</template>
+          <button type="button" :aria-label="t('column_filter_clear')" @click="amountFilter = ''"><X class="h-3 w-3" /></button>
+        </span>
         <span v-if="accountFilter.length" class="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-3 py-1">
           {{ t('account') }}: {{ accountFilter.join(', ') }}
           <button type="button" :aria-label="t('column_filter_clear')" @click="accountFilter = []"><X class="h-3 w-3" /></button>
@@ -337,10 +378,10 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
               <tr class="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
                 <th class="px-3 py-2 font-medium"><ColumnMenu :label="t('date')" column="date" :sort="sort" @sort="dir => sort = { key: 'date', dir }" /></th>
                 <th class="hidden px-2 py-2 font-medium 2xl:table-cell"><ColumnMenu :label="t('reference')" column="reference" :sort="sort" @sort="dir => sort = { key: 'reference', dir }" /></th>
-                <th class="px-2 py-2 font-medium"><ColumnMenu :label="t('description')" column="description" :sort="sort" @sort="dir => sort = { key: 'description', dir }" /></th>
+                <th class="px-2 py-2 font-medium"><ColumnMenu v-model:text="descriptionFilter" :label="t('description')" column="description" :sort="sort" :text-placeholder="t('journal_description_filter')" @sort="dir => sort = { key: 'description', dir }" /></th>
                 <th class="hidden px-2 py-2 font-medium lg:table-cell"><ColumnMenu v-model:selected="accountFilter" :label="t('debit')" column="debit" :sortable="false" :options="accountOptions" /></th>
                 <th class="hidden px-2 py-2 font-medium lg:table-cell"><ColumnMenu v-model:selected="accountFilter" :label="t('credit')" column="credit" :sortable="false" :options="accountOptions" /></th>
-                <th class="px-2 py-2 text-right font-medium"><ColumnMenu :label="t('amount')" column="amount" align="right" :sort="sort" @sort="dir => sort = { key: 'amount', dir }" /></th>
+                <th class="px-2 py-2 text-right font-medium"><ColumnMenu v-model:text="amountFilter" :label="t('amount')" column="amount" align="right" :sort="sort" :text-placeholder="t('journal_amount_filter')" :text-hint="t('journal_amount_filter_hint')" @sort="dir => sort = { key: 'amount', dir }" /></th>
                 <th class="hidden px-2 py-2 font-medium sm:table-cell"><ColumnMenu v-model:selected="projectFilter" :label="t('project_area')" column="project" :sort="sort" :options="projectOptions" @sort="dir => sort = { key: 'project', dir }" /></th>
                 <th class="px-2 py-2 font-medium"><ColumnMenu v-model:selected="jobFilter" :label="t('project')" column="job" :sort="sort" :options="jobOptions" @sort="dir => sort = { key: 'job', dir }" /></th>
                 <th v-if="can.steer" class="hidden whitespace-nowrap px-2 py-2 text-right font-medium md:table-cell"><ColumnMenu v-model:selected="personFilter" :label="t('project_shares')" column="people" :sortable="false" :options="personOptions" align="right" /></th>

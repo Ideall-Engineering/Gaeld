@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Journal filters by words and amount:** the description and amount column
+  heads of the project journal take a typed filter. Words must all appear in
+  the description; an amount is found exactly (separators and cents optional,
+  a minus for expenses only) or compared with > and <.
 - **Recurring expenses feed the plan:** a recurring expense now counts in the
   plan of its account from its start day (new field), so cost blocks without a
   set amount and the steering of people include it. A schedule can be set to

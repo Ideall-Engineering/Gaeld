@@ -16,13 +16,21 @@ const props = defineProps({
   options: { type: Array, default: () => [] },
   selected: { type: Array, default: () => [] },
   align: { type: String, default: 'left' },
+  // A typed filter instead of values to tick: words, or an amount.
+  // null means the column has none.
+  text: { type: String, default: null },
+  textPlaceholder: { type: String, default: '' },
+  textHint: { type: String, default: '' },
 })
 
-const emit = defineEmits(['sort', 'update:selected'])
+const emit = defineEmits(['sort', 'update:selected', 'update:text'])
 const { t } = useTranslations()
 
+// Typing starts right away when the menu opens.
+const vFocus = { mounted: el => el.focus() }
+
 const sorted = computed(() => props.sort.key === props.column)
-const filtered = computed(() => props.selected.length > 0)
+const filtered = computed(() => props.selected.length > 0 || !!props.text?.trim())
 
 function toggle(value) {
   emit('update:selected', props.selected.includes(value)
@@ -58,6 +66,26 @@ function toggle(value) {
           <button type="button" class="flex w-full items-center gap-2 rounded px-2 py-1.5 hover:bg-[hsl(var(--muted))]" @click="emit('sort', 'desc'); close()">
             <ArrowDown class="h-4 w-4" /> {{ t('column_sort_desc') }}
             <Check v-if="sorted && sort.dir === 'desc'" class="ml-auto h-4 w-4" />
+          </button>
+        </template>
+        <template v-if="text !== null">
+          <div v-if="sortable" class="my-1 border-t border-[hsl(var(--border))]" />
+          <div class="px-2 py-1">
+            <input
+              v-focus
+              :value="text"
+              type="search"
+              :placeholder="textPlaceholder"
+              :aria-label="label"
+              class="h-8 w-56 rounded-md border border-[hsl(var(--input))] bg-transparent px-2 text-sm"
+              @input="emit('update:text', $event.target.value)"
+              @keydown.enter.prevent="close()"
+              @click.stop
+            />
+            <p v-if="textHint" class="mt-1 w-56 text-xs text-[hsl(var(--muted-foreground))]">{{ textHint }}</p>
+          </div>
+          <button v-if="text?.trim()" type="button" class="mt-1 flex w-full items-center gap-2 rounded px-2 py-1.5 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" @click="emit('update:text', ''); close()">
+            <X class="h-4 w-4" /> {{ t('column_filter_clear') }}
           </button>
         </template>
         <template v-if="options.length">
