@@ -2959,6 +2959,7 @@ return [
     'journal_open' => 'offen',
     'journal_pick_other' => 'Ohne Auftrag',
     'journal_pick_none' => 'Keine Zuordnung',
+    'journal_pick_project' => 'Projekt wählen',
     'journal_split' => 'Aufteilen',
     'journal_none_match' => 'Keine Buchung passt zu den Filtern.',
     'journal_show_more' => 'Weitere :count anzeigen',

@@ -177,18 +177,66 @@ function clearFilters() {
 // Change the job right in the line: pick a job, "General" or nothing.
 const GENERAL = '__general'
 const NONE = '__none'
-const pickerOptions = computed(() => [
+const OTHER = () => [
   { value: GENERAL, label: t('general_project_name'), group: t('journal_pick_other') },
   { value: NONE, label: t('journal_pick_none'), group: t('journal_pick_other') },
-  ...props.projects
-    .filter(p => p.is_active && p.kind !== 'area' && p.code !== props.generalCode)
+]
+const activeJobs = computed(() => props.projects.filter(p => p.is_active && p.kind !== 'area' && p.code !== props.generalCode))
+// Right after a project was chosen, the job picker offers only its jobs.
+const jobArea = ref(null)
+const pickerOptions = computed(() => [
+  ...OTHER(),
+  ...activeJobs.value
+    .filter(p => jobArea.value === null || groupOf(p)?.id === jobArea.value)
     .map(p => ({ value: p.id, label: `${p.name} (${p.code})`, group: groupOf(p)?.name ?? t('project_no_area') })),
 ])
+// The project of a line: any active project (area); the line goes to the
+// project itself until a job is chosen.
+const areaOptions = computed(() => [
+  ...OTHER(),
+  ...props.projects
+    .filter(p => p.is_active && p.kind === 'area' && p.code !== props.generalCode)
+    .map(p => ({ value: p.id, label: `${p.name} (${p.code})`, group: t('project_area') })),
+])
+const editingArea = ref(null)
+const areaPicker = ref(null)
+const mayChangeArea = row => props.can.allocate && !row.split && row.category !== 'payroll'
+async function editArea(row) {
+  if (!mayChangeArea(row)) return
+  editing.value = null
+  editingArea.value = row.line_id
+  await nextTick()
+  areaPicker.value?.openDropdown?.()
+}
+function saveArea(row, value) {
+  editingArea.value = null
+  if (value === null || value === undefined || value === '' || String(value) === row.projectKey) return
+  if (value === GENERAL || value === NONE) {
+    if (value === GENERAL && row.projectKey === 'general') return
+    save(row, value)
+    return
+  }
+  saving.value = row.line_id
+  router.post('/projects/unallocated', { items: [{ line_id: row.line_id, project_id: Number(value) }] }, {
+    preserveScroll: true,
+    preserveState: true,
+    onSuccess: async () => {
+      if (!activeJobs.value.some(p => groupOf(p)?.id === Number(value))) return
+      jobArea.value = Number(value)
+      editing.value = row.line_id
+      await nextTick()
+      picker.value?.openDropdown?.()
+    },
+    onFinish: () => { saving.value = null },
+  })
+}
 const editing = ref(null)
 const picker = ref(null)
 const saving = ref(null)
 async function edit(row) {
   if (!props.can.allocate) return
+  jobArea.value = null
+  editingArea.value = null
   if (row.split) {
     openSplit(row)
     return
@@ -199,6 +247,7 @@ async function edit(row) {
 }
 function save(row, value) {
   editing.value = null
+  jobArea.value = null
   if (value === null || value === undefined || value === '' || value === row.jobs[0]?.project_id) return
   const options = { preserveScroll: true, preserveState: true, onFinish: () => { saving.value = null } }
   saving.value = row.line_id
@@ -312,12 +361,35 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
                 <td class="hidden px-2 py-1.5 font-mono text-xs lg:table-cell" :title="row.debit_account === row.account.code ? row.account.name : ''">{{ row.debit_account }}</td>
                 <td class="hidden px-2 py-1.5 font-mono text-xs lg:table-cell" :title="row.credit_account === row.account.code ? row.account.name : ''">{{ row.credit_account }}</td>
                 <td class="px-2 py-1.5 text-right tabular-nums whitespace-nowrap" :class="Number(row.net) > 0 ? 'text-green-700 dark:text-green-400' : ''">{{ formatCurrency(row.net) }}</td>
-                <td class="hidden max-w-[10rem] px-2 py-1.5 sm:table-cell">
-                  <Badge v-if="row.category === 'open'" :variant="categoryVariant.open">{{ t('journal_open') }}</Badge>
-                  <template v-else>
-                    <div class="truncate" :class="row.category === 'payroll' ? 'text-[hsl(var(--muted-foreground))]' : ''" :title="row.projectLabel">{{ row.projectLabel }}</div>
-                    <div v-if="row.projectHint" :title="row.projectHint" class="truncate text-xs text-[hsl(var(--muted-foreground))]">{{ row.projectHint }}</div>
-                  </template>
+                <td class="hidden max-w-[10rem] px-2 py-1 sm:table-cell">
+                  <SearchableSelect
+                    v-if="editingArea === row.line_id"
+                    :ref="el => { areaPicker = el }"
+                    :model-value="/^\d+$/.test(row.projectKey) ? Number(row.projectKey) : null"
+                    :options="areaOptions"
+                    group-key="group"
+                    :placeholder="t('journal_pick_project')"
+                    force-searchable
+                    @update:model-value="v => saveArea(row, v)"
+                  />
+                  <button
+                    v-else
+                    type="button"
+                    class="group flex w-full min-w-0 items-center gap-1 rounded px-1 py-0.5 text-left"
+                    :class="mayChangeArea(row) ? 'hover:bg-[hsl(var(--muted))]' : 'cursor-default'"
+                    :disabled="!mayChangeArea(row)"
+                    :title="mayChangeArea(row) ? t('journal_pick_project') : ''"
+                    @click="editArea(row)"
+                  >
+                    <span class="min-w-0 flex-1">
+                      <Badge v-if="row.category === 'open'" :variant="categoryVariant.open">{{ t('journal_open') }}</Badge>
+                      <template v-else>
+                        <span class="block truncate" :class="row.category === 'payroll' ? 'text-[hsl(var(--muted-foreground))]' : ''" :title="row.projectLabel">{{ row.projectLabel }}</span>
+                        <span v-if="row.projectHint" :title="row.projectHint" class="block truncate text-xs text-[hsl(var(--muted-foreground))]">{{ row.projectHint }}</span>
+                      </template>
+                    </span>
+                    <Pencil v-if="mayChangeArea(row)" class="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-60" />
+                  </button>
                 </td>
                 <td class="w-48 max-w-[12rem] px-2 py-1">
                   <SearchableSelect
@@ -341,7 +413,7 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
                       <span v-if="row.split" class="truncate">
                         <Split class="mr-1 inline h-3 w-3" />{{ row.jobs.map(j => `${j.project?.code ?? '?'} ${Number(j.share)}%`).join(', ') || row.allocations.map(a => `${initials(a.employee_id)} ${Number(a.share)}%`).join(', ') }}
                       </span>
-                      <span v-else-if="row.jobs.length" class="truncate" :title="row.jobs[0].project?.code">{{ row.jobs[0].project?.name ?? '?' }}</span>
+                      <span v-else-if="row.jobs.length && row.jobs[0].project?.kind !== 'area'" class="truncate" :title="row.jobs[0].project?.code">{{ row.jobs[0].project?.name ?? '?' }}</span>
                       <span v-else-if="can.allocate && row.category !== 'payroll'" class="truncate text-[hsl(var(--muted-foreground))]">{{ t('unallocated_choose') }}</span>
                       <span v-else class="text-[hsl(var(--muted-foreground))]">·</span>
                       <Pencil v-if="can.allocate" class="ml-auto h-3 w-3 shrink-0 opacity-0 group-hover:opacity-60" />

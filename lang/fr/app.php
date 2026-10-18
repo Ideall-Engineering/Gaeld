@@ -2967,6 +2967,7 @@ return [
     'journal_open' => 'ouvert',
     'journal_pick_other' => 'Sans mandat',
     'journal_pick_none' => 'Aucune attribution',
+    'journal_pick_project' => 'Choisir le projet',
     'journal_split' => 'Répartir',
     'journal_none_match' => 'Aucune écriture ne correspond aux filtres.',
     'journal_show_more' => 'Afficher :count de plus',

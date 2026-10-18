@@ -7,6 +7,7 @@ use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Users\Models\User;
@@ -71,6 +72,23 @@ class ProjectJournalTest extends TestCase
                 ->where('rows.1.block', 'Rent')
                 ->where('rows.2.category', 'open')
                 ->where('can.allocate', true));
+    }
+
+    public function test_a_general_line_moves_to_a_project_before_a_job_is_chosen(): void
+    {
+        $area = $this->makeProject('B-LAB', kind: ProjectKind::Area);
+        $entry = $this->entry('E-BLOCK', $this->expense, $this->bank, '20.00');
+        $block = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Rent', 'kind' => 'running']);
+        $block->accounts()->sync([$this->expense->id]);
+        $line = $entry->lines()->where('account_id', $this->expense->id)->firstOrFail();
+
+        $this->actAsOrg()->post('/projects/unallocated', ['items' => [['line_id' => $line->id, 'project_id' => $area->id]]])
+            ->assertSessionHasNoErrors();
+
+        $this->actAsOrg()->get('/projects/journal?year=2026')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('rows.0.category', 'assigned')
+                ->where('rows.0.allocations.0.project_id', $area->id));
     }
 
     public function test_a_viewer_reads_the_journal_without_editing_or_shares(): void

@@ -2963,6 +2963,7 @@ return [
     'journal_open' => 'aperto',
     'journal_pick_other' => 'Senza incarico',
     'journal_pick_none' => 'Nessuna attribuzione',
+    'journal_pick_project' => 'Scegli il progetto',
     'journal_split' => 'Ripartire',
     'journal_none_match' => 'Nessuna registrazione corrisponde ai filtri.',
     'journal_show_more' => 'Mostra altri :count',

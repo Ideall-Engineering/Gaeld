@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Project journal, project in the line:** the project column can be
+  changed right in the line, also for a general line or one still open. The
+  line goes to the chosen project, and the job picker then opens with that
+  project's jobs.
 - **Receipt link on journal entries:** an entry can point to where its
   original receipt is kept (for example a Google Drive file). The link is
   shown on the entry page, as a small icon in the journal, in the project

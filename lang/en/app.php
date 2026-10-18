@@ -3021,6 +3021,7 @@ return [
     'journal_open' => 'open',
     'journal_pick_other' => 'Without a job',
     'journal_pick_none' => 'No allocation',
+    'journal_pick_project' => 'Choose project',
     'journal_split' => 'Split',
     'journal_none_match' => 'No entry matches the filters.',
     'journal_show_more' => 'Show :count more',
