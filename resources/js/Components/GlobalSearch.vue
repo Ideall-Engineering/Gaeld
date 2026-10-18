@@ -28,6 +28,7 @@ const typeConfig = {
 const navigationItems = computed(() => [
   { type: 'navigation', id: 'nav-dashboard', title: t('dashboard'), url: '/', icon: LayoutDashboard },
   { type: 'navigation', id: 'nav-invoices', title: t('invoices'), url: '/invoices', icon: FileText },
+  { type: 'navigation', id: 'nav-quotes', title: t('quotes'), url: '/quotes', icon: FileText },
   { type: 'navigation', id: 'nav-recurring', title: t('recurring'), url: '/invoices/recurring', icon: FileText },
   { type: 'navigation', id: 'nav-expenses', title: t('expenses'), url: '/expenses', icon: Receipt },
   { type: 'navigation', id: 'nav-contacts', title: t('contacts'), url: '/contacts', icon: Users },

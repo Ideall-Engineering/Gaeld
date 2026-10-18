@@ -25,6 +25,7 @@ import {
   Moon,
   Cog,
   FolderKanban,
+  FileSignature,
 } from 'lucide-vue-next'
 import { useTranslations } from '@/lib/useTranslations'
 import { usePermissions } from '@/lib/usePermissions'
@@ -119,6 +120,7 @@ const navigation = computed(() => {
     // ── Sales and purchases ──
     ...(!isFidu ? [
       { type: 'group', label: 'nav_sales' },
+      ...(can('invoicing.view') ? [{ key: 'quotes', href: '/quotes', icon: FileSignature }] : []),
       { key: 'invoices', href: '/invoices', icon: FileText, children: [
         { key: 'invoices', href: '/invoices' },
         { key: 'recurring', href: '/invoices/recurring', icon: Repeat },

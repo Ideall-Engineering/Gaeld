@@ -1,0 +1,30 @@
+<?php
+
+namespace App\Domains\Api\Resources;
+
+use App\Domains\Invoicing\Models\QuoteLine;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+/** @mixin QuoteLine */
+class QuoteLineResource extends JsonResource
+{
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'type' => $this->type->value,
+            'discount_type' => $this->discount_type,
+            'description' => $this->description,
+            'quantity' => $this->quantity,
+            'unit_price' => $this->unit_price,
+            'amount' => $this->amount,
+            'vat_rate_id' => $this->vatRate?->uuid,
+            'vat_amount' => $this->vat_amount,
+            'sort_order' => $this->sort_order,
+        ];
+    }
+}

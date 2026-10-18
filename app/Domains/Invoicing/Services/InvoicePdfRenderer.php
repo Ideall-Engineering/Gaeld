@@ -6,6 +6,7 @@ use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Models\Quote;
 use App\Domains\Invoicing\Support\InvoicePdfStyle;
 use App\Domains\Organizations\Models\Organization;
 use App\Support\Money;
@@ -14,6 +15,8 @@ use TCPDF;
 
 /**
  * Renders invoice content (header, line items, totals) into a TCPDF document.
+ * A quote is drawn with the same layout, titled as a quote and with its
+ * validity in place of the due date.
  *
  * Includes all Swiss legal requirements:
  * - Organization legal name, address, VAT number
@@ -73,7 +76,7 @@ class InvoicePdfRenderer
         $tcpdf->SetLineWidth(0.2);
     }
 
-    public function renderInvoiceHeader(TCPDF $tcpdf, Invoice $invoice, Organization $organization): void
+    public function renderInvoiceHeader(TCPDF $tcpdf, Invoice|Quote $invoice, Organization $organization): void
     {
         // Organization logo (if configured)
         $logoFullPath = $organization->logo_path
@@ -163,12 +166,20 @@ class InvoicePdfRenderer
         $tcpdf->SetXY(InvoicePdfStyle::MARGIN_LEFT, InvoicePdfStyle::INVOICE_TITLE_Y);
         $tcpdf->SetFont('Helvetica', 'B', InvoicePdfStyle::FONT_INVOICE_TITLE);
         $tcpdf->SetTextColor(...InvoicePdfStyle::COLOR_ACCENT);
-        $invoiceTypeLabel = $invoice->type === InvoiceType::CreditNote
-            ? $this->t('pdf_credit_note')
-            : $this->t('pdf_invoice');
+        $invoiceTypeLabel = match (true) {
+            $invoice instanceof Quote => $this->t('pdf_quote'),
+            $invoice->type === InvoiceType::CreditNote => $this->t('pdf_credit_note'),
+            default => $this->t('pdf_invoice'),
+        };
         // A draft carries no number yet — the finalisation assigns it. Saying so
         // beats the trailing space an empty number used to leave behind.
         $tcpdf->Cell(0, 8, trim($invoiceTypeLabel.' '.($invoice->number ?? $this->t('pdf_draft_no_number'))), 0, 1);
+
+        if ($invoice instanceof Quote && filled($invoice->title)) {
+            $tcpdf->SetFont('Helvetica', 'B', 10);
+            $tcpdf->SetTextColor(0, 0, 0);
+            $tcpdf->MultiCell(InvoicePdfStyle::COL_TOTAL_WIDTH, 5, (string) $invoice->title, 0, 'L');
+        }
 
         // Invoice metadata block
         $tcpdf->SetFont('Helvetica', '', 9);
@@ -176,7 +187,13 @@ class InvoicePdfRenderer
 
         $metaLines = [];
         $metaLines[] = $this->t('pdf_date').': '.$invoice->issue_date->format('d.m.Y');
-        $metaLines[] = $this->t('pdf_due_date').': '.($invoice->due_date?->format('d.m.Y') ?? '');
+        if ($invoice instanceof Quote) {
+            if ($invoice->valid_until !== null) {
+                $metaLines[] = $this->t('pdf_valid_until').': '.$invoice->valid_until->format('d.m.Y');
+            }
+        } else {
+            $metaLines[] = $this->t('pdf_due_date').': '.($invoice->due_date?->format('d.m.Y') ?? '');
+        }
         if ($invoice->payment_terms) {
             $metaLines[] = $this->t('pdf_payment_terms').': '.$invoice->payment_terms;
         }
@@ -184,7 +201,7 @@ class InvoicePdfRenderer
 
         $tcpdf->Cell(0, 5, implode('    ', $metaLines), 0, 1);
 
-        if ($invoice->qr_reference) {
+        if ($invoice instanceof Invoice && $invoice->qr_reference) {
             $tcpdf->SetFont('Helvetica', '', 8);
             $tcpdf->Cell(0, 4, $this->t('pdf_reference').': '.$invoice->qr_reference, 0, 1);
         }
@@ -249,7 +266,7 @@ class InvoicePdfRenderer
         $tcpdf->SetDrawColor(0, 0, 0);
     }
 
-    public function renderLineItems(TCPDF $tcpdf, Invoice $invoice): void
+    public function renderLineItems(TCPDF $tcpdf, Invoice|Quote $invoice): void
     {
         // Table header
         $tcpdf->SetFont('Helvetica', 'B', InvoicePdfStyle::FONT_TABLE_HEADER);
@@ -277,6 +294,8 @@ class InvoicePdfRenderer
                 $priceLabel = number_format((float) $line->unit_price, 2);
             }
             $vatLabel = $line->vatRate ? ($line->vatRate->rate.'%') : '-';
+            // A text line carries words only.
+            $isText = $line->type === InvoiceLineType::Text;
 
             $descText = str_replace(["\r\n", "\r"], "\n", (string) $line->description);
             $rowY = $tcpdf->GetY();
@@ -285,10 +304,10 @@ class InvoicePdfRenderer
 
             $tcpdf->MultiCell(InvoicePdfStyle::COL_DESCRIPTION, 4, $descText, 0, 'L', false, 0);
             $tcpdf->SetXY(InvoicePdfStyle::MARGIN_LEFT + InvoicePdfStyle::COL_DESCRIPTION, $rowY);
-            $tcpdf->Cell(InvoicePdfStyle::COL_QUANTITY, $rowHeight, $qtyLabel, 0, 0, 'R');
-            $tcpdf->Cell(InvoicePdfStyle::COL_UNIT_PRICE, $rowHeight, $priceLabel, 0, 0, 'R');
-            $tcpdf->Cell(InvoicePdfStyle::COL_VAT, $rowHeight, $vatLabel, 0, 0, 'R');
-            $tcpdf->Cell(InvoicePdfStyle::COL_AMOUNT, $rowHeight, number_format((float) $lineTotal, 2), 0, 1, 'R');
+            $tcpdf->Cell(InvoicePdfStyle::COL_QUANTITY, $rowHeight, $isText ? '' : $qtyLabel, 0, 0, 'R');
+            $tcpdf->Cell(InvoicePdfStyle::COL_UNIT_PRICE, $rowHeight, $isText ? '' : $priceLabel, 0, 0, 'R');
+            $tcpdf->Cell(InvoicePdfStyle::COL_VAT, $rowHeight, $isText ? '' : $vatLabel, 0, 0, 'R');
+            $tcpdf->Cell(InvoicePdfStyle::COL_AMOUNT, $rowHeight, $isText ? '' : number_format((float) $lineTotal, 2), 0, 1, 'R');
             $tcpdf->SetY($rowY + $rowHeight);
         }
 
@@ -296,7 +315,7 @@ class InvoicePdfRenderer
         $tcpdf->Cell(InvoicePdfStyle::COL_TOTAL_WIDTH, 0, '', 'T', 1);
     }
 
-    public function renderTotals(TCPDF $tcpdf, Invoice $invoice, Organization $organization): void
+    public function renderTotals(TCPDF $tcpdf, Invoice|Quote $invoice, Organization $organization): void
     {
         $tcpdf->Ln(2);
         $tcpdf->SetFont('Helvetica', '', InvoicePdfStyle::FONT_TOTALS);

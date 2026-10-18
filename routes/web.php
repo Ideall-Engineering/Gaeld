@@ -149,6 +149,7 @@ Route::middleware(['auth', 'verified', 'org', 'org-2fa', 'subscription'])->group
     require __DIR__.'/web/accounting.php';
     require __DIR__.'/web/reporting.php';
     require __DIR__.'/web/invoicing.php';
+    require __DIR__.'/web/quotes.php';
     require __DIR__.'/web/expenses.php';
     require __DIR__.'/web/banking.php';
     require __DIR__.'/web/contacts.php';

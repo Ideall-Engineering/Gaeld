@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Quotes (offers):** write a quote to a customer with the same lines,
+  discounts, VAT and totals as an invoice, under Sales › Quotes. Quotes are
+  numbered `OF-YYYY-NNN`, carry a subject and a validity date, and print as a
+  PDF in the invoice layout (without a payment slip; a draft carries the
+  draft mark). The answer is recorded as sent, accepted or declined; a sent
+  quote past its validity is shown as expired. A sent or accepted quote turns
+  into an invoice draft with one click, with the same customer, lines and job,
+  once. Quotes book nothing and never appear among invoices or open items.
+  The API covers the whole life of a quote under `/api/v1/quotes` (list,
+  create, update, delete, `send`, `accept`, `decline`, `reopen`, `convert`,
+  `pdf`), with the invoicing token abilities.
 - **Project journal, project in the line:** the project column can be
   changed right in the line, also for a general line or one still open. The
   line goes to the chosen project, and the job picker then opens with that
@@ -164,6 +175,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot drift between them.
 
 ### Fixed
+- An invoice with a percentage discount could not be saved: the discount
+  line was written before its amount was known.
+- Text lines on invoice PDFs no longer show zero quantities and amounts.
 - **Expense amounts under acquisition tax:** an amount entered as paid
   including VAT is read as net when the supplier charged no Swiss VAT
   (acquisition tax, import VAT, no VAT), so no VAT share is carved out of it,

@@ -13,6 +13,7 @@ use App\Domains\Api\Controllers\InvoicePdfPreviewApiController;
 use App\Domains\Api\Controllers\JournalEntryApiController;
 use App\Domains\Api\Controllers\JournalEntryRevisionApiController;
 use App\Domains\Api\Controllers\OrgTokenController;
+use App\Domains\Api\Controllers\QuoteApiController;
 use App\Domains\Api\Controllers\WebhookApiController;
 use App\Domains\Projects\Controllers\AcquisitionApiController;
 use App\Domains\Projects\Controllers\BudgetGroupApiController;
@@ -70,6 +71,20 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
     ]);
 
     // Invoice lifecycle operations
+    // Quotes (offers)
+    Route::apiResource('quotes', QuoteApiController::class)->names([
+        'index' => 'api.quotes.index',
+        'show' => 'api.quotes.show',
+        'store' => 'api.quotes.store',
+        'update' => 'api.quotes.update',
+        'destroy' => 'api.quotes.destroy',
+    ]);
+    Route::post('/quotes/{quote}/send', [QuoteApiController::class, 'send'])->name('api.quotes.send');
+    Route::post('/quotes/{quote}/accept', [QuoteApiController::class, 'accept'])->name('api.quotes.accept');
+    Route::post('/quotes/{quote}/decline', [QuoteApiController::class, 'decline'])->name('api.quotes.decline');
+    Route::post('/quotes/{quote}/reopen', [QuoteApiController::class, 'reopen'])->name('api.quotes.reopen');
+    Route::post('/quotes/{quote}/convert', [QuoteApiController::class, 'convert'])->name('api.quotes.convert');
+    Route::get('/quotes/{quote}/pdf', [QuoteApiController::class, 'pdf'])->name('api.quotes.pdf');
     Route::post('/invoices/{invoice}/finalize', [InvoiceApiController::class, 'finalize'])->name('api.invoices.finalize');
     Route::post('/invoices/{invoice}/cancel', [InvoiceApiController::class, 'cancel'])->name('api.invoices.cancel');
     Route::post('/invoices/{invoice}/record-payment', [InvoiceApiController::class, 'recordPayment'])->name('api.invoices.record-payment');
