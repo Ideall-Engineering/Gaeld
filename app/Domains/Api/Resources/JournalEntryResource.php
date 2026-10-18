@@ -28,6 +28,8 @@ class JournalEntryResource extends JsonResource
             // Send back as `If-Match` when amending or deleting a posted entry.
             'revision' => $this->revision,
             'edit_state' => $this->editStateService($request)->stateFor($this->resource)->value,
+            // Descriptions can often still be sharpened where the rest is locked.
+            'text_edit_state' => $this->editStateService($request)->textStateFor($this->resource)->value,
             'debit_total' => $this->totalDebit(),
             'credit_total' => $this->totalCredit(),
             // Insertion order — debit before credit, as the entry was written.

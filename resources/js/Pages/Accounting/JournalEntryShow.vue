@@ -16,7 +16,7 @@ import JournalEntryFormModal from '@/Components/Accounting/JournalEntryFormModal
 import JournalLinesEditor, { lineFromEntry, serializeLines } from '@/Components/Accounting/JournalLinesEditor.vue'
 import JournalEntryHistory from '@/Components/Accounting/JournalEntryHistory.vue'
 import AllocationDialog from '@/Components/Projects/AllocationDialog.vue'
-import { ExternalLink, FileText, FolderKanban, Lock, Pencil, Replace, RotateCcw, Trash2 } from 'lucide-vue-next'
+import { ExternalLink, FileText, FolderKanban, Lock, Pencil, Replace, RotateCcw, Trash2, Type } from 'lucide-vue-next'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 
@@ -58,6 +58,25 @@ function saveDocument() {
   documentForm.put(`/accounting/journal-entries/${props.entry.id}/document`, {
     preserveScroll: true,
     onSuccess: () => { editingDocument.value = false },
+  })
+}
+
+// Sharpen the texts of a posted entry where amounts, accounts and date
+// are locked (settled VAT quarter, correction, source workflow).
+const editingText = ref(false)
+const textForm = useForm({ revision: props.entry.revision, description: '', lines: [], change_reason: '' })
+function startText() {
+  textForm.revision = props.entry.revision
+  textForm.description = props.entry.description || ''
+  textForm.lines = (props.entry.lines ?? []).map(line => ({ id: line.id, description: line.description || '' }))
+  textForm.clearErrors()
+  editingText.value = true
+}
+const lineText = id => textForm.lines.find(line => line.id === id)
+function saveText() {
+  textForm.put(`/accounting/journal-entries/${props.entry.id}/text`, {
+    preserveScroll: true,
+    onSuccess: () => { editingText.value = false },
   })
 }
 
@@ -216,6 +235,10 @@ function allocationLabel(line) {
                 <Pencil class="mr-1 h-4 w-4" />
                 {{ t('edit') }}
               </Button>
+              <Button v-if="can.amend_text && !entry.can_amend && !editingText" size="sm" variant="outline" @click="startText">
+                <Type class="mr-1 h-4 w-4" />
+                {{ t('journal_entry_text_edit') }}
+              </Button>
               <Button v-if="entry.can_amend" size="sm" variant="outline" @click="confirmingDelete = true">
                 <Trash2 class="mr-1 h-4 w-4 text-[hsl(var(--destructive))]" />
                 {{ t('delete') }}
@@ -243,6 +266,7 @@ function allocationLabel(line) {
             <Lock class="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]" />
             <span>
               {{ t('journal_entry_locked_hint', { reason: entry.edit_state_label }) }}
+              <template v-if="can.amend_text">{{ t('journal_entry_text_still_editable') }}</template>
               <button
                 v-if="canStartCorrection && entry.suggests_correction"
                 type="button"
@@ -264,7 +288,10 @@ function allocationLabel(line) {
             </div>
             <div>
               <dt class="text-[hsl(var(--muted-foreground))]">{{ t('description') }}</dt>
-              <dd class="font-medium">{{ entry.description || '—' }}</dd>
+              <dd v-if="editingText">
+                <FormInput id="text_description" v-model="textForm.description" :aria-label="t('description')" :error="textForm.errors.description" />
+              </dd>
+              <dd v-else class="font-medium">{{ entry.description || '—' }}</dd>
             </div>
             <div class="sm:col-span-3">
               <dt class="text-[hsl(var(--muted-foreground))]">{{ t('journal_entry_document') }}</dt>
@@ -307,6 +334,13 @@ function allocationLabel(line) {
               </dd>
             </div>
           </dl>
+          <form v-if="editingText" class="mt-4 flex flex-wrap items-end gap-2 border-t border-[hsl(var(--border))] pt-4" @submit.prevent="saveText">
+            <p class="w-full text-xs text-[hsl(var(--muted-foreground))]">{{ t('journal_entry_text_hint') }}</p>
+            <FormInput id="text_reason" v-model="textForm.change_reason" class="min-w-0 flex-1" :placeholder="t('journal_entry_text_reason')" :aria-label="t('journal_entry_text_reason')" />
+            <Button type="button" size="sm" variant="outline" @click="editingText = false">{{ t('cancel') }}</Button>
+            <Button type="submit" size="sm" :loading="textForm.processing">{{ t('save') }}</Button>
+            <p v-if="textForm.errors.revision" class="w-full text-xs text-[hsl(var(--destructive))]">{{ textForm.errors.revision }}</p>
+          </form>
         </CardContent>
       </Card>
 
@@ -385,7 +419,10 @@ function allocationLabel(line) {
               <tbody class="divide-y divide-[hsl(var(--border))]">
                 <tr v-for="line in entry.lines" :key="line.id">
                   <td class="py-2">{{ line.account?.code }} — {{ line.account?.name }}</td>
-                  <td class="py-2">{{ line.description || '—' }}</td>
+                  <td v-if="editingText && lineText(line.id)" class="py-1 pr-2">
+                    <input v-model="lineText(line.id).description" type="text" maxlength="500" :aria-label="t('description')" class="h-8 w-full min-w-[12rem] rounded-md border border-[hsl(var(--input))] bg-transparent px-2 text-sm" />
+                  </td>
+                  <td v-else class="py-2">{{ line.description || '—' }}</td>
                   <td class="py-2">
                     <span v-if="line.vat_type">{{ vatTypeLabels[line.vat_type] || line.vat_type }} · {{ formatCurrency(line.vat_amount) }}</span>
                     <span v-else class="text-[hsl(var(--muted-foreground))]">—</span>

@@ -97,6 +97,46 @@ class JournalEntryEditStateService
     }
 
     /**
+     * Whether the texts of a posted entry (its description and the line
+     * descriptions) may be sharpened. Texts change no amount, account or
+     * date, so a settled VAT quarter, a correction, a source workflow or a
+     * lettrage do not stand in the way; only the archive, a closed year and
+     * an organization that keeps posted entries final do.
+     */
+    public function textStateFor(JournalEntry $entry): JournalEntryEditState
+    {
+        if (! $entry->is_posted) {
+            return JournalEntryEditState::Draft;
+        }
+
+        if ($entry->archived_at !== null) {
+            return JournalEntryEditState::Archived;
+        }
+
+        if ($this->ledger->isFiscalYearClosedOn($entry->organization_id, $entry->date->toDateString())) {
+            return JournalEntryEditState::FiscalYearClosed;
+        }
+
+        if (! $this->isFlexible($entry->organization_id)) {
+            return JournalEntryEditState::Strict;
+        }
+
+        return JournalEntryEditState::Open;
+    }
+
+    /**
+     * @throws JournalEntryNotEditableException When the texts are locked
+     */
+    public function assertTextAmendable(JournalEntry $entry): void
+    {
+        $state = $this->textStateFor($entry);
+
+        if (! $state->isAmendable()) {
+            throw new JournalEntryNotEditableException($state);
+        }
+    }
+
+    /**
      * @throws JournalEntryNotEditableException When the entry or its new date is locked
      */
     public function assertAmendable(JournalEntry $entry, ?string $newDate = null): void

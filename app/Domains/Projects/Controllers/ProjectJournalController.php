@@ -2,6 +2,8 @@
 
 namespace App\Domains\Projects\Controllers;
 
+use App\Domains\Accounting\Services\JournalEntryEditStateService;
+use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Queries\ProjectQuery;
@@ -37,6 +39,10 @@ class ProjectJournalController extends Controller
             'can' => [
                 'allocate' => $user?->can('allocate', Project::class) ?? false,
                 'steer' => $steer,
+                // Texts of posted entries can be sharpened (spec 008); the
+                // server still refuses a closed year or the archive.
+                'amend_text' => ($user?->hasPermissionTo(Permission::AccountingAmendPosted) ?? false)
+                    && app(JournalEntryEditStateService::class)->isFlexible($currentOrg->id()),
             ],
         ]);
     }

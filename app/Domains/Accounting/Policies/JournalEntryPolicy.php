@@ -112,6 +112,13 @@ class JournalEntryPolicy extends BasePolicy
             && app(JournalEntryEditStateService::class)->stateFor($entry)->isAmendable();
     }
 
+    /** Whether the texts of this posted entry may be changed now. */
+    public function amendText(User $user, JournalEntry $entry): bool
+    {
+        return $this->attemptAmend($user, $entry)
+            && app(JournalEntryEditStateService::class)->textStateFor($entry)->isAmendable();
+    }
+
     /**
      * Whether the user may try to amend or delete this posted entry at all.
      *

@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Descriptions of posted entries can be sharpened where the rest is locked:**
+  the description of an entry and of its lines can be changed even in a
+  settled VAT quarter, on corrections and reversals, on entries from invoices,
+  bank or payroll, and on lettered lines, because no amount, account or date
+  moves. Not in a closed fiscal year, the archive or strict mode. The previous
+  text stays as a revision. On the entry page ("Edit text"), right in the
+  project journal row, and over the API (`PATCH /journal-entries/{id}/text`,
+  `text_edit_state` in the resource).
 - **Journal filters by words and amount:** the description and amount column
   heads of the project journal take a typed filter. Words must all appear in
   the description; an amount is found exactly (separators and cents optional,

@@ -77,6 +77,9 @@ class ProjectJournalService
                 'reference' => $line->reference,
                 'document_url' => $line->document_url,
                 'description' => $line->line_description ?: $line->description,
+                // Which text the row shows, so a change in the row lands there.
+                'own_line_text' => filled($line->line_description),
+                'revision' => (int) $line->revision,
                 'account' => ['id' => (int) $line->account_id, 'code' => (string) $line->code, 'name' => (string) $line->name],
                 'type' => $line->type,
                 'debit_account' => $isDebit ? (string) $line->code : implode(', ', $counter),

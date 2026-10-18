@@ -124,6 +124,7 @@ class AllocationCoverageService
                 'journal_entries.reference',
                 'journal_entries.description',
                 'journal_entries.document_url',
+                'journal_entries.revision',
                 'accounts.code',
                 'accounts.name',
                 'accounts.type',

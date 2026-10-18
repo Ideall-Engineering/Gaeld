@@ -2,6 +2,7 @@
 
 namespace App\Domains\Api\Controllers;
 
+use App\Domains\Accounting\Actions\AmendJournalEntryTextAction;
 use App\Domains\Accounting\Actions\AmendPostedJournalEntryAction;
 use App\Domains\Accounting\Actions\DeletePostedJournalEntryAction;
 use App\Domains\Accounting\DTOs\JournalEntryChangeContext;
@@ -109,6 +110,68 @@ class JournalEntryApiController extends Controller
         $journalEntry->update(['document_url' => $validated['document_url'] ?: null]);
 
         return new JournalEntryResource($journalEntry->load($this->lineRelations()));
+    }
+
+    /**
+     * Change the texts of a posted journal entry
+     *
+     * Sets the description of the entry and, under `lines`, of single lines
+     * by id. Works where a full amendment is locked by a settled VAT
+     * quarter, a correction or a source workflow, since no amount, account
+     * or date changes; not in a closed fiscal year or the archive. Requires
+     * `If-Match` with the entry's current `revision` and an `Idempotency-Key`.
+     *
+     * @urlParam journalEntry string required The journal entry UUID. Example: 9c8f1b2a-3d4e-5f67-8901-abcdef123456
+     */
+    public function text(
+        Request $request,
+        JournalEntry $journalEntry,
+        CurrentOrganization $currentOrganization,
+        AmendJournalEntryTextAction $amendText,
+        ApiIdempotencyService $idempotency,
+    ): JsonResponse {
+        $this->ensureOrganization($journalEntry, $currentOrganization->id());
+        $this->authorize('attemptAmend', $journalEntry);
+
+        $expectedRevision = $this->expectedRevision($request);
+        if ($expectedRevision === null) {
+            return $this->revisionRequired();
+        }
+
+        $validated = $request->validate([
+            'description' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'lines' => ['sometimes', 'array'],
+            'lines.*.id' => ['required', 'integer'],
+            'lines.*.description' => ['present', 'nullable', 'string', 'max:500'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        return $this->executeMutation(
+            $request,
+            $currentOrganization->id(),
+            null,
+            $idempotency,
+            function () use ($request, $journalEntry, $amendText, $expectedRevision, $validated): JsonResponse {
+                $entry = $amendText->execute(
+                    $journalEntry,
+                    array_key_exists('description', $validated),
+                    $validated['description'] ?? null,
+                    AmendJournalEntryTextAction::linesById($validated['lines'] ?? null),
+                    new JournalEntryChangeContext(
+                        expectedRevision: $expectedRevision,
+                        source: JournalCorrectionSource::Api,
+                        userId: $request->user()?->id,
+                        reason: $validated['reason'] ?? null,
+                        tokenId: $this->tokenId($request),
+                        idempotencyKey: $this->idempotencyKey($request),
+                    ),
+                );
+
+                return (new JournalEntryResource($entry->load($this->lineRelations())))
+                    ->response()
+                    ->setStatusCode(200);
+            },
+        );
     }
 
     /**

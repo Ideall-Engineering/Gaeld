@@ -58,6 +58,32 @@ class JournalEntryAmendApiTest extends SecurityTestCase
         $this->assertNotNull($revision->token_id);
     }
 
+    public function test_the_texts_of_an_entry_in_a_settled_quarter_are_sharpened(): void
+    {
+        $entry = $this->postEntry('API-TEXT', '2026-05-10');
+        JournalEntry::create([
+            'organization_id' => $this->orgA->id, 'date' => '2026-06-30', 'reference' => 'VAT-SETTLEMENT-Q2',
+            'description' => 'VAT settlement', 'is_posted' => true, 'type' => 'vat_settlement',
+            'vat_period_start' => '2026-04-01', 'vat_period_end' => '2026-06-30',
+        ]);
+        $line = $entry->lines()->orderBy('id')->first();
+
+        $this->withToken($this->tokenA)
+            ->withHeaders(['If-Match' => '1', 'Idempotency-Key' => 'text-1'])
+            ->patchJson("/api/v1/journal-entries/{$entry->id}/text", [
+                'description' => 'Kurs Stadt Zug, Teil 2',
+                'lines' => [['id' => $line->id, 'description' => 'Zahlung Teil 2']],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.revision', 2)
+            ->assertJsonPath('data.description', 'Kurs Stadt Zug, Teil 2')
+            ->assertJsonPath('data.edit_state', 'vat_locked')
+            ->assertJsonPath('data.text_edit_state', 'open');
+
+        $this->assertSame('Zahlung Teil 2', $line->fresh()->description);
+        $this->assertSame(1, JournalEntryRevision::count());
+    }
+
     public function test_a_replayed_amendment_does_not_create_a_second_revision(): void
     {
         $entry = $this->postEntry('API-REPLAY');

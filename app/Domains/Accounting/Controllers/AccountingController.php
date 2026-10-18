@@ -2,6 +2,7 @@
 
 namespace App\Domains\Accounting\Controllers;
 
+use App\Domains\Accounting\Actions\AmendJournalEntryTextAction;
 use App\Domains\Accounting\Actions\AmendPostedJournalEntryAction;
 use App\Domains\Accounting\Actions\CancelJournalCorrectionAction;
 use App\Domains\Accounting\Actions\DeletePostedJournalEntryAction;
@@ -481,6 +482,7 @@ class AccountingController extends Controller
                 'reverse' => $user?->can('reverse', $journalEntry) ?? false,
                 'amend' => $mayAmend,
                 'link_document' => $user?->can('linkDocument', $journalEntry) ?? false,
+                'amend_text' => $user?->can('amendText', $journalEntry) ?? false,
             ],
         ]);
     }
@@ -686,6 +688,45 @@ class AccountingController extends Controller
             : redirect()->route('accounting.journal');
 
         return $target->with('success', __($journalEntry->is_posted ? 'app.journal_entry_amended' : 'app.journal_entry_updated'));
+    }
+
+    /**
+     * Sharpen the description of a posted entry and of its lines, also where
+     * amounts, accounts and date are locked (settled VAT quarter, correction,
+     * source workflow). Kept as a revision like any amendment.
+     */
+    public function updateJournalEntryText(Request $request, JournalEntry $journalEntry, AmendJournalEntryTextAction $amendText): RedirectResponse
+    {
+        $this->authorize('amendText', $journalEntry);
+
+        $validated = $request->validate([
+            'revision' => ['required', 'integer'],
+            'description' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'lines' => ['sometimes', 'array'],
+            'lines.*.id' => ['required', 'integer'],
+            'lines.*.description' => ['nullable', 'string', 'max:500'],
+            'change_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $amendText->execute(
+                $journalEntry,
+                array_key_exists('description', $validated),
+                $validated['description'] ?? null,
+                AmendJournalEntryTextAction::linesById($validated['lines'] ?? null),
+                new JournalEntryChangeContext(
+                    expectedRevision: (int) $validated['revision'],
+                    source: JournalCorrectionSource::Web,
+                    userId: $request->user()?->id,
+                    reason: $validated['change_reason'] ?? null,
+                ),
+            );
+        } catch (DomainException $e) {
+            // As a field error, so the open form stays and shows why.
+            return back()->withErrors(['revision' => $this->normalizeErrorMessage($e)]);
+        }
+
+        return back()->with('success', __('app.journal_entry_text_saved'));
     }
 
     /**

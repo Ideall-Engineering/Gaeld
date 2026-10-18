@@ -107,6 +107,7 @@ Route::get('/accounting/journal-entries/changes', [AccountingController::class, 
 Route::get('/accounting/journal-entries/{journalEntry}', [AccountingController::class, 'showJournalEntry'])->name('accounting.journal-entries.show');
 Route::post('/accounting/journal-entries', [AccountingController::class, 'storeJournalEntry'])->name('accounting.journal-entries.store');
 Route::put('/accounting/journal-entries/{journalEntry}', [AccountingController::class, 'updateJournalEntry'])->name('accounting.journal-entries.update');
+Route::put('/accounting/journal-entries/{journalEntry}/text', [AccountingController::class, 'updateJournalEntryText'])->name('accounting.journal-entries.text');
 Route::put('/accounting/journal-entries/{journalEntry}/document', [AccountingController::class, 'linkJournalEntryDocument'])->name('accounting.journal-entries.document');
 Route::post('/accounting/journal-entries/{journalEntry}/post', [AccountingController::class, 'postJournalEntry'])->name('accounting.journal-entries.post');
 Route::post('/accounting/journal-entries/{journalEntry}/reverse', [AccountingController::class, 'reverseJournalEntry'])->name('accounting.journal-entries.reverse');

@@ -299,6 +299,35 @@ function save(row, value) {
 
 // Split a line across jobs and people: the allocation dialog of its entry,
 // with the result lines of that entry.
+// Sharpen the text a row shows: the line's own text where it has one,
+// the entry's description otherwise. Posted entries keep it as a revision.
+const textEditing = ref(null)
+const textDraft = ref('')
+const textError = ref('')
+const textSaving = ref(false)
+const textInput = ref(null)
+function startText(row) {
+  textEditing.value = row.line_id
+  textDraft.value = row.description ?? ''
+  textError.value = ''
+  nextTick(() => { (Array.isArray(textInput.value) ? textInput.value[0] : textInput.value)?.focus() })
+}
+function saveText(row) {
+  const text = textDraft.value.trim()
+  if (text === (row.description ?? '')) { textEditing.value = null; return }
+  const data = row.own_line_text
+    ? { revision: row.revision, lines: [{ id: row.line_id, description: text }] }
+    : { revision: row.revision, description: text }
+  textSaving.value = true
+  router.put(`/accounting/journal-entries/${row.entry_id}/text`, data, {
+    preserveScroll: true,
+    preserveState: true,
+    onSuccess: () => { textEditing.value = null },
+    onError: errors => { textError.value = Object.values(errors)[0] ?? '' },
+    onFinish: () => { textSaving.value = false },
+  })
+}
+
 const splitEntry = ref(null)
 const dialogOptions = computed(() => ({ projects: props.projects, employees: props.employees }))
 function openSplit(row) {
@@ -394,7 +423,12 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
                   <Link :href="`/accounting/journal-entries/${row.entry_id}`" class="block max-w-[9rem] truncate font-mono text-xs hover:underline" :title="row.reference">{{ row.reference || t('journal_entry') }}</Link>
                 </td>
                 <td class="max-w-[15rem] px-2 py-1.5">
-                  <div class="truncate" :title="row.description">{{ row.description }}<a v-if="row.document_url" :href="row.document_url" target="_blank" rel="noopener noreferrer" class="ml-1 inline-flex align-middle text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]" :title="t('journal_entry_document_open')" :aria-label="t('journal_entry_document_open')"><FileText class="h-3.5 w-3.5" /></a></div>
+                  <form v-if="textEditing === row.line_id" class="flex items-center gap-1" @submit.prevent="saveText(row)">
+                    <input ref="textInput" v-model="textDraft" type="text" maxlength="500" :aria-label="t('description')" class="h-7 w-full min-w-[10rem] rounded border border-[hsl(var(--input))] bg-transparent px-2 text-sm" :disabled="textSaving" @keydown.esc.prevent="textEditing = null" />
+                    <button type="button" class="text-[hsl(var(--muted-foreground))]" :aria-label="t('cancel')" @click="textEditing = null"><X class="h-3.5 w-3.5" /></button>
+                  </form>
+                  <p v-if="textEditing === row.line_id && textError" class="text-xs text-[hsl(var(--destructive))]">{{ textError }}</p>
+                  <div v-else-if="textEditing !== row.line_id" class="group flex min-w-0 items-center"><span class="truncate" :title="row.description">{{ row.description }}</span><button v-if="can.amend_text" type="button" class="ml-1 hidden shrink-0 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] group-hover:inline-flex" :title="t('journal_entry_text_edit')" :aria-label="t('journal_entry_text_edit')" @click="startText(row)"><Pencil class="h-3.5 w-3.5" /></button><a v-if="row.document_url" :href="row.document_url" target="_blank" rel="noopener noreferrer" class="ml-1 inline-flex align-middle text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]" :title="t('journal_entry_document_open')" :aria-label="t('journal_entry_document_open')"><FileText class="h-3.5 w-3.5" /></a></div>
                   <div class="truncate text-xs text-[hsl(var(--muted-foreground))] 2xl:hidden">
                     <Link :href="`/accounting/journal-entries/${row.entry_id}`" class="font-mono hover:underline">{{ row.reference || t('journal_entry') }}</Link><span class="lg:hidden"> · {{ row.debit_account }} / {{ row.credit_account }}</span>
                   </div>
