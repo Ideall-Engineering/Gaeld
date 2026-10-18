@@ -3,12 +3,16 @@
 namespace App\Domains\Projects\Controllers;
 
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Requests\BudgetGroupRequest;
 use App\Domains\Projects\Services\PlanActualService;
+use App\Domains\Projects\Services\ProjectJournalService;
 use App\Http\Controllers\Controller;
 use App\Support\CsvExportService;
+use App\Support\Money;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -72,6 +76,55 @@ class BudgetGroupController extends Controller
         });
 
         return back()->with('success', __('app.saved'));
+    }
+
+    /**
+     * The booked lines behind a block's actual, for unfolding its row on the
+     * jobs page (spec 010). Lines that sit with a customer job are marked,
+     * as the actual leaves them out.
+     */
+    public function lines(BudgetGroup $budgetGroup, ProjectJournalService $journal, CurrentOrganization $currentOrg): JsonResponse
+    {
+        $this->authorize('viewAny', Project::class);
+
+        $accountIds = $budgetGroup->accounts()->pluck('accounts.id')->map(fn ($id) => (int) $id)->flip();
+        $projects = Project::query()->get(['id', 'name', 'kind'])->keyBy('id');
+
+        $rows = collect($journal->forYear($currentOrg->id(), (int) $budgetGroup->year))
+            ->filter(fn (array $row) => $accountIds->has($row['account']['id']))
+            ->sortBy([['date', 'desc'], ['line_id', 'desc']])
+            ->map(function (array $row) use ($projects): array {
+                /** @var array<int, array{project_id: int|null, share: numeric-string}> $allocations */
+                $allocations = $row['allocations'];
+                $jobs = [];
+                $atJobs = '0';
+                foreach ($allocations as $allocation) {
+                    $project = $allocation['project_id'] !== null ? $projects->get($allocation['project_id']) : null;
+                    if ($project !== null && $project->kind === ProjectKind::Project) {
+                        $jobs[$project->id] = $project->name;
+                        $atJobs = bcadd($atJobs, $allocation['share'], 4);
+                    }
+                }
+                $amount = Money::negate($row['net']);
+
+                return [
+                    'line_id' => $row['line_id'],
+                    'entry_id' => $row['entry_id'],
+                    'date' => $row['date'],
+                    'reference' => $row['reference'],
+                    'description' => $row['description'],
+                    'account' => $row['account']['code'],
+                    'counter' => $row['debit_account'] === $row['account']['code'] ? $row['credit_account'] : $row['debit_account'],
+                    // Cost positive, as the block's actual counts it; the part
+                    // at customer jobs is not in the actual.
+                    'amount' => $amount,
+                    'at_jobs' => Money::round(bcdiv(bcmul($amount, $atJobs, 6), '100', 6)),
+                    'jobs' => array_values($jobs),
+                ];
+            })
+            ->values();
+
+        return response()->json(['rows' => $rows]);
     }
 
     public function destroy(BudgetGroup $budgetGroup): RedirectResponse

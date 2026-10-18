@@ -23,6 +23,7 @@ Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::get('/projects/plan/export', [BudgetGroupController::class, 'export'])->name('projects.plan.export');
     Route::post('/projects/plan', [BudgetGroupController::class, 'store'])->name('projects.plan.store');
     Route::post('/projects/plan/copy-previous', [BudgetGroupController::class, 'copyPrevious'])->name('projects.plan.copy');
+    Route::get('/projects/plan/{budgetGroup}/lines', [BudgetGroupController::class, 'lines'])->name('projects.plan.lines');
     Route::put('/projects/plan/{budgetGroup}', [BudgetGroupController::class, 'update'])->name('projects.plan.update');
     Route::delete('/projects/plan/{budgetGroup}', [BudgetGroupController::class, 'destroy'])->name('projects.plan.destroy');
     Route::get('/projects/acquisitions', [AcquisitionController::class, 'index'])->name('projects.acquisitions');

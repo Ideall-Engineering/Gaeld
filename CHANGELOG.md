@@ -125,8 +125,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the next free one. No new table and no migration.
 - **General costs on the jobs page:** the cost blocks moved from their own page
   to the bottom of the jobs page, with who bears each block (shared or one
-  person alone), plan, actual, rest and projection; a click on a row edits it.
-  The form has quick buttons for "shared", "X alone" and who did the work.
+  person alone), plan, actual, rest and projection. A click on a row unfolds
+  the bookings behind the actual, with the part that sits at a customer job;
+  the pencil edits the block. The form has quick buttons for "shared", "X alone" and who did the work.
   The old address `/projects/plan` redirects there. On the people page the
   general costs and the drawings open line by line, and every block in "who
   bears what" can be edited in place. Acquisitions sort and filter by column

@@ -12,9 +12,10 @@ import ColumnMenu from '@/Components/Projects/ColumnMenu.vue'
 import BudgetGroupFormModal from '@/Components/Projects/BudgetGroupFormModal.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { formatCurrency } from '@/lib/utils'
+import { useFormatters } from '@/lib/useFormatters'
 import { computed, ref, watch } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
-import { AlertTriangle, CheckCircle2, Copy, Download, FolderKanban, FolderPlus, ListChecks, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Copy, Download, FolderKanban, FolderPlus, ListChecks, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
 
 // Jobs grouped by project, with what each brought in net (spec 010, US1
 // and US3). On top: whether every receipt of the year has its place.
@@ -243,6 +244,25 @@ const deletingBlock = ref(null)
 function performDeleteBlock() {
   router.delete(`/projects/plan/${deletingBlock.value.id}`, { preserveScroll: true, onFinish: () => { deletingBlock.value = null } })
 }
+// A block's row unfolds to the bookings behind its actual, loaded on
+// first open and dropped when the page data changes.
+const { formatDate } = useFormatters()
+const openBlocks = ref({})
+const blockLines = ref({})
+async function toggleBlock(block) {
+  const open = !openBlocks.value[block.id]
+  openBlocks.value = { ...openBlocks.value, [block.id]: open }
+  if (!open || blockLines.value[block.id]) return
+  blockLines.value = { ...blockLines.value, [block.id]: 'loading' }
+  try {
+    const response = await fetch(`/projects/plan/${block.id}/lines`, { headers: { Accept: 'application/json' } })
+    if (!response.ok) throw new Error(String(response.status))
+    blockLines.value = { ...blockLines.value, [block.id]: (await response.json()).rows }
+  } catch {
+    blockLines.value = { ...blockLines.value, [block.id]: 'error' }
+  }
+}
+watch(() => props.plan, () => { blockLines.value = {} })
 function copyPreviousBlocks() {
   router.post('/projects/plan/copy-previous', { year: props.year }, { preserveScroll: true })
 }
@@ -508,15 +528,18 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
             </tr>
           </thead>
           <tbody class="divide-y divide-[hsl(var(--border))]">
+            <template v-for="block in blocks" :key="block.id">
             <tr
-              v-for="block in blocks"
-              :key="block.id"
-              :class="can.manage ? 'cursor-pointer hover:bg-[hsl(var(--muted))]/40' : ''"
-              @click="can.manage && openBlock(block)"
+              class="cursor-pointer hover:bg-[hsl(var(--muted))]/40"
+              :aria-expanded="!!openBlocks[block.id]"
+              @click="toggleBlock(block)"
             >
               <td class="px-4 py-2">
-                <div class="font-medium">{{ block.name }}</div>
-                <div class="text-xs text-[hsl(var(--muted-foreground))]">
+                <div class="flex items-center gap-1 font-medium">
+                  <component :is="openBlocks[block.id] ? ChevronDown : ChevronRight" class="h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]" />
+                  {{ block.name }}
+                </div>
+                <div class="pl-5 text-xs text-[hsl(var(--muted-foreground))]">
                   {{ blockOptions.kinds.find(k => k.value === block.kind)?.label ?? block.kind }}<template v-if="Number(block.customer_projects) !== 0"> · {{ t('budget_group_customer_projects_short', { amount: formatCurrency(block.customer_projects) }) }}</template>
                 </div>
               </td>
@@ -546,6 +569,30 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
                 </template>
               </td>
             </tr>
+            <tr v-if="openBlocks[block.id]" class="bg-[hsl(var(--muted))]/20">
+              <td :colspan="can.steer ? 7 : 6" class="px-4 pb-3 pt-1">
+                <p v-if="blockLines[block.id] === 'loading'" class="py-2 text-xs text-[hsl(var(--muted-foreground))]">{{ t('loading') }}</p>
+                <p v-else-if="blockLines[block.id] === 'error'" class="py-2 text-xs text-[hsl(var(--destructive))]">{{ t('block_lines_error') }}</p>
+                <p v-else-if="!blockLines[block.id]?.length" class="py-2 text-xs text-[hsl(var(--muted-foreground))]">{{ t('block_lines_empty') }}</p>
+                <table v-else class="w-full text-xs">
+                  <tbody>
+                    <tr v-for="line in blockLines[block.id]" :key="line.line_id" :class="line.jobs.length && Number(line.at_jobs) === Number(line.amount) ? 'text-[hsl(var(--muted-foreground))]' : ''">
+                      <td class="w-24 py-1 pr-2 whitespace-nowrap tabular-nums">{{ formatDate(line.date) }}</td>
+                      <td class="hidden w-28 py-1 pr-2 sm:table-cell">
+                        <Link :href="`/accounting/journal-entries/${line.entry_id}`" class="font-mono hover:underline">{{ line.reference || t('journal_entry') }}</Link>
+                      </td>
+                      <td class="py-1 pr-2">
+                        <Link :href="`/accounting/journal-entries/${line.entry_id}`" class="hover:underline sm:no-underline">{{ line.description }}</Link>
+                        <span v-if="line.jobs.length" class="ml-1 italic text-[hsl(var(--muted-foreground))]">{{ t('block_line_at_job', { amount: formatCurrency(line.at_jobs), jobs: line.jobs.join(', ') }) }}</span>
+                      </td>
+                      <td class="hidden w-28 py-1 pr-2 font-mono whitespace-nowrap md:table-cell">{{ line.account }} / {{ line.counter }}</td>
+                      <td class="w-28 py-1 text-right whitespace-nowrap tabular-nums">{{ formatCurrency(line.amount) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            </template>
             <tr class="font-semibold">
               <td class="px-4 py-2">{{ t('total') }}</td>
               <td v-if="can.steer" class="hidden md:table-cell"></td>

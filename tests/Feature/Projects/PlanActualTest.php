@@ -102,6 +102,31 @@ class PlanActualTest extends TestCase
         $this->assertSame('100.00', $row['customer_projects']);
     }
 
+    public function test_a_block_unfolds_to_its_bookings(): void
+    {
+        $group = $this->group('Software', [$this->software1, $this->software2], '1000.00');
+        $customer = $this->makeProject('CUST');
+        $this->cost($this->software2, '40.00', '2026-02-01');
+        $this->cost($this->marketing, '70.00', '2026-02-02');
+        app(LedgerService::class)->postEntry($this->organization->id, new JournalEntryData('2026-03-01', 'SPLIT', 'x', [
+            new JournalLineData(accountId: (string) $this->software1->id, debit: '200.00', credit: '0', allocations: [
+                new LineAllocationData(projectId: $customer->id, employeeId: null, share: '60'),
+            ]),
+            new JournalLineData(accountId: (string) $this->bank->id, debit: '0', credit: '200.00'),
+        ]));
+
+        $rows = $this->actAsOrg()->getJson("/projects/plan/{$group->id}/lines")->assertOk()->json('rows');
+
+        $this->assertCount(2, $rows);
+        $this->assertSame(['2026-03-01', '2026-02-01'], array_column($rows, 'date'));
+        $this->assertSame('200.00', $rows[0]['amount']);
+        $this->assertSame('120.00', $rows[0]['at_jobs']);
+        $this->assertSame([$customer->name], $rows[0]['jobs']);
+        $this->assertSame('0.00', $rows[1]['at_jobs']);
+        $this->assertSame((string) $this->bank->code, $rows[0]['counter']);
+        $this->assertSame([], $rows[1]['jobs']);
+    }
+
     public function test_accounts_with_costs_outside_any_block_are_listed(): void
     {
         $this->group('Software', [$this->software1], '1000.00');
