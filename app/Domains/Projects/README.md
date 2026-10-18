@@ -16,6 +16,14 @@ Projects, areas and the allocation of journal lines to projects and people
   rebuilt and whose old allocations had no clear successor line.
 - **Report**: `ProjectReportService` sums revenue and expense lines by their
   allocated share, rolls up sub-projects and leaves out year-end closing.
+- **Coverage** (spec `specs/010-projects-simple`): `AllocationCoverageService`
+  puts every revenue and expense line of a year into assigned, general (cost
+  block or the internal job `ALLG`), payroll (class 5 without block) or open,
+  leaving out reversals and posted corrections like the journal's "hide
+  corrections". The allocate inbox lists the open ones.
+
+In the interface an area is called a project and a project a job; the code
+keeps the names of spec 009.
 
 ## Rules
 

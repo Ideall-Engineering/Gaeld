@@ -55,14 +55,14 @@ return [
         'net_profit_loss' => 'Utile netto / (Perdita)',
     ],
     'project_report' => [
-        'title' => 'Rapporto di progetto',
-        'period' => 'Rapporto di progetto, dal :from al :to',
+        'title' => 'Rapporto incarico',
+        'period' => 'Rapporto incarico, dal :from al :to',
         'revenue' => 'Ricavi',
         'total_revenue' => 'Totale ricavi',
         'expenses' => 'Costi',
         'total_expenses' => 'Totale costi',
         'contribution' => 'Margine di contribuzione',
-        'project' => 'Progetto',
+        'project' => 'Incarico',
     ],
     'cash_flow' => [
         'title' => 'Rendiconto finanziario',

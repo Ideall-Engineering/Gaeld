@@ -207,10 +207,12 @@ const navigation = computed(() => {
     ]},
     ...(features.value.projects && can('projects.view') ? [
       { key: 'projects', href: '/projects', icon: FolderKanban, children: [
-        { key: 'projects', href: '/projects', exact: true },
+        // Spec 010: the three everyday pages first, the planning tools after.
+        { key: 'jobs', href: '/projects', exact: true },
+        ...(can('projects.allocate') ? [{ key: 'unallocated_lines', href: '/projects/unallocated' }] : []),
+        ...(can('organization.delete') ? [{ key: 'steering', href: '/projects/steering' }] : []),
         { key: 'budget_groups', href: '/projects/plan' },
         { key: 'acquisitions', href: '/projects/acquisitions' },
-        ...(can('organization.delete') ? [{ key: 'steering', href: '/projects/steering' }] : []),
       ]},
     ] : []),
     // ── Payroll ──

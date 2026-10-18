@@ -9,6 +9,7 @@ use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Policies\ProjectPolicy;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -28,6 +29,15 @@ class ProjectRequest extends FormRequest
             $this->merge(['code' => strtoupper(trim($this->input('code')))]);
         }
 
+        // Spec 010: the code is optional. A new job gets the next free
+        // P<yy>-<nn>, a new group B-<NAME>; an edit keeps the code it had.
+        if (in_array($this->input('code'), [null, ''], true)) {
+            $project = $this->route('project');
+            $this->merge(['code' => $project instanceof Project
+                ? $project->code
+                : self::nextCode((string) $this->input('kind'), (string) $this->input('name'))]);
+        }
+
         // A month field sends YYYY-MM; the first of that month is stored.
         if (is_string($this->input('billing_month')) && preg_match('/^\d{4}-\d{2}$/', $this->input('billing_month')) === 1) {
             $this->merge(['billing_month' => $this->input('billing_month').'-01']);
@@ -38,6 +48,37 @@ class ProjectRequest extends FormRequest
                 $this->merge([$field => null]);
             }
         }
+    }
+
+    /**
+     * The next free code for a new job or group of the current organization.
+     */
+    public static function nextCode(string $kind, string $name): string
+    {
+        $taken = Project::query()->pluck('code')->map(fn ($code) => strtoupper((string) $code))->flip();
+
+        if ($kind === ProjectKind::Area->value) {
+            $base = 'B-'.(Str::of($name)->ascii()->upper()->replaceMatches('/[^A-Z0-9]+/', '-')->trim('-')->limit(20, '')->value() ?: 'PROJEKT');
+            $code = $base;
+            for ($n = 2; $taken->has($code); $n++) {
+                $code = "{$base}-{$n}";
+            }
+
+            return $code;
+        }
+
+        $prefix = 'P'.now()->format('y').'-';
+        $next = $taken->keys()
+            ->filter(fn (string $code) => str_starts_with($code, $prefix) && ctype_digit(substr($code, strlen($prefix))))
+            ->map(fn (string $code) => (int) substr($code, strlen($prefix)))
+            ->max() ?? 0;
+
+        do {
+            $next++;
+            $code = $prefix.str_pad((string) $next, 2, '0', STR_PAD_LEFT);
+        } while ($taken->has($code));
+
+        return $code;
     }
 
     /**

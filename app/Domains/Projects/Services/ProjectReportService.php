@@ -25,6 +25,7 @@ class ProjectReportService
      *     revenue: array<int, array{code: string, name: string, amount: string}>,
      *     expenses: array<int, array{code: string, name: string, amount: string}>,
      *     projects: array<int, array{id: int, code: string, name: string, revenue: string, expenses: string, contribution: string}>,
+     *     lines: array<int, array<string, mixed>>,
      *     total_revenue: string,
      *     total_expenses: string,
      *     contribution: string,
@@ -36,8 +37,22 @@ class ProjectReportService
 
         $byAccount = [];
         $byProject = [];
+        $lines = [];
 
         foreach ($this->allocatedParts($project->organization_id, $from, $to, $projectIds) as $part) {
+            $lines[] = [
+                'line_id' => $part['line_id'],
+                'entry_id' => $part['entry_id'],
+                'date' => $part['date'],
+                'reference' => $part['reference'],
+                'description' => $part['description'],
+                'account' => "{$part['code']} {$part['name']}",
+                'side' => $part['type'] === AccountType::Revenue->value ? 'revenue' : 'expenses',
+                'project_id' => $part['project_id'],
+                'share' => $part['share'],
+                'amount' => $part['amount'],
+            ];
+
             $key = $part['type'].'|'.$part['code'];
             $byAccount[$key] ??= ['type' => $part['type'], 'code' => $part['code'], 'name' => $part['name'], 'amount' => '0.00'];
             $byAccount[$key]['amount'] = Money::add($byAccount[$key]['amount'], $part['amount']);
@@ -88,6 +103,7 @@ class ProjectReportService
             'revenue' => $revenue,
             'expenses' => $expenses,
             'projects' => $projects,
+            'lines' => $lines,
             'total_revenue' => $totalRevenue,
             'total_expenses' => $totalExpenses,
             'contribution' => Money::subtract($totalRevenue, $totalExpenses),
@@ -141,7 +157,7 @@ class ProjectReportService
      * the same share whichever projects are asked for.
      *
      * @param  array<int, int>|null  $projectIds  only parts for these projects; null for all
-     * @return \Generator<int, array{project_id: int, type: string, code: string, name: string, amount: string}>
+     * @return \Generator<int, array{project_id: int, type: string, code: string, name: string, amount: string, line_id: int, entry_id: string, date: string, reference: ?string, description: ?string, share: string}>
      */
     private function allocatedParts(string $organizationId, string $from, string $to, ?array $projectIds = null): \Generator
     {
@@ -158,10 +174,17 @@ class ProjectReportService
                 ->whereColumn('line_allocations.transaction_line_id', 'transaction_lines.id')
                 ->whereNotNull('line_allocations.cost_center_id')
                 ->when($projectIds !== null, fn ($q) => $q->whereIn('line_allocations.cost_center_id', $projectIds)))
+            ->orderBy('journal_entries.date')
+            ->orderBy('transaction_lines.id')
             ->get([
                 'transaction_lines.id',
+                'transaction_lines.journal_entry_id',
                 'transaction_lines.debit',
                 'transaction_lines.credit',
+                'transaction_lines.description AS line_description',
+                'journal_entries.date',
+                'journal_entries.reference',
+                'journal_entries.description',
                 'accounts.code',
                 'accounts.name',
                 'accounts.type',
@@ -174,7 +197,7 @@ class ProjectReportService
             ->groupBy('transaction_line_id');
 
         foreach ($lines as $line) {
-            /** @var object{id:int,debit:string,credit:string,code:string,name:string,type:string} $line */
+            /** @var object{id:int,journal_entry_id:string,debit:string,credit:string,line_description:?string,date:string,reference:?string,description:?string,code:string,name:string,type:string} $line */
             $amount = $line->type === AccountType::Revenue->value
                 ? Money::subtract((string) $line->credit, (string) $line->debit)
                 : Money::subtract((string) $line->debit, (string) $line->credit);
@@ -197,6 +220,12 @@ class ProjectReportService
                     'code' => (string) $line->code,
                     'name' => AccountDisplayName::for((string) $line->code, (string) $line->name),
                     'amount' => $parts[$index],
+                    'line_id' => (int) $line->id,
+                    'entry_id' => (string) $line->journal_entry_id,
+                    'date' => substr((string) $line->date, 0, 10),
+                    'reference' => $line->reference,
+                    'description' => $line->line_description ?: $line->description,
+                    'share' => (string) (float) $allocation->share,
                 ];
             }
         }

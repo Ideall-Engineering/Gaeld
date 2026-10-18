@@ -55,14 +55,14 @@ return [
         'net_profit_loss' => 'Résultat net / (Perte)',
     ],
     'project_report' => [
-        'title' => 'Rapport de projet',
-        'period' => 'Rapport de projet, du :from au :to',
+        'title' => 'Rapport de mandat',
+        'period' => 'Rapport de mandat, du :from au :to',
         'revenue' => 'Produits',
         'total_revenue' => 'Total des produits',
         'expenses' => 'Charges',
         'total_expenses' => 'Total des charges',
         'contribution' => 'Marge de contribution',
-        'project' => 'Projet',
+        'project' => 'Mandat',
     ],
     'cash_flow' => [
         'title' => 'Tableau des flux de trésorerie',

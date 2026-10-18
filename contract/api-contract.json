@@ -2617,9 +2617,9 @@
         }
       },
       "response_200": {
-        "data": "{year, people: [{employee_id, name, by_status, contribution, credit, burden, effect, value, planned_items, acquisitions, drawn, booked_salary, play, play_without_possible}], blocks, items, unshared, totals}"
+        "data": "{year, people: [{employee_id, name, by_status, jobs: [{id, code, name, group, status, booked, share, value, part}], contribution, credit, burden, effect, value, planned_items, acquisitions, drawn, booked_salary, play, play_without_possible}], blocks, items, unshared, totals}"
       },
-      "notes": "Spec 009, stage 5. Owners only; projects module on."
+      "notes": "Spec 009, stage 5. Owners only; projects module on. Spec 010 adds jobs: what each job brought the person."
     }
   ],
   "audit_findings": {

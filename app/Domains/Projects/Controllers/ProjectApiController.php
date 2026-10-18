@@ -134,7 +134,8 @@ class ProjectApiController extends Controller
             'project' => ['id' => $project->id, 'code' => $project->code, 'name' => $project->name],
             'from' => $validated['from'],
             'to' => $validated['to'],
-            ...$reports->forProject($project, $validated['from'], $validated['to']),
+            // The line list belongs to the job page; the API keeps its shape.
+            ...collect($reports->forProject($project, $validated['from'], $validated['to']))->except('lines')->all(),
         ]]);
     }
 

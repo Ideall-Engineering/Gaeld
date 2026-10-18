@@ -13,6 +13,7 @@ use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\ProjectShare;
 use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Requests\ProjectRequest;
+use App\Domains\Projects\Services\AllocationCoverageService;
 use App\Domains\Projects\Services\ProjectOverviewService;
 use App\Http\Controllers\Controller;
 use App\Support\CsvExportService;
@@ -28,7 +29,7 @@ use Symfony\Component\HttpFoundation\Response as HttpResponse;
  */
 class ProjectController extends Controller
 {
-    public function index(Request $request, ProjectOverviewService $overview, CurrentOrganization $currentOrg): Response
+    public function index(Request $request, ProjectOverviewService $overview, AllocationCoverageService $coverage, CurrentOrganization $currentOrg): Response
     {
         $this->authorize('viewAny', Project::class);
 
@@ -38,6 +39,8 @@ class ProjectController extends Controller
         return Inertia::render('Projects/Index', [
             'projects' => ProjectQuery::tree(withShares: $user?->can('steer', Project::class) ?? false),
             'overview' => $overview->overview($currentOrg->id(), "{$year}-01-01", "{$year}-12-31"),
+            // Spec 010: whether every receipt of the year has its place.
+            'coverage' => $user?->can('allocate', Project::class) ? $coverage->forYear($currentOrg->id(), $year) : null,
             'year' => $year,
             'contacts' => Contact::query()->orderBy('name')->get(['id', 'name']),
             'employees' => ProjectQuery::employeeOptions(),
@@ -108,7 +111,7 @@ class ProjectController extends Controller
         return back()->with('success', __('app.saved'));
     }
 
-    public function destroy(Project $project): RedirectResponse
+    public function destroy(Request $request, Project $project): RedirectResponse
     {
         $this->authorize('delete', $project);
 
@@ -125,7 +128,8 @@ class ProjectController extends Controller
 
         $project->delete();
 
-        return back()->with('success', __('app.deleted'));
+        // From the job's own page there is nothing to go back to.
+        return ($request->boolean('to_index') ? redirect()->route('projects.index') : back())->with('success', __('app.deleted'));
     }
 
     /**

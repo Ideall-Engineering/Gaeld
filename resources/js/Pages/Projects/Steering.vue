@@ -11,11 +11,12 @@ import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
-import { router, useForm } from '@inertiajs/vue3'
-import { computed } from 'vue'
-import { Plus, Trash2 } from 'lucide-vue-next'
+import { Link, router, useForm } from '@inertiajs/vue3'
+import { computed, reactive } from 'vue'
+import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
 
-// Contribution, drawings and what is left per person (spec 009, stage 5).
+// What each person earned and drew, and the room left for performance pay
+// (spec 009, stage 5; spec 010, US5).
 const props = defineProps({
   year: Number,
   steering: Object,
@@ -26,23 +27,13 @@ const { t } = useTranslations()
 const { formatCurrency } = useFormatters()
 
 const people = computed(() => props.steering.people)
-const statuses = ['done', 'in_progress', 'pipeline', 'possible']
 const yearOptions = computed(() => {
   const now = new Date().getFullYear()
   return [now + 1, now, now - 1, now - 2].map(y => ({ value: String(y), label: String(y) }))
 })
 
-const summary = [
-  { field: 'contribution', strong: false },
-  { field: 'effect', strong: false },
-  { field: 'value', strong: true },
-  { field: 'drawn', strong: false, negative: true },
-  { field: 'play', strong: true },
-  { field: 'play_without_possible', strong: false },
-]
-
-const sum = (field) => people.value.reduce((total, p) => total + Number(p[field] || 0), 0)
-const statusTotal = (status) => people.value.reduce((total, p) => total + Number(p.by_status[status] || 0), 0)
+const open = reactive({})
+const toggle = id => { open[id] = !open[id] }
 const nameOf = id => props.employees.find(e => e.id === id)?.name ?? ''
 
 const itemForm = useForm({ year: props.year, employee_id: props.employees[0]?.id ?? '', label: '', amount: '' })
@@ -59,7 +50,7 @@ function removeItem(item) {
 
 <template>
   <AppLayout :title="t('steering')">
-    <Breadcrumb :items="[{ label: t('projects'), href: '/projects' }, { label: t('steering') }]" class="mb-4" />
+    <Breadcrumb :items="[{ label: t('jobs'), href: `/projects?year=${year}` }, { label: t('steering') }]" class="mb-4" />
     <div class="space-y-6">
       <Card>
         <CardHeader>
@@ -76,35 +67,64 @@ function removeItem(item) {
           <p v-if="Number(steering.unshared) !== 0" class="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
             {{ t('steering_unshared', { amount: formatCurrency(steering.unshared) }) }}
           </p>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
-              <thead>
-                <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
-                  <th class="pb-2"></th>
-                  <th v-for="person in people" :key="person.employee_id" class="pb-2 text-right">{{ person.name }}</th>
-                  <th class="pb-2 text-right">{{ t('total') }}</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-[hsl(var(--border))]">
-                <tr v-for="status in statuses" :key="status" class="text-[hsl(var(--muted-foreground))]">
-                  <td class="py-1 pl-4">{{ t('steering_projects_' + status) }}</td>
-                  <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">{{ formatCurrency(person.by_status[status]) }}</td>
-                  <td class="py-1 text-right tabular-nums">{{ formatCurrency(statusTotal(status)) }}</td>
-                </tr>
-                <tr v-for="row in summary" :key="row.field" :class="row.strong ? 'font-semibold' : ''">
-                  <td class="py-2">{{ t('steering_' + row.field) }}</td>
-                  <td v-for="person in people" :key="person.employee_id" class="py-2 text-right tabular-nums" :class="row.field.startsWith('play') && Number(person[row.field]) < 0 ? 'text-[hsl(var(--destructive))]' : ''">
-                    {{ formatCurrency(row.negative ? -person[row.field] : person[row.field]) }}
-                  </td>
-                  <td class="py-2 text-right tabular-nums">{{ formatCurrency(row.negative ? -sum(row.field) : sum(row.field)) }}</td>
-                </tr>
-                <tr class="text-xs text-[hsl(var(--muted-foreground))]">
-                  <td class="py-2">{{ t('steering_booked_salary') }}</td>
-                  <td v-for="person in people" :key="person.employee_id" class="py-2 text-right tabular-nums">{{ formatCurrency(person.booked_salary) }}</td>
-                  <td class="py-2 text-right tabular-nums">{{ formatCurrency(sum('booked_salary')) }}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div v-for="person in people" :key="person.employee_id" class="rounded-lg border border-[hsl(var(--border))] p-4">
+              <div class="mb-3 text-lg font-semibold">{{ person.name }}</div>
+              <table class="w-full text-sm">
+                <tbody>
+                  <tr>
+                    <td class="py-1">
+                      <button type="button" class="flex items-center gap-1 hover:underline" @click="toggle(person.employee_id)">
+                        <component :is="open[person.employee_id] ? ChevronDown : ChevronRight" class="h-4 w-4" />
+                        {{ t('steering_contribution') }}
+                      </button>
+                    </td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.contribution) }}</td>
+                  </tr>
+                  <tr v-if="open[person.employee_id]">
+                    <td colspan="2" class="pb-2 pl-5">
+                      <p v-if="!person.jobs?.length" class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('person_jobs_empty') }}</p>
+                      <table v-else class="w-full text-xs">
+                        <tbody class="divide-y divide-[hsl(var(--border))]">
+                          <tr v-for="job in person.jobs" :key="job.id">
+                            <td class="py-1">
+                              <Link :href="`/projects/${job.id}/report?from=${year}-01-01&to=${year}-12-31`" class="hover:underline">{{ job.name }}</Link>
+                              <span class="text-[hsl(var(--muted-foreground))]"><template v-if="job.group"> · {{ job.group }}</template> · {{ t('project_status_' + job.status) }}<template v-if="!job.booked"> · {{ t('person_expected') }}</template></span>
+                            </td>
+                            <td class="py-1 text-right tabular-nums text-[hsl(var(--muted-foreground))]">{{ Number(job.share) }} %</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(job.part) }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="py-1 pl-5">{{ t('steering_effect') }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.effect) }}</td>
+                  </tr>
+                  <tr class="border-t font-semibold">
+                    <td class="py-2">{{ t('steering_value') }}</td>
+                    <td class="py-2 text-right tabular-nums">{{ formatCurrency(person.value) }}</td>
+                  </tr>
+                  <tr>
+                    <td class="py-1 pl-5">{{ t('steering_drawn') }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(-person.drawn) }}</td>
+                  </tr>
+                  <tr class="border-t text-base font-semibold">
+                    <td class="py-2">{{ t('steering_play') }}</td>
+                    <td class="py-2 text-right tabular-nums" :class="Number(person.play) < 0 ? 'text-[hsl(var(--destructive))]' : 'text-green-700 dark:text-green-400'">{{ formatCurrency(person.play) }}</td>
+                  </tr>
+                  <tr class="text-xs text-[hsl(var(--muted-foreground))]">
+                    <td class="py-1 pl-5">{{ t('steering_play_without_possible') }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.play_without_possible) }}</td>
+                  </tr>
+                  <tr class="text-xs text-[hsl(var(--muted-foreground))]">
+                    <td class="py-1 pl-5">{{ t('steering_booked_salary') }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.booked_salary) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </CardContent>
       </Card>

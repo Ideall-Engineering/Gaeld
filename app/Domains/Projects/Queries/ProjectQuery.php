@@ -60,16 +60,35 @@ class ProjectQuery
     /**
      * Options for a project picker: active projects only, in tree order.
      *
-     * @return array<int, array{id: int, code: string, name: string, depth: int}>
+     * Each carries its kind and the name of the project (top-most area)
+     * it belongs to, so pickers can group jobs by project (spec 010).
+     *
+     * @return array<int, array{id: int, code: string, name: string, depth: int, kind: string, group: string|null}>
      */
     public static function options(): array
     {
-        return array_map(fn (array $row) => [
-            'id' => $row['id'],
-            'code' => $row['code'],
-            'name' => $row['name'],
-            'depth' => $row['depth'],
-        ], self::tree(activeOnly: true));
+        $rows = self::tree(activeOnly: true);
+        $byId = array_column($rows, null, 'id');
+
+        return array_map(function (array $row) use ($byId) {
+            $group = null;
+            $cursor = $row['parent_id'] !== null ? ($byId[$row['parent_id']] ?? null) : null;
+            for ($depth = 0; $cursor !== null && $depth < 32; $depth++) {
+                if ($cursor['kind'] === 'area') {
+                    $group = $cursor['name'];
+                }
+                $cursor = $cursor['parent_id'] !== null ? ($byId[$cursor['parent_id']] ?? null) : null;
+            }
+
+            return [
+                'id' => $row['id'],
+                'code' => $row['code'],
+                'name' => $row['name'],
+                'depth' => $row['depth'],
+                'kind' => $row['kind'],
+                'group' => $row['kind'] === 'area' ? $row['name'] : $group,
+            ];
+        }, $rows);
     }
 
     /**

@@ -110,6 +110,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   volume names in the production compose file.
 
 ### Changed
+- **Projects, made for occasional use:** projects now group jobs (what was an
+  area is a project, what was a project is a job), and the projects page is a
+  single list of jobs per project with status, people, revenue, expenses, net
+  and margin. On top it says how many receipts of the year still lack a place;
+  a line counts as done once it is on a job or its account belongs to a cost
+  block (general costs), while payroll lines (class 5 without a cost block) and
+  both halves of every reversal and posted correction are left out. The
+  allocate page works like an inbox: pick a job or "General", where an expense
+  account can go into a new or existing cost block in one step and a single
+  receipt goes to an internal job "General". Each job has its own page with
+  its receipts and the net share of every person, and the people page breaks
+  each person's net down by job. A job or project created without a code gets
+  the next free one. No new table and no migration.
 - **Accountants may discard a draft invoice.** The role could prepare, edit,
   finalise and collect an invoice but not throw a draft away, and the delete
   button was shown anyway and then refused with a 403. A draft carries no

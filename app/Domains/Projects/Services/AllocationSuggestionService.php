@@ -2,17 +2,15 @@
 
 namespace App\Domains\Projects\Services;
 
-use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Support\AccountDisplayName;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Projects\Models\Project;
-use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Revenue and expense lines without a project, each with a suggestion where
- * there is a reason for one (spec 009, stage 2):
+ * Open revenue and expense lines, each with a suggestion where there is a
+ * reason for one (spec 009, stage 2; spec 010):
  *
  * 1. the line books an invoice that has a project;
  * 2. the line books an invoice whose customer has exactly one open project;
@@ -27,42 +25,27 @@ class AllocationSuggestionService
 
     public function __construct(
         private InvoiceProjectService $invoiceProjects,
+        private AllocationCoverageService $coverage,
     ) {}
 
     /**
+     * The open lines of a year (spec 010): not yet allocated, not general
+     * through a cost block, not payroll and not part of a correction. With
+     * $withGeneral the general ones are listed too, to move one of them to
+     * a job after all.
+     *
      * @return array<int, array<string, mixed>>
      */
-    public function unallocated(string $organizationId, string $from, string $to): array
+    public function unallocated(string $organizationId, int $year, bool $withGeneral = false): array
     {
-        $lines = DB::table('transaction_lines')
-            ->join('journal_entries', 'journal_entries.id', '=', 'transaction_lines.journal_entry_id')
-            ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
-            ->where('journal_entries.organization_id', $organizationId)
-            ->where('journal_entries.is_posted', true)
-            ->whereBetween('journal_entries.date', [$from, $to])
-            ->where(fn ($q) => $q->whereNull('journal_entries.type')->orWhere('journal_entries.type', '<>', 'year_end_closing'))
-            ->whereIn('accounts.type', [AccountType::Revenue->value, AccountType::Expense->value])
-            ->whereNotExists(fn ($q) => $q->selectRaw('1')
-                ->from('line_allocations')
-                ->whereColumn('line_allocations.transaction_line_id', 'transaction_lines.id')
-                ->whereNotNull('line_allocations.cost_center_id'))
-            ->orderBy('journal_entries.date')
-            ->orderBy('transaction_lines.id')
-            ->limit(self::LIMIT)
-            ->get([
-                'transaction_lines.id',
-                'transaction_lines.journal_entry_id',
-                'transaction_lines.account_id',
-                'transaction_lines.debit',
-                'transaction_lines.credit',
-                'transaction_lines.description AS line_description',
-                'journal_entries.date',
-                'journal_entries.reference',
-                'journal_entries.description',
-                'accounts.code',
-                'accounts.name',
-                'accounts.type',
-            ]);
+        $categories = $withGeneral
+            ? [AllocationCoverageService::OPEN, AllocationCoverageService::GENERAL]
+            : [AllocationCoverageService::OPEN];
+
+        $lines = $this->coverage->lines($organizationId, $year)
+            ->filter(fn ($line) => in_array($line->category, $categories, true))
+            ->take(self::LIMIT)
+            ->values();
 
         $projects = Project::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
@@ -108,10 +91,10 @@ class AllocationSuggestionService
                 'description' => $line->description,
                 'line_description' => $line->line_description,
                 'account' => $line->code.' '.AccountDisplayName::for((string) $line->code, (string) $line->name),
+                'account_id' => (int) $line->account_id,
                 'type' => $line->type,
-                'amount' => $line->type === AccountType::Revenue->value
-                    ? Money::subtract((string) $line->credit, (string) $line->debit)
-                    : Money::subtract((string) $line->debit, (string) $line->credit),
+                'category' => $line->category,
+                'amount' => $line->amount,
                 'suggestion' => $project === null ? null : [
                     'project_id' => $project->id,
                     'label' => "{$project->code} {$project->name}",

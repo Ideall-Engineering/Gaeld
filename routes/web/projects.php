@@ -35,6 +35,7 @@ Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::delete('/projects/steering/items/{steeringItem}', [SteeringController::class, 'destroyItem'])->name('projects.steering.items.destroy');
     Route::get('/projects/unallocated', [UnallocatedLinesController::class, 'index'])->name('projects.unallocated');
     Route::post('/projects/unallocated', [UnallocatedLinesController::class, 'apply'])->name('projects.unallocated.apply');
+    Route::post('/projects/unallocated/general', [UnallocatedLinesController::class, 'general'])->name('projects.unallocated.general');
     Route::get('/projects/allocation-reviews', [AllocationReviewController::class, 'index'])->name('projects.allocation-reviews.index');
     Route::post('/projects/allocation-reviews/{allocationReview}/dismiss', [AllocationReviewController::class, 'dismiss'])->name('projects.allocation-reviews.dismiss');
     Route::get('/projects/{project}/report', [ProjectReportController::class, 'show'])->name('projects.report');

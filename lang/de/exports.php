@@ -55,14 +55,14 @@ return [
         'net_profit_loss' => 'Reingewinn / (Verlust)',
     ],
     'project_report' => [
-        'title' => 'Projektauswertung',
-        'period' => 'Projektauswertung, :from bis :to',
+        'title' => 'Auswertung Auftrag',
+        'period' => 'Auswertung Auftrag, :from bis :to',
         'revenue' => 'Ertrag',
         'total_revenue' => 'Total Ertrag',
         'expenses' => 'Aufwand',
         'total_expenses' => 'Total Aufwand',
-        'contribution' => 'Deckungsbeitrag',
-        'project' => 'Projekt',
+        'contribution' => 'Netto',
+        'project' => 'Auftrag',
     ],
     'cash_flow' => [
         'title' => 'Geldflussrechnung',

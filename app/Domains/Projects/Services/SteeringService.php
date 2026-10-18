@@ -74,6 +74,7 @@ class SteeringService
             $byStatus[$status->value] = $zero();
         }
         $unshared = '0.00';
+        $jobs = array_fill_keys($ids, []);
 
         foreach ($projects as $project) {
             if ($project->kind !== ProjectKind::Project || $project->status === ProjectStatus::Lost) {
@@ -92,6 +93,17 @@ class SteeringService
             foreach ($this->split($value, $key) as $employeeId => $part) {
                 if (isset($byStatus[$project->status->value][$employeeId])) {
                     $byStatus[$project->status->value][$employeeId] = Money::add($byStatus[$project->status->value][$employeeId], $part);
+                    $jobs[$employeeId][] = [
+                        'id' => $project->id,
+                        'code' => $project->code,
+                        'name' => $project->name,
+                        'group' => $this->groupOf($project, $byId),
+                        'status' => $project->status->value,
+                        'booked' => Money::isPositive($booked[$project->id]['revenue'] ?? '0'),
+                        'share' => (string) (float) $key[$employeeId],
+                        'value' => $value,
+                        'part' => $part,
+                    ];
                 }
             }
         }
@@ -169,6 +181,8 @@ class SteeringService
                 'employee_id' => $id,
                 'name' => trim("{$person->first_name} {$person->last_name}"),
                 'by_status' => array_map(fn (array $amounts) => $amounts[$id], $byStatus),
+                // Spec 010: what each job brought this person, largest first.
+                'jobs' => collect($jobs[$id])->sortByDesc(fn (array $job) => (float) $job['part'])->values()->all(),
                 'contribution' => $contribution[$id],
                 'credit' => $credit[$id],
                 'burden' => Money::negate($burden[$id]),
@@ -219,6 +233,56 @@ class SteeringService
             : $project->status !== ProjectStatus::Done && $year === (int) now()->year;
 
         return Money::subtract($belongs && $project->expected_amount !== null ? (string) $project->expected_amount : '0.00', $expenses);
+    }
+
+    /**
+     * How the value of one job is shared out (spec 010, US4): its key, own or
+     * inherited, and each person's part of the given value.
+     *
+     * @return array<int, array{employee_id: string, name: string, share: string, part: string, inherited: bool}>
+     */
+    public function splitOf(Project $project, string $value): array
+    {
+        $projects = Project::withoutGlobalScopes()->where('organization_id', $project->organization_id)->get();
+        $shares = ProjectShare::withoutGlobalScopes()->where('organization_id', $project->organization_id)->get()->groupBy('cost_center_id');
+        $key = $this->keyFor($project, $projects->keyBy('id'), $shares);
+        if ($key === []) {
+            return [];
+        }
+
+        $inherited = ($shares->get($project->id) ?? collect())->isEmpty();
+        $names = Employee::withoutGlobalScopes()->withTrashed()->whereIn('id', array_keys($key))->get(['id', 'first_name', 'last_name'])->keyBy('id');
+
+        return collect($this->split($value, $key))
+            ->map(fn (string $part, string $employeeId) => [
+                'employee_id' => $employeeId,
+                'name' => trim(($names[$employeeId]->first_name ?? '').' '.($names[$employeeId]->last_name ?? '')),
+                'share' => (string) (float) $key[$employeeId],
+                'part' => $part,
+                'inherited' => $inherited,
+            ])
+            ->sortByDesc(fn (array $row) => (float) $row['share'])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Name of the group (top-most area) a job belongs to, if any.
+     *
+     * @param  Collection<int, Project>  $byId
+     */
+    private function groupOf(Project $project, Collection $byId): ?string
+    {
+        $group = null;
+        $cursor = $project->parent_id !== null ? $byId->get($project->parent_id) : null;
+        for ($depth = 0; $cursor !== null && $depth < 32; $depth++) {
+            if ($cursor->kind === ProjectKind::Area) {
+                $group = $cursor->name;
+            }
+            $cursor = $cursor->parent_id !== null ? $byId->get($cursor->parent_id) : null;
+        }
+
+        return $group;
     }
 
     /**

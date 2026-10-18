@@ -1,25 +1,21 @@
 <script setup>
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
-import CardHeader from '@/Components/UI/CardHeader.vue'
-import CardTitle from '@/Components/UI/CardTitle.vue'
 import CardContent from '@/Components/UI/CardContent.vue'
 import Badge from '@/Components/UI/Badge.vue'
 import Button from '@/Components/UI/Button.vue'
-import DataTable from '@/Components/UI/DataTable.vue'
 import ConfirmDialog from '@/Components/UI/ConfirmDialog.vue'
-import Modal from '@/Components/UI/Modal.vue'
-import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
-import FormTextarea from '@/Components/UI/FormTextarea.vue'
-import SearchableSelect from '@/Components/UI/SearchableSelect.vue'
 import EmptyState from '@/Components/UI/EmptyState.vue'
+import ProjectFormModal from '@/Components/Projects/ProjectFormModal.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { formatCurrency } from '@/lib/utils'
 import { computed, ref, watch } from 'vue'
-import { Link, router, useForm } from '@inertiajs/vue3'
-import { Plus, Pencil, Trash2, FolderKanban, BarChart3, ListChecks, ListTodo, Download } from 'lucide-vue-next'
+import { Link, router } from '@inertiajs/vue3'
+import { AlertTriangle, CheckCircle2, Download, FolderKanban, FolderPlus, ListChecks, Pencil, Plus, Search, Trash2 } from 'lucide-vue-next'
 
+// Jobs grouped by project, with what each brought in net (spec 010, US1
+// and US3). On top: whether every receipt of the year has its place.
 const props = defineProps({
   projects: Array,
   contacts: Array,
@@ -29,44 +25,14 @@ const props = defineProps({
   openReviews: Number,
   can: Object,
   overview: Object,
+  coverage: Object,
   year: Number,
 })
 
 const { t } = useTranslations()
 
-const statusFilter = ref('')
-const kindFilter = ref('')
-const showInactive = ref(false)
-
-const statusVariant = {
-  pipeline: 'info',
-  possible: 'secondary',
-  in_progress: 'warning',
-  done: 'success',
-  lost: 'destructive',
-}
-
-const statusLabel = (value) => props.statuses.find(s => s.value === value)?.label ?? value
-const kindLabel = (value) => props.kinds.find(k => k.value === value)?.label ?? value
-
-// Two views of the same projects: the figures of a year, as the
-// spreadsheet showed them, and the master data behind them.
-const VIEW_KEY = 'gaeld.projects.view'
-function storedView() {
-  try {
-    return localStorage.getItem(VIEW_KEY) === 'master' ? 'master' : 'overview'
-  } catch {
-    return 'overview'
-  }
-}
-const activeView = ref(storedView())
-watch(activeView, view => {
-  try {
-    localStorage.setItem(VIEW_KEY, view)
-  } catch {
-    // Remembering the view is a convenience only.
-  }
-})
+const statusVariant = { pipeline: 'info', possible: 'secondary', in_progress: 'warning', done: 'success', lost: 'destructive' }
+const statusLabel = value => props.statuses.find(s => s.value === value)?.label ?? value
 
 const yearOptions = computed(() => {
   const now = new Date().getFullYear()
@@ -76,127 +42,132 @@ function changeYear(value) {
   router.get('/projects', { year: value }, { preserveScroll: true, preserveState: true })
 }
 
-const figuresById = computed(() => Object.fromEntries((props.overview?.rows ?? []).map(r => [r.id, r])))
-
-const deadlineVariant = { overdue: 'destructive', critical: 'warning', on_track: 'success', done: 'secondary', none: 'outline' }
-const paymentVariant = { paid: 'success', partial: 'warning', open: 'destructive' }
-
-const overviewColumns = computed(() => [
-  { key: 'code', label: t('code') },
-  { key: 'name', label: t('name') },
-  { key: 'status', label: t('status') },
-  { key: 'deadline', label: t('project_deadline') },
-  { key: 'billing_month', label: t('project_billing_month') },
-  { key: 'expected', label: t('project_expected_amount'), class: 'text-right whitespace-nowrap' },
-  { key: 'revenue', label: t('revenue'), class: 'text-right whitespace-nowrap' },
-  { key: 'expenses', label: t('expenses'), class: 'text-right whitespace-nowrap' },
-  { key: 'net', label: t('project_net'), class: 'text-right whitespace-nowrap' },
-  { key: 'received', label: t('project_received'), class: 'text-right whitespace-nowrap' },
-  { key: 'open', label: t('project_open'), class: 'text-right whitespace-nowrap' },
-  { key: 'payment', label: t('project_payment') },
-  { key: 'actions', label: '', sortable: false },
+// Filters stay in the browser between visits; a convenience only.
+const FILTER_KEY = 'gaeld.jobs.filter'
+function stored() {
+  try {
+    return JSON.parse(localStorage.getItem(FILTER_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+const search = ref('')
+const statusFilter = ref(stored().status ?? 'not_lost')
+const showInactive = ref(!!stored().inactive)
+watch([statusFilter, showInactive], () => {
+  try {
+    localStorage.setItem(FILTER_KEY, JSON.stringify({ status: statusFilter.value, inactive: showInactive.value }))
+  } catch {
+    // Remembering the filter is a convenience only.
+  }
+})
+const statusOptions = computed(() => [
+  { value: 'not_lost', label: t('job_status_active') },
+  { value: '', label: t('all') },
+  ...props.statuses,
 ])
 
-const overviewRows = computed(() => rows.value.map(p => ({ ...p, ...(figuresById.value[p.id] ?? {}), depth: p.depth })))
-const money = value => (value === null || value === undefined || Number(value) === 0 ? '' : formatCurrency(value))
+const figures = computed(() => Object.fromEntries((props.overview?.rows ?? []).map(r => [r.id, r])))
+const byId = computed(() => Object.fromEntries(props.projects.map(p => [p.id, p])))
 
-const rows = computed(() => props.projects.filter(p =>
-  (showInactive.value || p.is_active)
-  && (!statusFilter.value || p.status === statusFilter.value)
-  && (!kindFilter.value || p.kind === kindFilter.value),
-))
+// The top-most project above a job, or null.
+function groupOf(project) {
+  let group = null
+  let cursor = project.parent_id ? byId.value[project.parent_id] : null
+  for (let depth = 0; cursor && depth < 32; depth++) {
+    if (cursor.kind === 'area') group = cursor
+    cursor = cursor.parent_id ? byId.value[cursor.parent_id] : null
+  }
+  return group
+}
 
-const columns = computed(() => [
-  { key: 'code', label: t('code') },
-  { key: 'name', label: t('name') },
-  { key: 'kind', label: t('project_kind') },
-  { key: 'status', label: t('status') },
-  { key: 'contact_name', label: t('project_customer') },
-  { key: 'responsible_name', label: t('project_responsible') },
-  { key: 'target_date', label: t('project_target_date') },
-  { key: 'expected_amount', label: t('project_expected_amount'), align: 'right' },
-  { key: 'actions', label: '', sortable: false },
-])
+// Who works on a job: its own key, else the nearest one above it.
+function keyOf(project) {
+  let cursor = project
+  for (let depth = 0; cursor && depth < 32; depth++) {
+    if (cursor.shares?.length) return { shares: cursor.shares, inherited: cursor !== project }
+    cursor = cursor.parent_id ? byId.value[cursor.parent_id] : null
+  }
+  return { shares: [], inherited: false }
+}
+const initials = id => {
+  const name = props.employees.find(e => e.id === id)?.name ?? '?'
+  return name.split(' ').map(part => part[0]).join('').slice(0, 3).toUpperCase()
+}
 
-const filterStatusOptions = computed(() => [{ value: '', label: t('all') }, ...props.statuses])
-const filterKindOptions = computed(() => [{ value: '', label: t('all') }, ...props.kinds])
+const matches = (job) => {
+  if (!showInactive.value && !job.is_active) return false
+  if (statusFilter.value === 'not_lost' && job.status === 'lost') return false
+  if (statusFilter.value && statusFilter.value !== 'not_lost' && job.status !== statusFilter.value) return false
+  const q = search.value.trim().toLowerCase()
+  if (!q) return true
+  const f = figures.value[job.id] ?? {}
+  return [job.code, job.name, f.customer, groupOf(job)?.name].some(v => (v ?? '').toLowerCase().includes(q))
+}
 
-const parentOptions = computed(() => [
-  { value: '', label: t('none') },
-  ...props.projects
-    .filter(p => p.is_active && p.id !== editing.value?.id)
-    .map(p => ({ value: p.id, label: `${'· '.repeat(p.depth)}${p.code} ${p.name}` })),
-])
-const contactOptions = computed(() => [{ value: '', label: t('none') }, ...props.contacts.map(c => ({ value: c.id, label: c.name }))])
-const employeeOptions = computed(() => [{ value: '', label: t('none') }, ...props.employees.map(e => ({ value: e.id, label: e.name }))])
+const margin = (row) => Number(row.revenue) > 0 ? Math.round((Number(row.net) / Number(row.revenue)) * 100) : null
 
-const showForm = ref(false)
-const editing = ref(null)
+const groups = computed(() => {
+  const list = []
+  const index = {}
+  const add = (group) => {
+    const key = group ? group.id : 0
+    if (!index[key]) {
+      index[key] = { key, group, jobs: [] }
+      list.push(index[key])
+    }
+    return index[key]
+  }
+  props.projects.filter(p => p.kind === 'area' && !groupOf(p)).forEach(add)
+  props.projects
+    .filter(p => p.kind !== 'area' && matches(p))
+    .forEach(job => add(groupOf(job)).jobs.push({ ...job, ...(figures.value[job.id] ?? {}), key: keyOf(job) }))
 
-const blankProject = () => ({
-  code: '',
-  name: '',
-  parent_id: '',
-  kind: 'project',
-  status: 'in_progress',
-  contact_id: '',
-  responsible_employee_id: '',
-  target_date: '',
-  billing_month: '',
-  expected_amount: '',
-  notes: '',
-  is_active: true,
-  shares: [],
+  return list
+    .filter(g => g.jobs.length > 0 || (!search.value && g.group && (showInactive.value || g.group.is_active)))
+    .map(g => {
+      const sum = g.jobs.reduce((s, j) => ({
+        revenue: s.revenue + Number(j.revenue || 0),
+        expenses: s.expenses + Number(j.expenses || 0),
+        net: s.net + Number(j.net || 0),
+        // Still to come: what open jobs without any revenue yet expect.
+        expected: s.expected + (!Number(j.revenue) && !['done', 'lost'].includes(j.status) ? Number(j.expected || 0) : 0),
+      }), { revenue: 0, expenses: 0, net: 0, expected: 0 })
+      return { ...g, sum }
+    })
 })
 
-const form = useForm(blankProject())
+const totals = computed(() => props.overview?.totals ?? { revenue: 0, expenses: 0, net: 0 })
+const totalMargin = computed(() => margin(totals.value))
+const money = value => (value === null || value === undefined || Number(value) === 0 ? '' : formatCurrency(value))
 
-// Assigned field by field: after a save Inertia keeps the submitted values
-// as the form's defaults, so reset() would bring back the last project.
-function openCreate() {
+const coverageShare = computed(() => {
+  const c = props.coverage
+  return c && c.total > 0 ? Math.round((c.done / c.total) * 100) : 100
+})
+
+// Create and edit
+const showForm = ref(false)
+const editing = ref(null)
+const preset = ref({})
+const formOptions = computed(() => ({ projects: props.projects, contacts: props.contacts, employees: props.employees, kinds: props.kinds, statuses: props.statuses }))
+function openCreate(values = {}) {
   editing.value = null
-  Object.assign(form, blankProject())
-  form.clearErrors()
+  preset.value = values
   showForm.value = true
 }
-
 function openEdit(project) {
   editing.value = project
-  form.code = project.code
-  form.name = project.name
-  form.parent_id = project.parent_id ?? ''
-  form.kind = project.kind
-  form.status = project.status
-  form.contact_id = project.contact_id ?? ''
-  form.responsible_employee_id = project.responsible_employee_id ?? ''
-  form.target_date = project.target_date ?? ''
-  form.billing_month = project.billing_month ?? ''
-  form.expected_amount = project.expected_amount ?? ''
-  form.notes = project.notes ?? ''
-  form.is_active = project.is_active
-  form.shares = (project.shares ?? []).map(s => ({ ...s }))
-  form.clearErrors()
   showForm.value = true
-}
-
-function submitForm() {
-  const options = { preserveScroll: true, onSuccess: () => { showForm.value = false } }
-  if (editing.value) {
-    form.put(`/projects/${editing.value.id}`, options)
-  } else {
-    form.post('/projects', options)
-  }
 }
 
 const showDelete = ref(false)
 const deleting = ref(null)
 const deleteProcessing = ref(false)
-
 function confirmDelete(project) {
   deleting.value = project
   showDelete.value = true
 }
-
 function performDelete() {
   if (!deleting.value) return
   deleteProcessing.value = true
@@ -209,234 +180,187 @@ function performDelete() {
     },
   })
 }
+
+const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=${props.year}-12-31`
 </script>
 
 <template>
-  <AppLayout :title="t('projects')">
-    <Card>
-      <CardHeader>
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle>{{ t('projects') }}</CardTitle>
-          <div class="flex flex-wrap items-center gap-2">
-            <Link v-if="openReviews > 0" href="/projects/allocation-reviews">
-              <Button size="sm" variant="outline">
-                <ListChecks class="mr-1 h-4 w-4" /> {{ t('allocation_reviews') }}
-                <Badge variant="warning" class="ml-2">{{ openReviews }}</Badge>
-              </Button>
-            </Link>
-            <Link v-if="can.allocate" :href="`/projects/unallocated?year=${year}`">
-              <Button size="sm" variant="outline"><ListTodo class="mr-1 h-4 w-4" /> {{ t('unallocated_lines') }}</Button>
-            </Link>
-            <Button v-if="can.manage" size="sm" @click="openCreate">
-              <Plus class="mr-1 h-4 w-4" /> {{ t('add') }}
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p class="mb-4 text-sm text-[hsl(var(--muted-foreground))]">{{ t('projects_desc') }}</p>
-        <div class="mb-4 flex flex-wrap items-end gap-3">
-          <div class="flex gap-1 rounded-md border border-[hsl(var(--border))] p-1" role="tablist">
-            <button
-              v-for="view in [{ value: 'overview', label: t('project_view_overview') }, { value: 'master', label: t('project_view_master') }]"
-              :key="view.value"
-              type="button"
-              role="tab"
-              :aria-selected="activeView === view.value"
-              class="rounded px-3 py-1 text-sm transition-colors"
-              :class="activeView === view.value ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]/50'"
-              @click="activeView = view.value"
-            >
-              {{ view.label }}
-            </button>
-          </div>
-          <FormSelect v-if="activeView === 'overview'" id="filter_year" :model-value="String(year)" :label="t('year')" :options="yearOptions" @update:model-value="changeYear" />
-          <FormSelect id="filter_status" v-model="statusFilter" :label="t('status')" :options="filterStatusOptions" />
-          <FormSelect id="filter_kind" v-model="kindFilter" :label="t('project_kind')" :options="filterKindOptions" />
-          <label class="flex items-center gap-2 pb-2 text-sm">
-            <input v-model="showInactive" type="checkbox" class="h-4 w-4 rounded border-[hsl(var(--input))]" />
-            {{ t('project_show_inactive') }}
-          </label>
-          <a v-if="activeView === 'overview'" :href="`/projects/export?year=${year}`" class="ml-auto">
-            <Button size="sm" variant="outline"><Download class="mr-1 h-4 w-4" /> CSV</Button>
-          </a>
-        </div>
+  <AppLayout :title="t('jobs')">
+    <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <div class="flex items-end gap-3">
+        <h1 class="text-2xl font-semibold">{{ t('jobs') }}</h1>
+        <FormSelect id="filter_year" :model-value="String(year)" :options="yearOptions" :aria-label="t('year')" class="w-28" @update:model-value="changeYear" />
+      </div>
+      <div v-if="can.manage" class="flex flex-wrap gap-2">
+        <Button variant="outline" @click="openCreate({ kind: 'area' })"><FolderPlus class="mr-1 h-4 w-4" /> {{ t('group_new') }}</Button>
+        <Button @click="openCreate()"><Plus class="mr-1 h-4 w-4" /> {{ t('job_new') }}</Button>
+      </div>
+    </div>
 
-        <template v-if="activeView === 'overview'">
-          <DataTable :columns="overviewColumns" :rows="overviewRows">
-            <template #empty>
-              <EmptyState :icon="FolderKanban" :title="t('empty_projects_title')" :description="t('empty_projects_desc')" />
-            </template>
-            <template #cell-name="{ row }">
-              <span :style="{ paddingLeft: `${row.depth * 1.25}rem` }" :class="[row.kind === 'area' ? 'font-semibold' : '', row.is_active ? '' : 'text-[hsl(var(--muted-foreground))] line-through']">
-                {{ row.name }}
-              </span>
-              <div v-if="row.customer && row.kind !== 'area'" class="text-xs text-[hsl(var(--muted-foreground))]" :style="{ paddingLeft: `${row.depth * 1.25}rem` }">{{ row.customer }}</div>
-            </template>
-            <template #cell-status="{ row }">
-              <Badge v-if="row.kind !== 'area'" :variant="statusVariant[row.status] ?? 'default'">{{ statusLabel(row.status) }}</Badge>
-            </template>
-            <template #cell-deadline="{ row }">
-              <span v-if="row.kind !== 'area'" class="inline-flex items-center gap-2 whitespace-nowrap">
-                <Badge :variant="deadlineVariant[row.deadline] ?? 'outline'">{{ t('project_deadline_' + row.deadline) }}</Badge>
-                <span class="text-xs text-[hsl(var(--muted-foreground))]">{{ row.target_date }}</span>
-              </span>
-            </template>
-            <template #cell-expected="{ value }"><span class="tabular-nums">{{ money(value) }}</span></template>
-            <template #cell-revenue="{ value }"><span class="tabular-nums">{{ money(value) }}</span></template>
-            <template #cell-expenses="{ value }"><span class="tabular-nums">{{ money(value) }}</span></template>
-            <template #cell-net="{ value }">
-              <span class="tabular-nums font-medium" :class="Number(value) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ money(value) }}</span>
-            </template>
-            <template #cell-received="{ value }"><span class="tabular-nums">{{ money(value) }}</span></template>
-            <template #cell-open="{ value }"><span class="tabular-nums">{{ money(value) }}</span></template>
-            <template #cell-payment="{ value }">
-              <Badge v-if="value" :variant="paymentVariant[value]">{{ t('project_payment_' + value) }}</Badge>
-            </template>
-            <template #cell-actions="{ row }">
-              <div class="flex items-center justify-end gap-1">
-                <Link :href="`/projects/${row.id}/report?from=${year}-01-01&to=${year}-12-31`">
-                  <Button variant="ghost" size="icon" :aria-label="t('project_report')"><BarChart3 class="h-4 w-4" /></Button>
-                </Link>
-                <Button v-if="can.manage" variant="ghost" size="icon" :aria-label="t('edit')" @click="openEdit(row)"><Pencil class="h-4 w-4" /></Button>
+    <!-- US1: has every receipt its place? -->
+    <Card v-if="coverage" class="mb-4">
+      <CardContent class="pt-6">
+        <div v-if="coverage.open === 0" class="flex items-start gap-3">
+          <CheckCircle2 class="mt-0.5 h-6 w-6 shrink-0 text-green-600" />
+          <div>
+            <div class="font-medium">{{ t('coverage_all_done', { year }) }}</div>
+            <div class="text-sm text-[hsl(var(--muted-foreground))]">
+              {{ t('coverage_revenue', { assigned: coverage.revenue.assigned.count, general: coverage.revenue.general.count, open: 0 }) }} ·
+              {{ t('coverage_expense', { assigned: coverage.expense.assigned.count, general: coverage.expense.general.count, open: 0 }) }}
+            </div>
+          </div>
+        </div>
+        <div v-else class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex min-w-[16rem] flex-1 items-start gap-3">
+            <AlertTriangle class="mt-0.5 h-6 w-6 shrink-0 text-amber-500" />
+            <div class="flex-1">
+              <div class="font-medium">{{ t('coverage_open', { count: coverage.open }) }}</div>
+              <div class="my-2 h-2 w-full overflow-hidden rounded-full bg-[hsl(var(--muted))]" role="progressbar" :aria-valuenow="coverageShare" aria-valuemin="0" aria-valuemax="100">
+                <div class="h-full rounded-full bg-green-600" :style="{ width: `${coverageShare}%` }" />
               </div>
-            </template>
-          </DataTable>
-
-          <div v-if="overview" class="mt-6 grid gap-4 lg:grid-cols-2">
-            <div>
-              <h3 class="mb-2 text-sm font-semibold">{{ t('project_sums_by_status') }}</h3>
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
-                    <th class="pb-1">{{ t('status') }}</th><th class="pb-1 text-right">{{ t('project_expected_amount') }}</th><th class="pb-1 text-right">{{ t('project_net') }}</th><th class="pb-1 text-right">{{ t('project_open') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="group in overview.by_status" :key="group.key">
-                    <td class="py-1">{{ statusLabel(group.key) }} <span class="text-xs text-[hsl(var(--muted-foreground))]">({{ group.count }})</span></td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(group.expected) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(group.net) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(group.open) }}</td>
-                  </tr>
-                  <tr class="border-t font-semibold">
-                    <td class="py-1">{{ t('total') }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(overview.totals.expected) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(overview.totals.net) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(overview.totals.open) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div>
-              <h3 class="mb-2 text-sm font-semibold">{{ t('project_sums_by_area') }}</h3>
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
-                    <th class="pb-1">{{ t('project_area') }}</th><th class="pb-1 text-right">{{ t('revenue') }}</th><th class="pb-1 text-right">{{ t('expenses') }}</th><th class="pb-1 text-right">{{ t('project_net') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="group in overview.by_area" :key="group.key ?? 'none'">
-                    <td class="py-1">{{ group.key ?? t('project_no_area') }} <span class="text-xs text-[hsl(var(--muted-foreground))]">({{ group.count }})</span></td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(group.revenue) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(group.expenses) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(group.net) }}</td>
-                  </tr>
-                </tbody>
-              </table>
+              <div class="text-sm text-[hsl(var(--muted-foreground))]">
+                {{ t('coverage_progress', { done: coverage.done, total: coverage.total }) }} ·
+                {{ t('coverage_revenue', { assigned: coverage.revenue.assigned.count, general: coverage.revenue.general.count, open: coverage.revenue.open.count }) }} ·
+                {{ t('coverage_expense', { assigned: coverage.expense.assigned.count, general: coverage.expense.general.count, open: coverage.expense.open.count }) }}
+              </div>
             </div>
           </div>
-        </template>
-
-        <DataTable v-else :columns="columns" :rows="rows">
-          <template #empty>
-            <EmptyState
-              :icon="FolderKanban"
-              :title="t('empty_projects_title')"
-              :description="t('empty_projects_desc')"
-              :action-label="can.manage ? t('create_first') : undefined"
-              @action="openCreate"
-            />
-          </template>
-          <template #cell-name="{ row }">
-            <span :style="{ paddingLeft: `${row.depth * 1.25}rem` }" :class="[row.kind === 'area' ? 'font-semibold' : '', row.is_active ? '' : 'text-[hsl(var(--muted-foreground))] line-through']">
-              {{ row.name }}
-            </span>
-          </template>
-          <template #cell-kind="{ value }">{{ kindLabel(value) }}</template>
-          <template #cell-status="{ value }">
-            <Badge :variant="statusVariant[value] ?? 'default'">{{ statusLabel(value) }}</Badge>
-          </template>
-          <template #cell-expected_amount="{ value }">
-            <span class="tabular-nums">{{ value !== null && value !== '' ? formatCurrency(value) : '' }}</span>
-          </template>
-          <template #cell-actions="{ row }">
-            <div class="flex items-center justify-end gap-1">
-              <Link :href="`/projects/${row.id}/report`">
-                <Button variant="ghost" size="icon" :aria-label="t('project_report')"><BarChart3 class="h-4 w-4" /></Button>
-              </Link>
-              <template v-if="can.manage">
-                <Button variant="ghost" size="icon" :aria-label="t('edit')" @click="openEdit(row)"><Pencil class="h-4 w-4" /></Button>
-                <Button variant="ghost" size="icon" :aria-label="t('delete')" @click="confirmDelete(row)">
-                  <Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" />
-                </Button>
-              </template>
-            </div>
-          </template>
-        </DataTable>
+          <Link :href="`/projects/unallocated?year=${year}`">
+            <Button><ListChecks class="mr-1 h-4 w-4" /> {{ t('coverage_action') }}</Button>
+          </Link>
+        </div>
+        <p class="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+          {{ t('coverage_hidden', { payroll: coverage.revenue.payroll.count + coverage.expense.payroll.count, corrections: coverage.corrections }) }}
+        </p>
       </CardContent>
     </Card>
 
-    <Modal :open="showForm" :title="editing ? t('edit') : t('add')" @close="showForm = false">
-      <form class="space-y-4" @submit.prevent="submitForm">
-        <div class="grid gap-4 sm:grid-cols-3">
-          <FormInput id="code" v-model="form.code" :label="t('code')" :error="form.errors.code" required />
-          <FormInput id="name" v-model="form.name" :label="t('name')" :error="form.errors.name" required class="sm:col-span-2" />
-        </div>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <FormSelect id="kind" v-model="form.kind" :label="t('project_kind')" :options="kinds" :error="form.errors.kind" required />
-          <FormSelect id="status" v-model="form.status" :label="t('status')" :options="statuses" :error="form.errors.status" required />
-        </div>
-        <SearchableSelect id="parent_id" v-model="form.parent_id" :label="t('project_parent')" :options="parentOptions" :error="form.errors.parent_id" />
-        <div class="grid gap-4 sm:grid-cols-2">
-          <SearchableSelect id="contact_id" v-model="form.contact_id" :label="t('project_customer')" :options="contactOptions" :error="form.errors.contact_id" />
-          <SearchableSelect id="responsible_employee_id" v-model="form.responsible_employee_id" :label="t('project_responsible')" :options="employeeOptions" :error="form.errors.responsible_employee_id" />
-        </div>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <FormInput id="target_date" v-model="form.target_date" type="date" :label="t('project_target_date')" :error="form.errors.target_date" />
-          <FormInput id="expected_amount" v-model="form.expected_amount" type="number" step="0.01" min="0" :label="t('project_expected_amount')" :error="form.errors.expected_amount" />
-        </div>
-        <FormInput id="billing_month" v-model="form.billing_month" type="month" :label="t('project_billing_month')" :error="form.errors.billing_month" />
-        <FormTextarea id="notes" v-model="form.notes" :label="t('notes')" :error="form.errors.notes" />
-        <div v-if="can.steer" class="rounded-md border border-[hsl(var(--border))] p-3">
-          <div class="mb-1 text-sm font-medium">{{ t('project_shares') }}</div>
-          <p class="mb-2 text-xs text-[hsl(var(--muted-foreground))]">{{ t('project_shares_hint') }}</p>
-          <div v-for="(share, index) in form.shares" :key="index" class="mb-2 flex items-end gap-2">
-            <FormSelect :id="`share_person_${index}`" v-model="share.employee_id" :options="employeeOptions.slice(1)" class="flex-1" />
-            <FormInput :id="`share_value_${index}`" v-model="share.share" type="number" step="0.01" min="0" max="100" class="w-28" />
-            <Button type="button" variant="ghost" size="icon" :aria-label="t('delete')" @click="form.shares.splice(index, 1)"><Trash2 class="h-4 w-4" /></Button>
+    <div v-if="openReviews > 0" class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+      <span>{{ t('allocation_reviews_desc') }}</span>
+      <Link href="/projects/allocation-reviews"><Button size="sm" variant="outline">{{ t('allocation_reviews') }} ({{ openReviews }})</Button></Link>
+    </div>
+
+    <!-- Year at a glance -->
+    <div class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div class="rounded-lg border border-[hsl(var(--border))] p-4">
+        <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('revenue') }}</div>
+        <div class="text-xl font-semibold tabular-nums">{{ formatCurrency(totals.revenue) }}</div>
+      </div>
+      <div class="rounded-lg border border-[hsl(var(--border))] p-4">
+        <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('expenses') }}</div>
+        <div class="text-xl font-semibold tabular-nums">{{ formatCurrency(totals.expenses) }}</div>
+      </div>
+      <div class="rounded-lg border border-[hsl(var(--border))] p-4">
+        <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('project_net') }}</div>
+        <div class="text-xl font-semibold tabular-nums" :class="Number(totals.net) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ formatCurrency(totals.net) }}</div>
+      </div>
+      <div class="rounded-lg border border-[hsl(var(--border))] p-4">
+        <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('job_margin') }}</div>
+        <div class="text-xl font-semibold tabular-nums">{{ totalMargin === null ? '·' : `${totalMargin} %` }}</div>
+      </div>
+    </div>
+
+    <div class="mb-4 flex flex-wrap items-end gap-3">
+      <label class="relative min-w-[14rem] flex-1">
+        <Search class="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+        <input v-model="search" type="search" :placeholder="t('job_search')" :aria-label="t('job_search')" class="h-9 w-full rounded-md border border-[hsl(var(--input))] bg-transparent pl-8 pr-3 text-sm" />
+      </label>
+      <FormSelect id="filter_status" v-model="statusFilter" :options="statusOptions" :aria-label="t('status')" class="w-44" />
+      <label class="flex items-center gap-2 pb-2 text-sm">
+        <input v-model="showInactive" type="checkbox" class="h-4 w-4 rounded border-[hsl(var(--input))]" />
+        {{ t('project_show_inactive') }}
+      </label>
+      <a :href="`/projects/export?year=${year}`">
+        <Button size="sm" variant="ghost"><Download class="mr-1 h-4 w-4" /> CSV</Button>
+      </a>
+    </div>
+
+    <EmptyState
+      v-if="groups.length === 0"
+      :icon="FolderKanban"
+      :title="t('empty_projects_title')"
+      :description="t('empty_projects_desc')"
+      :action-label="can.manage ? t('job_new') : undefined"
+      @action="openCreate()"
+    />
+
+    <div class="space-y-4">
+      <Card v-for="group in groups" :key="group.key">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--border))] px-4 py-3">
+          <div class="flex items-center gap-2">
+            <Link v-if="group.group" :href="jobHref(group.group)" class="font-semibold hover:underline" :class="group.group.is_active ? '' : 'line-through'">{{ group.group.name }}</Link>
+            <span v-else class="font-semibold text-[hsl(var(--muted-foreground))]">{{ t('project_no_area') }}</span>
+            <span class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('job_count', { count: group.jobs.length }) }}</span>
+            <template v-if="group.group && can.manage">
+              <Button variant="ghost" size="icon" :aria-label="t('group_edit')" @click="openEdit(group.group)"><Pencil class="h-4 w-4" /></Button>
+              <Button v-if="group.jobs.length === 0" variant="ghost" size="icon" :aria-label="t('delete')" @click="confirmDelete(group.group)"><Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" /></Button>
+            </template>
           </div>
-          <Button type="button" size="sm" variant="outline" @click="form.shares.push({ employee_id: employees[0]?.id ?? '', share: form.shares.length ? '' : '100' })">
-            <Plus class="mr-1 h-3 w-3" /> {{ t('acquisition_add_person') }}
-          </Button>
-          <p v-if="form.errors.shares" class="mt-1 text-xs text-[hsl(var(--destructive))]">{{ form.errors.shares }}</p>
+          <div class="flex items-center gap-4 text-sm tabular-nums">
+            <span class="text-[hsl(var(--muted-foreground))]">{{ t('project_net') }}</span>
+            <span class="font-semibold" :class="group.sum.net < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ formatCurrency(group.sum.net) }}</span>
+            <span v-if="group.sum.expected" class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('job_expected_hint', { amount: formatCurrency(group.sum.expected) }) }}</span>
+            <Button v-if="can.manage" size="sm" variant="outline" @click="openCreate({ parent_id: group.group?.id ?? '' })"><Plus class="mr-1 h-3 w-3" /> {{ t('project') }}</Button>
+          </div>
         </div>
-        <label v-if="editing" class="flex items-center gap-2 text-sm">
-          <input v-model="form.is_active" type="checkbox" class="h-4 w-4 rounded border-[hsl(var(--input))]" />
-          {{ t('active') }}
-        </label>
-        <div class="flex justify-end gap-2">
-          <Button variant="outline" type="button" @click="showForm = false">{{ t('cancel') }}</Button>
-          <Button type="submit" :disabled="form.processing" :loading="form.processing">{{ t('save') }}</Button>
+        <div v-if="group.jobs.length" class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-[hsl(var(--muted-foreground))]">
+                <th class="px-4 py-2 font-medium">{{ t('project') }}</th>
+                <th class="hidden px-2 py-2 font-medium sm:table-cell">{{ t('status') }}</th>
+                <th v-if="can.steer" class="hidden px-2 py-2 font-medium md:table-cell">{{ t('project_shares') }}</th>
+                <th class="px-2 py-2 text-right font-medium">{{ t('revenue') }}</th>
+                <th class="hidden px-2 py-2 text-right font-medium sm:table-cell">{{ t('expenses') }}</th>
+                <th class="px-2 py-2 text-right font-medium">{{ t('project_net') }}</th>
+                <th class="hidden px-2 py-2 text-right font-medium md:table-cell">{{ t('job_margin') }}</th>
+                <th class="hidden w-10 px-2 py-2 sm:table-cell"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[hsl(var(--border))]">
+              <tr
+                v-for="job in group.jobs"
+                :key="job.id"
+                class="cursor-pointer hover:bg-[hsl(var(--muted))]/40"
+                @click="router.visit(jobHref(job))"
+              >
+                <td class="px-4 py-2">
+                  <Link :href="jobHref(job)" class="font-medium hover:underline" :class="job.is_active ? '' : 'text-[hsl(var(--muted-foreground))] line-through'" @click.stop>{{ job.name }}</Link>
+                  <div class="text-xs text-[hsl(var(--muted-foreground))]">
+                    {{ job.code }}<template v-if="job.customer"> · {{ job.customer }}</template><template v-if="job.kind === 'internal'"> · {{ t('project_kind_internal') }}</template>
+                  </div>
+                </td>
+                <td class="hidden px-2 py-2 sm:table-cell"><Badge :variant="statusVariant[job.status] ?? 'default'">{{ statusLabel(job.status) }}</Badge></td>
+                <td v-if="can.steer" class="hidden px-2 py-2 md:table-cell">
+                  <div class="flex flex-wrap gap-1" :class="job.key.inherited ? 'opacity-60' : ''" :title="job.key.inherited ? t('job_people_inherited') : ''">
+                    <span v-for="share in job.key.shares" :key="share.employee_id" class="rounded bg-[hsl(var(--muted))] px-1.5 py-0.5 text-xs whitespace-nowrap">
+                      {{ initials(share.employee_id) }}<template v-if="Number(share.share) !== 100"> {{ Number(share.share) }}%</template>
+                    </span>
+                  </div>
+                </td>
+                <td class="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+                  {{ money(job.revenue) }}
+                  <div v-if="!Number(job.revenue) && Number(job.expected)" class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('job_expected_hint', { amount: formatCurrency(job.expected) }) }}</div>
+                </td>
+                <td class="hidden px-2 py-2 text-right tabular-nums whitespace-nowrap sm:table-cell">{{ money(job.expenses) }}</td>
+                <td class="px-2 py-2 text-right font-medium tabular-nums whitespace-nowrap" :class="Number(job.net) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ money(job.net) }}</td>
+                <td class="hidden px-2 py-2 text-right tabular-nums md:table-cell">{{ margin(job) === null ? '' : `${margin(job)} %` }}</td>
+                <td class="hidden px-2 py-2 text-right sm:table-cell" @click.stop>
+                  <Button v-if="can.manage" variant="ghost" size="icon" :aria-label="t('edit')" @click="openEdit(job)"><Pencil class="h-4 w-4" /></Button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </form>
-    </Modal>
+      </Card>
+    </div>
+
+    <ProjectFormModal :open="showForm" :project="editing" :preset="preset" :options="formOptions" :can-steer="can.steer" @close="showForm = false" />
 
     <ConfirmDialog
       :open="showDelete"
       :title="t('confirm_delete')"
-      :message="deleting ? `${deleting.code} ${deleting.name}` : ''"
+      :message="deleting ? deleting.name : ''"
       :processing="deleteProcessing"
       @confirm="performDelete"
       @cancel="showDelete = false"

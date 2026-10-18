@@ -140,7 +140,9 @@ class ProjectApiTest extends SecurityTestCase
 
         $this->api()->getJson("/api/v1/projects/{$project->id}/report?from=2026-01-01&to=2026-12-31")
             ->assertOk()
-            ->assertJsonPath('data.total_expenses', '40.00');
+            ->assertJsonPath('data.total_expenses', '40.00')
+            // The line list of the job page (spec 010) stays out of the API.
+            ->assertJsonMissingPath('data.lines');
     }
 
     public function test_nothing_changes_while_the_module_is_off(): void

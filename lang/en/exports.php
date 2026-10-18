@@ -55,14 +55,14 @@ return [
         'net_profit_loss' => 'Net Profit / (Loss)',
     ],
     'project_report' => [
-        'title' => 'Project report',
-        'period' => 'Project report, :from to :to',
+        'title' => 'Job report',
+        'period' => 'Job report, :from to :to',
         'revenue' => 'Revenue',
         'total_revenue' => 'Total revenue',
         'expenses' => 'Expenses',
         'total_expenses' => 'Total expenses',
         'contribution' => 'Contribution margin',
-        'project' => 'Project',
+        'project' => 'Job',
     ],
     'cash_flow' => [
         'title' => 'Cash Flow Statement',
