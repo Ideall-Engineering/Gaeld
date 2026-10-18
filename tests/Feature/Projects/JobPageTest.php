@@ -181,6 +181,7 @@ class JobPageTest extends TestCase
             'group' => 'AI courses',
             'status' => 'done',
             'booked' => true,
+            'billing' => null,
             'share' => '75',
             'value' => '800.00',
             'part' => '600.00',

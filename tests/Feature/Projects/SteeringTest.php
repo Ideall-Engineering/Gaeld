@@ -96,19 +96,21 @@ class SteeringTest extends TestCase
         $this->assertSame('300.00', $anna['by_status']['in_progress']);
         $this->assertSame('0.00', $ben['by_status']['in_progress']);
 
-        $this->assertSame('950.00', $anna['contribution']);
-        $this->assertSame('650.00', $ben['contribution']);
+        // B is only quoted: shown beside, not counted.
+        $this->assertSame('700.00', $anna['contribution']);
+        $this->assertSame('400.00', $ben['contribution']);
+        $this->assertSame('250.00', $anna['prospects']);
+        $this->assertSame('250.00', $ben['prospects']);
+        $this->assertSame('B', $ben['prospect_jobs'][0]['code']);
         $this->assertSame('700.00', $anna['effect']);
         $this->assertSame('-700.00', $ben['effect']);
-        $this->assertSame('1650.00', $anna['value']);
-        $this->assertSame('-50.00', $ben['value']);
+        $this->assertSame('1400.00', $anna['value']);
+        $this->assertSame('-300.00', $ben['value']);
         $this->assertSame('2000.00', $anna['drawn']);
         $this->assertSame('100.00', $ben['drawn']);
-        $this->assertSame('-350.00', $anna['play']);
-        $this->assertSame('-150.00', $ben['play']);
-        $this->assertSame('-600.00', $anna['play_without_possible']);
-        $this->assertSame('-400.00', $ben['play_without_possible']);
-        $this->assertSame('-500.00', $data['totals']['play']);
+        $this->assertSame('-600.00', $anna['play']);
+        $this->assertSame('-400.00', $ben['play']);
+        $this->assertSame('-1000.00', $data['totals']['play']);
     }
 
     public function test_a_block_without_a_key_is_borne_equally_and_credits_nobody(): void
@@ -121,7 +123,7 @@ class SteeringTest extends TestCase
         $this->assertSame('-800.00', $people['Ben B']['effect']);
     }
 
-    public function test_open_jobs_count_but_not_in_the_safe_room(): void
+    public function test_open_jobs_are_shown_but_not_counted(): void
     {
         $open = $this->makeProject('O', Project::query()->where('code', 'AREA')->first());
         $open->update(['status' => ProjectStatus::Pipeline, 'expected_amount' => '200.00', 'billing_month' => '2026-10-01']);
@@ -129,8 +131,25 @@ class SteeringTest extends TestCase
         $people = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['people'])->keyBy('name');
 
         $this->assertSame('100.00', $people['Anna A']['by_status']['pipeline']);
-        $this->assertSame('-250.00', $people['Anna A']['play']);
-        $this->assertSame('-600.00', $people['Anna A']['play_without_possible']);
+        $this->assertSame('350.00', $people['Anna A']['prospects']);
+        $this->assertSame('-600.00', $people['Anna A']['play']);
+    }
+
+    public function test_amounts_expected_after_the_year_are_shown_but_not_counted(): void
+    {
+        $next = $this->makeProject('N', Project::query()->where('code', 'AREA')->first());
+        $next->update(['status' => ProjectStatus::InProgress, 'expected_amount' => '1000.00', 'billing_month' => '2027-02-01']);
+
+        $people = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['people'])->keyBy('name');
+
+        $this->assertSame('500.00', $people['Anna A']['later']);
+        $this->assertSame('N', $people['Anna A']['later_jobs'][0]['code']);
+        $this->assertSame('2027-02', $people['Anna A']['later_jobs'][0]['billing']);
+        $this->assertSame('-600.00', $people['Anna A']['play']);
+
+        $people2027 = collect(app(SteeringService::class)->forYear($this->organization->id, 2027)['people'])->keyBy('name');
+        $this->assertSame('500.00', $people2027['Anna A']['by_status']['in_progress'], 'In its own year it counts.');
+        $this->assertSame('0.00', $people2027['Anna A']['later']);
     }
 
     public function test_each_block_shows_how_its_numbers_come_about(): void
@@ -160,7 +179,7 @@ class SteeringTest extends TestCase
 
     public function test_a_project_without_any_key_is_reported_as_unshared(): void
     {
-        $this->makeProject('LOOSE')->update(['status' => ProjectStatus::Possible, 'expected_amount' => '123.00', 'billing_month' => '2026-09-01']);
+        $this->makeProject('LOOSE')->update(['status' => ProjectStatus::InProgress, 'expected_amount' => '123.00', 'billing_month' => '2026-09-01']);
 
         $this->assertSame('123.00', app(SteeringService::class)->forYear($this->organization->id, 2026)['unshared']);
     }
@@ -250,7 +269,7 @@ class SteeringTest extends TestCase
 
         $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
 
-        $this->assertSame('-500.00', $data['totals']['play'], 'Ben\'s part is still counted.');
+        $this->assertSame('-1000.00', $data['totals']['play'], 'Ben\'s part is still counted.');
         $this->assertCount(2, $data['people']);
     }
 

@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Steering plans only with what is certain:** a person's net from jobs and
+  the room for performance pay now count only jobs in progress or done, and
+  only the selected year. Open and quoted jobs, and amounts expected in a later
+  year, are listed below as not counted. The export follows.
 - **Delete a job from its edit window:** the job list's edit window has a
   delete button. When receipts or jobs still hang on a record, the reason now
   shows in the confirmation instead of the delete silently doing nothing.

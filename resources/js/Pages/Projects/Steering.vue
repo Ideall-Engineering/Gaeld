@@ -176,10 +176,33 @@ function removeItem(item) {
                     <td class="py-2">{{ t('steering_play') }}</td>
                     <td class="py-2 text-right tabular-nums" :class="Number(person.play) < 0 ? 'text-[hsl(var(--destructive))]' : 'text-green-700 dark:text-green-400'">{{ formatCurrency(person.play) }}</td>
                   </tr>
-                  <tr class="text-xs text-[hsl(var(--muted-foreground))]">
-                    <td class="py-1 pl-5">{{ t('steering_play_without_possible') }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.play_without_possible) }}</td>
-                  </tr>
+                  <template v-for="aside in [{ key: 'prospects', jobs: person.prospect_jobs }, { key: 'later', jobs: person.later_jobs }]" :key="aside.key">
+                    <tr v-if="aside.jobs?.length" class="text-xs text-[hsl(var(--muted-foreground))]">
+                      <td class="py-1">
+                        <button type="button" class="flex items-center gap-1 hover:underline" @click="toggle(aside.key + '-' + person.employee_id)">
+                          <component :is="open[aside.key + '-' + person.employee_id] ? ChevronDown : ChevronRight" class="h-4 w-4" />
+                          {{ t('steering_' + aside.key) }}
+                        </button>
+                      </td>
+                      <td class="py-1 text-right tabular-nums">{{ formatCurrency(person[aside.key]) }}</td>
+                    </tr>
+                    <tr v-if="aside.jobs?.length && open[aside.key + '-' + person.employee_id]">
+                      <td colspan="2" class="pb-2 pl-5">
+                        <table class="w-full text-xs text-[hsl(var(--muted-foreground))]">
+                          <tbody class="divide-y divide-[hsl(var(--border))]">
+                            <tr v-for="job in aside.jobs" :key="job.id">
+                              <td class="py-1">
+                                <Link :href="`/projects/${job.id}/report?from=${year}-01-01&to=${year}-12-31`" class="hover:underline">{{ job.name }}</Link>
+                                <span> · {{ t('project_status_' + job.status) }}<template v-if="aside.key === 'later' && job.billing"> · {{ job.billing }}</template></span>
+                              </td>
+                              <td class="py-1 text-right tabular-nums">{{ Number(job.share) }} %</td>
+                              <td class="py-1 text-right tabular-nums">{{ formatCurrency(job.part) }}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  </template>
                   <tr class="text-xs text-[hsl(var(--muted-foreground))]">
                     <td class="py-1 pl-5">{{ t('steering_booked_salary') }}</td>
                     <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.booked_salary) }}</td>

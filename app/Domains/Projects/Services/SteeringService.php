@@ -20,7 +20,9 @@ use Illuminate\Support\Facades\DB;
  * (spec 009, stage 5).
  *
  * Contribution: each customer project's value shared by its key (its own,
- * or the nearest one above it). The value is the booked net once revenue
+ * or the nearest one above it). Only jobs in progress or done count; open
+ * and quoted jobs, and amounts expected after the year, are shown beside it
+ * but never planned with. The value is the booked net once revenue
  * is booked, before that the expected amount less booked costs.
  * Effect of cost blocks: who did the work is credited the planned amount,
  * everyone bears their part by the carry key. Drawn: the planned drawings
@@ -28,6 +30,9 @@ use Illuminate\Support\Facades\DB;
  */
 class SteeringService
 {
+    /** Job statuses whose value is planned with. */
+    private const COUNTED = [ProjectStatus::InProgress, ProjectStatus::Done];
+
     public function __construct(
         private ProjectReportService $reports,
         private AcquisitionService $acquisitions,
@@ -75,43 +80,74 @@ class SteeringService
         }
         $unshared = '0.00';
         $jobs = array_fill_keys($ids, []);
+        $prospectJobs = array_fill_keys($ids, []);
+        $laterJobs = array_fill_keys($ids, []);
+        $later = $zero();
 
         foreach ($projects as $project) {
             if ($project->kind !== ProjectKind::Project || $project->status === ProjectStatus::Lost) {
                 continue;
             }
             $value = $this->valueOf($project, $booked[$project->id] ?? null, $year);
-            if (Money::compare($value, '0') === 0) {
+            $expectedLater = $this->expectedLater($project, $booked[$project->id] ?? null, $year);
+            if (Money::compare($value, '0') === 0 && $expectedLater === null) {
                 continue;
             }
+            $counted = in_array($project->status, self::COUNTED, true);
             $key = $this->keyFor($project, $byId, $shares);
             if ($key === []) {
-                $unshared = Money::add($unshared, $value);
+                if ($counted) {
+                    $unshared = Money::add($unshared, $value);
+                }
 
                 continue;
             }
-            foreach ($this->split($value, $key) as $employeeId => $part) {
-                if (isset($byStatus[$project->status->value][$employeeId])) {
-                    $byStatus[$project->status->value][$employeeId] = Money::add($byStatus[$project->status->value][$employeeId], $part);
-                    $jobs[$employeeId][] = [
-                        'id' => $project->id,
-                        'code' => $project->code,
-                        'name' => $project->name,
-                        'group' => $this->groupOf($project, $byId),
-                        'status' => $project->status->value,
-                        'booked' => Money::isPositive($booked[$project->id]['revenue'] ?? '0'),
-                        'share' => (string) (float) $key[$employeeId],
-                        'value' => $value,
-                        'part' => $part,
-                    ];
+            $entry = fn (string $employeeId, string $amount, string $part) => [
+                'id' => $project->id,
+                'code' => $project->code,
+                'name' => $project->name,
+                'group' => $this->groupOf($project, $byId),
+                'status' => $project->status->value,
+                'booked' => Money::isPositive($booked[$project->id]['revenue'] ?? '0'),
+                'billing' => ($project->billing_month ?? $project->target_date)?->format('Y-m'),
+                'share' => (string) (float) $key[$employeeId],
+                'value' => $amount,
+                'part' => $part,
+            ];
+            if (Money::compare($value, '0') !== 0) {
+                foreach ($this->split($value, $key) as $employeeId => $part) {
+                    if (isset($byStatus[$project->status->value][$employeeId])) {
+                        $byStatus[$project->status->value][$employeeId] = Money::add($byStatus[$project->status->value][$employeeId], $part);
+                        if ($counted) {
+                            $jobs[$employeeId][] = $entry($employeeId, $value, $part);
+                        } else {
+                            $prospectJobs[$employeeId][] = $entry($employeeId, $value, $part);
+                        }
+                    }
+                }
+            }
+            // Expected in a later year: visible, not planned with.
+            if ($expectedLater !== null) {
+                foreach ($this->split($expectedLater, $key) as $employeeId => $part) {
+                    if (isset($later[$employeeId])) {
+                        $later[$employeeId] = Money::add($later[$employeeId], $part);
+                        $laterJobs[$employeeId][] = $entry($employeeId, $expectedLater, $part);
+                    }
                 }
             }
         }
 
+        // Only what is being done or done is planned with.
         $contribution = $zero();
-        foreach ($byStatus as $amounts) {
+        $prospects = $zero();
+        foreach ($byStatus as $status => $amounts) {
+            $counted = in_array(ProjectStatus::from($status), self::COUNTED, true);
             foreach ($amounts as $id => $amount) {
-                $contribution[$id] = Money::add($contribution[$id], $amount);
+                if ($counted) {
+                    $contribution[$id] = Money::add($contribution[$id], $amount);
+                } else {
+                    $prospects[$id] = Money::add($prospects[$id], $amount);
+                }
             }
         }
 
@@ -206,6 +242,8 @@ class SteeringService
                 'by_status' => array_map(fn (array $amounts) => $amounts[$id], $byStatus),
                 // Spec 010: what each job brought this person, largest first.
                 'jobs' => collect($jobs[$id])->sortByDesc(fn (array $job) => (float) $job['part'])->values()->all(),
+                'prospect_jobs' => collect($prospectJobs[$id])->sortByDesc(fn (array $job) => (float) $job['part'])->values()->all(),
+                'later_jobs' => collect($laterJobs[$id])->sortByDesc(fn (array $job) => (float) $job['part'])->values()->all(),
                 'contribution' => $contribution[$id],
                 'credit' => $credit[$id],
                 'burden' => Money::negate($burden[$id]),
@@ -216,8 +254,9 @@ class SteeringService
                 'drawn' => $drawn,
                 'booked_salary' => $salaries[$id] ?? '0.00',
                 'play' => $play,
-                // Without what is only in prospect: open jobs and quotes still out.
-                'play_without_possible' => Money::subtract($play, Money::add($byStatus[ProjectStatus::Pipeline->value][$id], $byStatus[ProjectStatus::Possible->value][$id])),
+                // Shown, not counted: open and quoted jobs, and later years.
+                'prospects' => $prospects[$id],
+                'later' => $later[$id],
             ];
         }
 
@@ -257,6 +296,23 @@ class SteeringService
             : $project->status !== ProjectStatus::Done && $year === (int) now()->year;
 
         return Money::subtract($belongs && $project->expected_amount !== null ? (string) $project->expected_amount : '0.00', $expenses);
+    }
+
+    /**
+     * The expected amount of a job that is to be invoiced after the given
+     * year and has no revenue booked in it yet; null when there is none.
+     *
+     * @param  array{revenue: string, expenses: string}|null  $booked
+     */
+    private function expectedLater(Project $project, ?array $booked, int $year): ?string
+    {
+        $planned = $project->billing_month ?? $project->target_date;
+        if ($planned === null || (int) $planned->year <= $year || $project->expected_amount === null
+            || $project->status === ProjectStatus::Done || Money::isPositive($booked['revenue'] ?? '0')) {
+            return null;
+        }
+
+        return (string) $project->expected_amount;
     }
 
     /**
@@ -379,7 +435,7 @@ class SteeringService
      */
     private function totals(array $rows): array
     {
-        $fields = ['contribution', 'credit', 'burden', 'effect', 'value', 'planned_items', 'acquisitions', 'drawn', 'booked_salary', 'play', 'play_without_possible'];
+        $fields = ['contribution', 'credit', 'burden', 'effect', 'value', 'planned_items', 'acquisitions', 'drawn', 'booked_salary', 'play', 'prospects', 'later'];
         $totals = array_fill_keys($fields, '0.00');
         foreach ($rows as $row) {
             foreach ($fields as $field) {
