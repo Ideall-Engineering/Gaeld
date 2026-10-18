@@ -214,7 +214,9 @@ function openEdit(project) {
 const showDelete = ref(false)
 const deleting = ref(null)
 const deleteProcessing = ref(false)
+const deleteErrors = ref({})
 function confirmDelete(project) {
+  deleteErrors.value = {}
   deleting.value = project
   showDelete.value = true
 }
@@ -223,11 +225,12 @@ function performDelete() {
   deleteProcessing.value = true
   router.delete(`/projects/${deleting.value.id}`, {
     preserveScroll: true,
-    onFinish: () => {
-      deleteProcessing.value = false
+    onSuccess: () => {
       showDelete.value = false
       deleting.value = null
     },
+    onError: errors => { deleteErrors.value = errors },
+    onFinish: () => { deleteProcessing.value = false },
   })
 }
 
@@ -607,7 +610,7 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
       </div>
     </Card>
 
-    <ProjectFormModal :open="showForm" :project="editing" :preset="preset" :options="formOptions" :can-steer="can.steer" @close="showForm = false" />
+    <ProjectFormModal :open="showForm" :project="editing" :preset="preset" :options="formOptions" :can-steer="can.steer" :can-delete="can.manage" @close="showForm = false" />
 
     <BudgetGroupFormModal
       v-if="plan"
@@ -627,6 +630,7 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
       :title="t('confirm_delete')"
       :message="deleting ? deleting.name : ''"
       :processing="deleteProcessing"
+      :errors="deleteErrors"
       @confirm="performDelete"
       @cancel="showDelete = false"
     />

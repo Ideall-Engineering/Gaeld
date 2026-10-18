@@ -66,11 +66,13 @@ const jobName = computed(() => Object.fromEntries(props.report.projects.map(p =>
 const showForm = ref(false)
 const showDelete = ref(false)
 const deleting = ref(false)
+const deleteErrors = ref({})
 function performDelete() {
   deleting.value = true
   router.delete(`/projects/${props.project.id}`, {
     data: { to_index: 1 },
-    onFinish: () => { deleting.value = false; showDelete.value = false },
+    onError: errors => { deleteErrors.value = errors },
+    onFinish: () => { deleting.value = false },
   })
 }
 const showNewJob = ref(false)
@@ -101,7 +103,7 @@ const showNewJob = ref(false)
         <FormSelect id="year" :model-value="isWholeYear ? year : ''" :options="isWholeYear ? yearOptions : [{ value: '', label: `${formatDate(filters.from)} – ${formatDate(filters.to)}` }, ...yearOptions]" :aria-label="t('year')" class="w-40" @update:model-value="v => v && changeYear(v)" />
         <ExportDropdown :base-url="`/projects/${project.id}/report/export`" :params="exportParams" />
         <Button v-if="can.manage" variant="outline" @click="showForm = true"><Pencil class="mr-1 h-4 w-4" /> {{ t('edit') }}</Button>
-        <Button v-if="can.manage && report.lines.length === 0 && jobs.length === 0" variant="ghost" size="icon" :aria-label="t('delete')" @click="showDelete = true">
+        <Button v-if="can.manage && jobs.length === 0" variant="ghost" size="icon" :aria-label="t('delete')" @click="deleteErrors = {}; showDelete = true">
           <Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" />
         </Button>
       </div>
@@ -246,6 +248,7 @@ const showNewJob = ref(false)
       :title="t('confirm_delete')"
       :message="project.name"
       :processing="deleting"
+      :errors="deleteErrors"
       @confirm="performDelete"
       @cancel="showDelete = false"
     />

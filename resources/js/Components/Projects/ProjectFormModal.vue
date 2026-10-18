@@ -1,7 +1,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { useForm } from '@inertiajs/vue3'
+import { router, useForm } from '@inertiajs/vue3'
 import Modal from '@/Components/UI/Modal.vue'
+import ConfirmDialog from '@/Components/UI/ConfirmDialog.vue'
 import Button from '@/Components/UI/Button.vue'
 import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
@@ -20,6 +21,9 @@ const props = defineProps({
   preset: { type: Object, default: () => ({}) },
   options: { type: Object, required: true },
   canSteer: { type: Boolean, default: false },
+  // Offer deleting the record; the server refuses it while receipts or
+  // jobs hang on it, and the reason shows in the confirmation.
+  canDelete: { type: Boolean, default: false },
   // Sent along with a new record, e.g. { allocate_line_id: 12 } to give the
   // new job a receipt right away (spec 010).
   extra: { type: Object, default: () => ({}) },
@@ -103,6 +107,23 @@ function evenly() {
   }))
 }
 
+const confirmingDelete = ref(false)
+const deleteErrors = ref({})
+const deleteProcessing = ref(false)
+function askDelete() {
+  deleteErrors.value = {}
+  confirmingDelete.value = true
+}
+function performDelete() {
+  deleteProcessing.value = true
+  router.delete(`/projects/${props.project.id}`, {
+    preserveScroll: true,
+    onSuccess: () => { confirmingDelete.value = false; emit('close') },
+    onError: errors => { deleteErrors.value = errors },
+    onFinish: () => { deleteProcessing.value = false },
+  })
+}
+
 function submit() {
   const options = { preserveScroll: true, onSuccess: () => emit('close') }
   if (props.project) {
@@ -176,9 +197,21 @@ function submit() {
       </div>
 
       <div class="flex justify-end gap-2">
+        <Button v-if="project && canDelete" variant="ghost" type="button" class="mr-auto text-[hsl(var(--destructive))]" @click="askDelete">
+          <Trash2 class="mr-1 h-4 w-4" /> {{ t('delete') }}
+        </Button>
         <Button variant="outline" type="button" @click="emit('close')">{{ t('cancel') }}</Button>
         <Button type="submit" :disabled="form.processing" :loading="form.processing">{{ t('save') }}</Button>
       </div>
     </form>
   </Modal>
+  <ConfirmDialog
+    :open="confirmingDelete"
+    :title="t('confirm_delete')"
+    :message="project?.name ?? ''"
+    :processing="deleteProcessing"
+    :errors="deleteErrors"
+    @confirm="performDelete"
+    @cancel="confirmingDelete = false"
+  />
 </template>

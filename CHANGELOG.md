@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Delete a job from its edit window:** the job list's edit window has a
+  delete button. When receipts or jobs still hang on a record, the reason now
+  shows in the confirmation instead of the delete silently doing nothing.
 - **Open job status is back:** "Open" marks a job in prospect that still
   needs work before a quote can go out. Sending its quote moves it to "quote
   sent". The steering line without prospects now leaves out open jobs too.
