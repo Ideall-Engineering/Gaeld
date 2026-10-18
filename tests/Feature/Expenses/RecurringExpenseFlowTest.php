@@ -56,6 +56,36 @@ class RecurringExpenseFlowTest extends TestCase
         ]);
     }
 
+    public function test_a_plan_only_schedule_keeps_its_start(): void
+    {
+        $this->actingAs($this->user)
+            ->withSession(['current_organization_id' => $this->org->id])
+            ->post(route('expenses.recurring.store'), [
+                'category' => 'Software',
+                'description' => 'Büromiete',
+                'amount' => '1366.00',
+                'amount_basis' => 'net',
+                'frequency' => 'monthly',
+                'starts_on' => '2026-10-01',
+                'next_due_date' => '2026-11-01',
+                'creates_expense' => false,
+            ])
+            ->assertRedirect(route('expenses.recurring.index'));
+
+        $this->assertDatabaseHas('recurring_expenses', ['description' => 'Büromiete', 'starts_on' => '2026-10-01', 'creates_expense' => false]);
+
+        $this->actingAs($this->user)
+            ->withSession(['current_organization_id' => $this->org->id])
+            ->post(route('expenses.recurring.store'), [
+                'category' => 'Software',
+                'amount' => '10.00',
+                'frequency' => 'monthly',
+                'starts_on' => '2026-12-01',
+                'next_due_date' => '2026-11-01',
+            ])
+            ->assertSessionHasErrors('starts_on');
+    }
+
     public function test_retry_after_success_does_not_create_a_duplicate_expense(): void
     {
         RecurringExpense::create([

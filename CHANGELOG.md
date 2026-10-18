@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Recurring expenses feed the plan:** a recurring expense now counts in the
+  plan of its account from its start day (new field), so cost blocks without a
+  set amount and the steering of people include it. A schedule can be set to
+  plan only: it moves on each due day without creating a pending expense, for
+  payments that arrive through the bank anyway (rent by standing order).
 - **Payment expected on:** a job can carry the day its payment is expected
   (edit window, API, and right in the list of outstanding payments). It places
   the expected amount in its year ahead of billing month and target date.

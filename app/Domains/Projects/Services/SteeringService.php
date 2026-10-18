@@ -3,6 +3,7 @@
 namespace App\Domains\Projects\Services;
 
 use App\Domains\Accounting\Models\Budget;
+use App\Domains\Expenses\Services\RecurringExpensePlan;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
@@ -39,6 +40,7 @@ class SteeringService
     public function __construct(
         private ProjectReportService $reports,
         private AcquisitionService $acquisitions,
+        private RecurringExpensePlan $recurring,
     ) {}
 
     /**
@@ -185,19 +187,28 @@ class SteeringService
             ->where('organization_id', $organizationId)
             ->where('fiscal_year', $year)
             ->pluck('monthly_amount', 'account_id');
+        $recurring = $this->recurring->forYear($organizationId, $year);
 
         $credit = $zero();
         $burden = $zero();
         $blocks = [];
         foreach ($groups as $group) {
             // How the plan comes about, shown when a block is opened: a set
-            // amount, or twelve times the monthly budget of each account.
-            $sources = $group->accounts->sortBy('code')->map(fn ($a) => [
-                'code' => $a->code,
-                'name' => $a->name,
-                'monthly' => (string) ($budgets[$a->id] ?? '0.00'),
-                'yearly' => Money::round(Money::multiply((string) ($budgets[$a->id] ?? '0'), '12')),
-            ])->values()->all();
+            // amount, or per account twelve times the monthly budget plus
+            // the recurring expenses due in the year.
+            $sources = $group->accounts->sortBy('code')->map(function ($a) use ($budgets, $recurring) {
+                $budgetYearly = Money::round(Money::multiply((string) ($budgets[$a->id] ?? '0'), '12'));
+                $items = $recurring[$a->id] ?? [];
+
+                return [
+                    'code' => $a->code,
+                    'name' => $a->name,
+                    'monthly' => (string) ($budgets[$a->id] ?? '0.00'),
+                    'budget_yearly' => $budgetYearly,
+                    'recurring' => $items,
+                    'yearly' => Money::add($budgetYearly, RecurringExpensePlan::total($items)),
+                ];
+            })->values()->all();
             $plan = $group->plan_amount !== null
                 ? (string) $group->plan_amount
                 : Money::round(array_reduce($sources, fn (string $sum, array $s) => Money::add($sum, $s['yearly']), '0.00'));

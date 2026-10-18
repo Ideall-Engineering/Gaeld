@@ -574,6 +574,14 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
             </tr>
             <tr v-if="openBlocks[block.id]" class="bg-[hsl(var(--muted))]/20">
               <td :colspan="can.steer ? 7 : 6" class="px-4 pb-3 pt-1">
+                <div v-if="block.recurring?.length" class="mb-2 rounded-md border border-[hsl(var(--border))] p-2 text-xs">
+                  <div class="mb-1 font-medium">{{ t('block_recurring_title') }}</div>
+                  <div v-for="r in block.recurring" :key="r.id" class="flex justify-between gap-3">
+                    <Link :href="`/expenses/recurring/${r.uuid}/edit`" class="hover:underline">{{ r.account_code }} · {{ r.label }}</Link>
+                    <span class="tabular-nums whitespace-nowrap">{{ t('block_recurring_item', { count: r.count, amount: formatCurrency(r.amount) }) }} = {{ formatCurrency(r.yearly) }}</span>
+                  </div>
+                  <p v-if="!block.plan_from_budgets" class="mt-1 text-[hsl(var(--muted-foreground))]">{{ t('block_recurring_ignored') }}</p>
+                </div>
                 <p v-if="blockLines[block.id] === 'loading'" class="py-2 text-xs text-[hsl(var(--muted-foreground))]">{{ t('loading') }}</p>
                 <p v-else-if="blockLines[block.id] === 'error'" class="py-2 text-xs text-[hsl(var(--destructive))]">{{ t('block_lines_error') }}</p>
                 <p v-else-if="!blockLines[block.id]?.length" class="py-2 text-xs text-[hsl(var(--muted-foreground))]">{{ t('block_lines_empty') }}</p>

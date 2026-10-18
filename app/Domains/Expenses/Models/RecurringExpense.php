@@ -37,9 +37,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $expense_account_code
  * @property string|null $bank_account_code
  * @property RecurrenceFrequency $frequency
+ * @property Carbon|null $starts_on
  * @property Carbon $next_due_date
  * @property Carbon|null $end_date
  * @property bool $is_active
+ * @property bool $creates_expense
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Organization $organization
@@ -66,18 +68,22 @@ class RecurringExpense extends Model
         'expense_account_id',
         'bank_account_code',
         'frequency',
+        'starts_on',
         'next_due_date',
         'end_date',
         'is_active',
+        'creates_expense',
     ];
 
     protected function casts(): array
     {
         return [
             'frequency' => RecurrenceFrequency::class,
+            'starts_on' => 'date',
             'next_due_date' => 'date',
             'end_date' => 'date',
             'is_active' => 'boolean',
+            'creates_expense' => 'boolean',
             'amount' => 'decimal:2',
             'vat_amount' => 'decimal:2',
         ];

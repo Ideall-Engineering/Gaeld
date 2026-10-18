@@ -56,9 +56,11 @@ class RecurringExpenseRequest extends FormRequest
             'currency' => ['nullable', 'string', 'size:3'],
             'payment_method' => ['nullable', Rule::in(['cash', 'card', 'bank_transfer', 'other'])],
             'frequency' => ['required', Rule::enum(RecurrenceFrequency::class)],
+            'starts_on' => ['nullable', 'date', 'before_or_equal:next_due_date'],
             'next_due_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after:next_due_date'],
             'is_active' => ['sometimes', 'boolean'],
+            'creates_expense' => ['sometimes', 'boolean'],
             'vat_rate_id' => [
                 'nullable',
                 Rule::exists('vat_rates', 'id')->where('organization_id', $orgId),

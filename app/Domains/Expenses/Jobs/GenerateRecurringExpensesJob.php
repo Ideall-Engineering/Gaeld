@@ -40,7 +40,11 @@ class GenerateRecurringExpensesJob implements ShouldQueue
                         return;
                     }
 
-                    $this->generateExpense($recurring, $createExpense);
+                    // Planned only: the payment arrives through the bank,
+                    // a pending expense would book it a second time.
+                    if ($recurring->creates_expense) {
+                        $this->generateExpense($recurring, $createExpense);
+                    }
                     $this->advanceSchedule($recurring);
                 });
             } catch (\DomainException|\InvalidArgumentException $e) {

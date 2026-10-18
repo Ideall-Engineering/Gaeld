@@ -45,6 +45,8 @@ const form = useForm({
   next_due_date: props.recurringExpense.next_due_date,
   end_date: props.recurringExpense.end_date ?? '',
   is_active: props.recurringExpense.is_active,
+  starts_on: (props.recurringExpense.starts_on ?? '').slice(0, 10),
+  creates_expense: props.recurringExpense.creates_expense ?? true,
 })
 
 function submit() {
@@ -183,6 +185,24 @@ const paymentMethodOptions = computed(() => [
               :label="t('end_date')"
               :error="form.errors.end_date"
             />
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <FormInput
+              id="starts_on"
+              v-model="form.starts_on"
+              type="date"
+              :label="t('recurring_starts_on')"
+              :hint="t('recurring_starts_on_hint')"
+              :error="form.errors.starts_on"
+            />
+            <div class="sm:col-span-2">
+              <label class="flex items-center gap-2 text-sm font-medium">
+                <input v-model="form.creates_expense" type="checkbox" class="h-4 w-4 rounded border-[hsl(var(--input))]" />
+                {{ t('recurring_creates_expense') }}
+              </label>
+              <p class="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{{ t('recurring_creates_expense_hint') }}</p>
+            </div>
           </div>
 
           <!-- Expense details -->

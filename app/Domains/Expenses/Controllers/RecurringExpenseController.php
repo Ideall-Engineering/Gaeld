@@ -95,8 +95,10 @@ class RecurringExpenseController extends Controller
                 : ($validated['expense_account_code'] ?? null),
             'bank_account_code' => $validated['bank_account_code'] ?? null,
             'frequency' => $validated['frequency'],
+            'starts_on' => $validated['starts_on'] ?? $validated['next_due_date'],
             'next_due_date' => $validated['next_due_date'],
             'end_date' => $validated['end_date'] ?? null,
+            'creates_expense' => $validated['creates_expense'] ?? true,
         ]);
 
         return redirect()->route('expenses.recurring.index')
@@ -158,6 +160,7 @@ class RecurringExpenseController extends Controller
         $validated['expense_account_code'] = $account !== null
             ? $account->code
             : ($validated['expense_account_code'] ?? null);
+        $validated['starts_on'] = $validated['starts_on'] ?? $recurring->starts_on ?? $validated['next_due_date'];
 
         $recurring->update($validated);
 

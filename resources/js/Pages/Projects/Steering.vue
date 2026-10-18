@@ -374,10 +374,16 @@ function removeItem(item) {
                       <td class="py-1 pl-5" colspan="2">
                         <template v-if="block.plan_fixed">{{ t('steering_block_plan_fixed') }}</template>
                         <template v-else-if="block.accounts?.length">
-                          <div v-for="a in block.accounts" :key="a.code" class="flex justify-between gap-3">
-                            <span>{{ a.code }} {{ a.name }}: {{ t('steering_block_monthly', { amount: formatCurrency(a.monthly) }) }}</span>
-                            <span class="tabular-nums">{{ formatCurrency(a.yearly) }}</span>
-                          </div>
+                          <template v-for="a in block.accounts" :key="a.code">
+                            <div class="flex justify-between gap-3">
+                              <span>{{ a.code }} {{ a.name }}: {{ t('steering_block_monthly', { amount: formatCurrency(a.monthly) }) }}</span>
+                              <span class="tabular-nums">{{ formatCurrency(a.budget_yearly ?? a.yearly) }}</span>
+                            </div>
+                            <div v-for="r in a.recurring ?? []" :key="r.id" class="flex justify-between gap-3 pl-3">
+                              <a :href="`/expenses/recurring/${r.uuid}/edit`" class="hover:underline" @click.stop>{{ t('steering_block_recurring', { label: r.label, count: r.count, amount: formatCurrency(r.amount) }) }}</a>
+                              <span class="tabular-nums">{{ formatCurrency(r.yearly) }}</span>
+                            </div>
+                          </template>
                         </template>
                         <template v-else>{{ t('steering_block_plan_none') }}</template>
                       </td>

@@ -6,6 +6,7 @@ use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\Budget;
 use App\Domains\Accounting\Support\AccountDisplayName;
+use App\Domains\Expenses\Services\RecurringExpensePlan;
 use App\Domains\Projects\Enums\BudgetGroupKind;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Models\BudgetGroup;
@@ -25,6 +26,7 @@ class PlanActualService
 {
     public function __construct(
         private ProjectReportService $reports,
+        private RecurringExpensePlan $recurring,
     ) {}
 
     /**
@@ -77,6 +79,7 @@ class PlanActualService
             ->where('organization_id', $organizationId)
             ->where('fiscal_year', $year)
             ->pluck('monthly_amount', 'account_id');
+        $recurring = $this->recurring->forYear($organizationId, $year);
 
         $actualOf = function (int $accountId) use ($balances, $accounts): string {
             $row = $balances->get($accountId);
@@ -103,11 +106,17 @@ class PlanActualService
             $booked = '0.00';
             $customer = '0.00';
             $budgeted = '0.00';
+            $planned = [];
             foreach ($group->accounts as $account) {
                 $grouped[$account->id] = true;
                 $booked = Money::add($booked, $actualOf($account->id));
                 $customer = Money::add($customer, $customerShare[$account->code] ?? '0.00');
                 $budgeted = Money::add($budgeted, Money::multiply((string) ($budgets[$account->id] ?? '0'), '12'));
+                // Recurring expenses add to the plan of their account.
+                foreach ($recurring[$account->id] ?? [] as $item) {
+                    $budgeted = Money::add($budgeted, $item['yearly']);
+                    $planned[] = $item + ['account_code' => $account->code];
+                }
             }
 
             $actual = Money::subtract($booked, $customer);
@@ -121,6 +130,7 @@ class PlanActualService
                 'name' => $group->name,
                 'kind' => $group->kind->value,
                 'plan_from_budgets' => $group->plan_amount === null,
+                'recurring' => $planned,
                 'accounts' => $group->accounts->sortBy('code')->map(fn (Account $a) => ['id' => $a->id, 'code' => $a->code, 'name' => $a->display_name])->values()->all(),
                 'notes' => $group->notes,
                 // Carry and credit keys are steering data: owners only.

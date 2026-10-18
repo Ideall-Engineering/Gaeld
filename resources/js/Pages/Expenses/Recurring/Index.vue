@@ -87,6 +87,7 @@ const columns = computed(() => [
             <Badge :variant="row.is_active ? 'success' : 'warning'">
               {{ t(row.is_active ? 'recurring_status_active' : 'recurring_status_paused') }}
             </Badge>
+            <Badge v-if="row.creates_expense === false" variant="secondary" class="ml-1">{{ t('recurring_plan_only') }}</Badge>
           </template>
           <template #cell-actions="{ row }">
             <div class="flex justify-end gap-1">

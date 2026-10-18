@@ -8,10 +8,15 @@ use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\Budget;
 use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Expenses\Actions\CreateExpenseAction;
+use App\Domains\Expenses\Jobs\GenerateRecurringExpensesJob;
+use App\Domains\Expenses\Models\RecurringExpense;
+use App\Domains\Invoicing\Enums\RecurrenceFrequency;
 use App\Domains\Projects\DTOs\LineAllocationData;
 use App\Domains\Projects\Enums\BudgetGroupKind;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Services\PlanActualService;
+use App\Domains\Projects\Services\SteeringService;
 use App\Domains\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -83,6 +88,41 @@ class PlanActualTest extends TestCase
 
         $this->assertSame('1800.00', $row['plan']);
         $this->assertTrue($row['plan_from_budgets']);
+    }
+
+    public function test_recurring_expenses_add_to_the_plan_of_their_account_from_their_start(): void
+    {
+        $group = $this->group('Miete', [$this->software1, $this->software2], null);
+        $next = $this->group('Miete', [$this->software1], null, year: 2027);
+        $fixed = $this->group('Marketing', [$this->marketing], '500.00');
+        Budget::create(['organization_id' => $this->organization->id, 'account_id' => $this->software2->id, 'fiscal_year' => 2026, 'monthly_amount' => '10.00']);
+        $this->recurring($this->software1, '1366.00', '2026-10-01');
+        $this->recurring($this->marketing, '50.00', '2026-01-15', RecurrenceFrequency::Quarterly);
+        // Paused without an end: counts nowhere.
+        $this->recurring($this->software1, '999.00', '2026-01-01')->update(['is_active' => false]);
+
+        $row = $this->row('2026-10-18', $group);
+        $this->assertSame('4218.00', $row['plan'], 'October to December rent plus twelve months of budget.');
+        $this->assertSame([3], array_column($row['recurring'], 'count'));
+        $this->assertSame('16392.00', $this->row('2026-10-18', $next, 2027)['plan']);
+        $this->assertSame('500.00', $this->row('2026-10-18', $fixed)['plan'], 'A set amount is not topped up.');
+
+        $block = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['blocks'])->firstWhere('id', $group->id);
+        $this->assertSame('4218.00', $block['plan']);
+        $this->assertSame('4098.00', $block['accounts'][0]['yearly']);
+    }
+
+    public function test_a_plan_only_schedule_moves_on_without_creating_an_expense(): void
+    {
+        Carbon::setTestNow('2026-11-01 08:00:00');
+        $rent = $this->recurring($this->software1, '1366.00', '2026-11-01');
+        $rent->update(['creates_expense' => false, 'starts_on' => '2026-10-01']);
+
+        app(GenerateRecurringExpensesJob::class)->handle(app(CreateExpenseAction::class));
+
+        $this->assertDatabaseCount('expenses', 0);
+        $this->assertSame('2026-12-01', $rent->fresh()->next_due_date->toDateString());
+        $this->assertSame('2026-10-01', $rent->fresh()->starts_on->toDateString());
     }
 
     public function test_shares_of_customer_projects_are_not_internal(): void
@@ -222,10 +262,27 @@ class PlanActualTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function row(string $asOf, BudgetGroup $group): array
+    private function row(string $asOf, BudgetGroup $group, int $year = 2026): array
     {
-        $plan = app(PlanActualService::class)->forYear($this->organization->id, 2026, Carbon::parse($asOf));
+        $plan = app(PlanActualService::class)->forYear($this->organization->id, $year, Carbon::parse($asOf));
 
         return collect($plan['groups'])->firstWhere('id', $group->id);
+    }
+
+    private function recurring(Account $account, string $amount, string $start, RecurrenceFrequency $frequency = RecurrenceFrequency::Monthly): RecurringExpense
+    {
+        return RecurringExpense::create([
+            'organization_id' => $this->organization->id,
+            'category' => 'Miete',
+            'description' => 'Büromiete',
+            'amount' => $amount,
+            'vat_amount' => '0.00',
+            'expense_account_id' => $account->id,
+            'expense_account_code' => $account->code,
+            'frequency' => $frequency,
+            'starts_on' => $start,
+            'next_due_date' => $start,
+            'is_active' => true,
+        ]);
     }
 }
