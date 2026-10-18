@@ -3045,4 +3045,11 @@ return [
     'person_jobs_empty' => 'Nessun incarico con quota nell’anno.',
     'person_expected' => 'previsto',
     'more' => 'Altro',
+    'job_filter_all_people' => 'Tutte le persone',
+    'job_filter_all_projects' => 'Tutti i progetti',
+    'job_sort' => 'Ordinamento',
+    'job_sort_code' => 'Per numero',
+    'job_sort_net' => 'Per netto',
+    'job_sort_revenue' => 'Per ricavo',
+    'job_sort_margin' => 'Per margine',
 ];

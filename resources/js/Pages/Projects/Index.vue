@@ -54,9 +54,18 @@ function stored() {
 const search = ref('')
 const statusFilter = ref(stored().status ?? 'not_lost')
 const showInactive = ref(!!stored().inactive)
-watch([statusFilter, showInactive], () => {
+const personFilter = ref(stored().person ?? '')
+const groupFilter = ref(stored().group ?? '')
+const sortBy = ref(stored().sort ?? 'code')
+watch([statusFilter, showInactive, personFilter, groupFilter, sortBy], () => {
   try {
-    localStorage.setItem(FILTER_KEY, JSON.stringify({ status: statusFilter.value, inactive: showInactive.value }))
+    localStorage.setItem(FILTER_KEY, JSON.stringify({
+      status: statusFilter.value,
+      inactive: showInactive.value,
+      person: personFilter.value,
+      group: groupFilter.value,
+      sort: sortBy.value,
+    }))
   } catch {
     // Remembering the filter is a convenience only.
   }
@@ -95,8 +104,28 @@ const initials = id => {
   return name.split(' ').map(part => part[0]).join('').slice(0, 3).toUpperCase()
 }
 
+const personOptions = computed(() => [{ value: '', label: t('job_filter_all_people') }, ...props.employees.map(e => ({ value: e.id, label: e.name }))])
+const groupOptions = computed(() => [
+  { value: '', label: t('job_filter_all_projects') },
+  ...props.projects.filter(p => p.kind === 'area' && !p.parent_id).map(p => ({ value: String(p.id), label: p.name })),
+  { value: 'none', label: t('project_no_area') },
+])
+const sortOptions = computed(() => [
+  { value: 'code', label: t('job_sort_code') },
+  { value: 'net', label: t('job_sort_net') },
+  { value: 'revenue', label: t('job_sort_revenue') },
+  { value: 'margin', label: t('job_sort_margin') },
+])
+const sorters = {
+  net: (a, b) => Number(b.net || 0) - Number(a.net || 0),
+  revenue: (a, b) => Number(b.revenue || 0) - Number(a.revenue || 0),
+  margin: (a, b) => (margin(b) ?? -Infinity) - (margin(a) ?? -Infinity),
+}
+
 const matches = (job) => {
   if (!showInactive.value && !job.is_active) return false
+  if (personFilter.value && !keyOf(job).shares.some(s => s.employee_id === personFilter.value)) return false
+  if (groupFilter.value && String(groupOf(job)?.id ?? 'none') !== groupFilter.value) return false
   if (statusFilter.value === 'not_lost' && job.status === 'lost') return false
   if (statusFilter.value && statusFilter.value !== 'not_lost' && job.status !== statusFilter.value) return false
   const q = search.value.trim().toLowerCase()
@@ -124,8 +153,9 @@ const groups = computed(() => {
     .forEach(job => add(groupOf(job)).jobs.push({ ...job, ...(figures.value[job.id] ?? {}), key: keyOf(job) }))
 
   return list
-    .filter(g => g.jobs.length > 0 || (!search.value && g.group && (showInactive.value || g.group.is_active)))
+    .filter(g => g.jobs.length > 0 || (!search.value && !personFilter.value && !groupFilter.value && g.group && (showInactive.value || g.group.is_active)))
     .map(g => {
+      if (sorters[sortBy.value]) g.jobs.sort(sorters[sortBy.value])
       const sum = g.jobs.reduce((s, j) => ({
         revenue: s.revenue + Number(j.revenue || 0),
         expenses: s.expenses + Number(j.expenses || 0),
@@ -265,7 +295,10 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
         <Search class="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
         <input v-model="search" type="search" :placeholder="t('job_search')" :aria-label="t('job_search')" class="h-9 w-full rounded-md border border-[hsl(var(--input))] bg-transparent pl-8 pr-3 text-sm" />
       </label>
-      <FormSelect id="filter_status" v-model="statusFilter" :options="statusOptions" :aria-label="t('status')" class="w-44" />
+      <FormSelect id="filter_group" v-model="groupFilter" :options="groupOptions" :aria-label="t('project_area')" class="w-44" />
+      <FormSelect id="filter_status" v-model="statusFilter" :options="statusOptions" :aria-label="t('status')" class="w-40" />
+      <FormSelect v-if="can.steer" id="filter_person" v-model="personFilter" :options="personOptions" :aria-label="t('acquisition_person')" class="w-44" />
+      <FormSelect id="sort_by" v-model="sortBy" :options="sortOptions" :aria-label="t('job_sort')" class="w-44" />
       <label class="flex items-center gap-2 pb-2 text-sm">
         <input v-model="showInactive" type="checkbox" class="h-4 w-4 rounded border-[hsl(var(--input))]" />
         {{ t('project_show_inactive') }}
@@ -304,17 +337,18 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
           </div>
         </div>
         <div v-if="group.jobs.length" class="overflow-x-auto">
-          <table class="w-full text-sm">
+          <!-- Fixed widths, so the columns line up from one project to the next. -->
+          <table class="w-full table-fixed text-sm">
             <thead>
               <tr class="text-left text-xs text-[hsl(var(--muted-foreground))]">
                 <th class="px-4 py-2 font-medium">{{ t('project') }}</th>
-                <th class="hidden px-2 py-2 font-medium sm:table-cell">{{ t('status') }}</th>
-                <th v-if="can.steer" class="hidden px-2 py-2 font-medium md:table-cell">{{ t('project_shares') }}</th>
-                <th class="px-2 py-2 text-right font-medium">{{ t('revenue') }}</th>
-                <th class="hidden px-2 py-2 text-right font-medium sm:table-cell">{{ t('expenses') }}</th>
-                <th class="px-2 py-2 text-right font-medium">{{ t('project_net') }}</th>
-                <th class="hidden px-2 py-2 text-right font-medium md:table-cell">{{ t('job_margin') }}</th>
-                <th class="hidden w-10 px-2 py-2 sm:table-cell"></th>
+                <th class="hidden w-28 px-2 py-2 font-medium sm:table-cell">{{ t('status') }}</th>
+                <th v-if="can.steer" class="hidden w-40 px-2 py-2 font-medium md:table-cell">{{ t('project_shares') }}</th>
+                <th class="w-32 px-2 py-2 text-right font-medium sm:w-36">{{ t('revenue') }}</th>
+                <th class="hidden w-32 px-2 py-2 text-right font-medium sm:table-cell">{{ t('expenses') }}</th>
+                <th class="w-28 px-2 py-2 text-right font-medium sm:w-32">{{ t('project_net') }}</th>
+                <th class="hidden w-20 px-2 py-2 text-right font-medium md:table-cell">{{ t('job_margin') }}</th>
+                <th class="hidden w-12 px-2 py-2 sm:table-cell"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-[hsl(var(--border))]">

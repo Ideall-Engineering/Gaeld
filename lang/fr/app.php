@@ -3049,4 +3049,11 @@ return [
     'person_jobs_empty' => 'Aucun mandat avec une part dans l’année.',
     'person_expected' => 'attendu',
     'more' => 'Plus',
+    'job_filter_all_people' => 'Toutes les personnes',
+    'job_filter_all_projects' => 'Tous les projets',
+    'job_sort' => 'Tri',
+    'job_sort_code' => 'Par numéro',
+    'job_sort_net' => 'Par net',
+    'job_sort_revenue' => 'Par produit',
+    'job_sort_margin' => 'Par marge',
 ];

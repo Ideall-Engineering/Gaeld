@@ -3103,4 +3103,11 @@ return [
     'person_jobs_empty' => 'No jobs with a share in the year.',
     'person_expected' => 'expected',
     'more' => 'More',
+    'job_filter_all_people' => 'All people',
+    'job_filter_all_projects' => 'All projects',
+    'job_sort' => 'Sort',
+    'job_sort_code' => 'By number',
+    'job_sort_net' => 'By net',
+    'job_sort_revenue' => 'By revenue',
+    'job_sort_margin' => 'By margin',
 ];

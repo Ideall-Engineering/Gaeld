@@ -3041,4 +3041,11 @@ return [
     'person_jobs_empty' => 'Keine Aufträge mit Anteil im Jahr.',
     'person_expected' => 'erwartet',
     'more' => 'Mehr',
+    'job_filter_all_people' => 'Alle Personen',
+    'job_filter_all_projects' => 'Alle Projekte',
+    'job_sort' => 'Sortierung',
+    'job_sort_code' => 'Nach Nummer',
+    'job_sort_net' => 'Nach Netto',
+    'job_sort_revenue' => 'Nach Ertrag',
+    'job_sort_margin' => 'Nach Marge',
 ];

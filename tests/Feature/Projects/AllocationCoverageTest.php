@@ -101,6 +101,28 @@ class AllocationCoverageTest extends TestCase
         $this->assertSame(2, $coverage['corrections']);
     }
 
+    public function test_an_older_reversal_linked_only_by_its_reference_is_left_out_too(): void
+    {
+        // Imports and the Notion catch-up wrote reversals without the
+        // structured link; only the REV- label ties them to the original.
+        $this->entry('BAN-1008', $this->bank, $this->revenue, '2400.00');
+        $reversal = $this->entry('REV-BAN-1008', $this->revenue, $this->bank, '2400.00');
+        $reversal->update(['type' => 'reversal']);
+        $this->entry('CORR-BAN-1008-V81', $this->bank, $this->revenue, '2400.00');
+        // A reversal without a matching original still counts.
+        $this->entry('REV-NOWHERE', $this->revenue, $this->bank, '5.00')->update(['type' => 'reversal']);
+
+        $coverage = $this->coverage();
+
+        $this->assertSame(2, $coverage['revenue']['open']['count']);
+        $this->assertSame('2395.00', $coverage['revenue']['open']['amount']);
+        $this->assertSame(2, $coverage['corrections']);
+        $this->assertEqualsCanonicalizing(
+            ['CORR-BAN-1008-V81', 'REV-NOWHERE'],
+            app(AllocationCoverageService::class)->lines($this->organization->id, 2026)->pluck('reference')->all(),
+        );
+    }
+
     public function test_the_inbox_lists_only_open_lines_unless_general_ones_are_asked_for(): void
     {
         $this->entry('R-JOB', $this->bank, $this->revenue, '1000.00', $this->job);

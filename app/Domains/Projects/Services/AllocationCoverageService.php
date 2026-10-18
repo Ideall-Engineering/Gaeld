@@ -24,8 +24,9 @@ use Illuminate\Support\Facades\DB;
  * - open:     everything else, to be dealt with.
  *
  * Both halves of every reversal and of every posted correction are left out
- * altogether, as the journal does with "hide corrections", and so are
- * year-end closing entries.
+ * altogether, as the journal does with "hide corrections" (and also older
+ * reversals linked only by their REV- reference), and so are year-end
+ * closing entries.
  */
 class AllocationCoverageService
 {
@@ -34,6 +35,9 @@ class AllocationCoverageService
 
     /** Account class of personnel expense in the Swiss SME chart. */
     public const PAYROLL_CLASS = '5';
+
+    /** Reference prefix LedgerService gives every reversal. */
+    private const REVERSAL_PREFIX = 'REV-';
 
     public const ASSIGNED = 'assigned';
 
@@ -229,7 +233,22 @@ class AllocationCoverageService
      */
     private function withoutCorrections(Builder $query): Builder
     {
-        return $query->whereNull('journal_entries.reversal_of_entry_id')
+        // Older reversals (imports, the Notion catch-up) carry no structured
+        // link, only the readable "REV-<reference>" label LedgerService gives
+        // every reversal. Such a pair is left out too, both halves of it.
+        $legacyReversal = fn (Builder $q, string $reversal, string $original) => $q->selectRaw('1')
+            ->from("journal_entries as {$reversal}")
+            ->join("journal_entries as {$original}", fn ($join) => $join
+                ->on("{$original}.organization_id", '=', "{$reversal}.organization_id")
+                ->whereRaw("{$reversal}.reference = ? || {$original}.reference", [self::REVERSAL_PREFIX]))
+            ->where("{$reversal}.type", 'reversal')
+            ->whereNull("{$reversal}.reversal_of_entry_id")
+            ->where("{$reversal}.is_posted", true);
+
+        return $query
+            ->whereNotExists(fn (Builder $q) => $legacyReversal($q, 'legacy_rev', 'legacy_orig')->whereColumn('legacy_rev.id', 'journal_entries.id'))
+            ->whereNotExists(fn (Builder $q) => $legacyReversal($q, 'legacy_rev2', 'legacy_orig2')->whereColumn('legacy_orig2.id', 'journal_entries.id'))
+            ->whereNull('journal_entries.reversal_of_entry_id')
             ->whereNotExists(fn (Builder $q) => $q->selectRaw('1')
                 ->from('journal_entries as reversals')
                 ->whereColumn('reversals.reversal_of_entry_id', 'journal_entries.id')
