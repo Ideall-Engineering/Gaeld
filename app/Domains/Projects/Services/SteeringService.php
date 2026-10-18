@@ -3,11 +3,13 @@
 namespace App\Domains\Projects\Services;
 
 use App\Domains\Accounting\Models\Budget;
+use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\BudgetGroup;
+use App\Domains\Projects\Models\InvoiceProject;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\ProjectShare;
 use App\Domains\Projects\Models\SteeringItem;
@@ -83,6 +85,7 @@ class SteeringService
         $prospectJobs = array_fill_keys($ids, []);
         $laterJobs = array_fill_keys($ids, []);
         $later = $zero();
+        $openPayments = [];
 
         foreach ($projects as $project) {
             if ($project->kind !== ProjectKind::Project || $project->status === ProjectStatus::Lost) {
@@ -95,6 +98,23 @@ class SteeringService
             }
             $counted = in_array($project->status, self::COUNTED, true);
             $key = $this->keyFor($project, $byId, $shares);
+            $isBooked = Money::isPositive($booked[$project->id]['revenue'] ?? '0');
+
+            // Still to come in this year: counted, nothing received yet.
+            if ($counted && ! $isBooked && $this->expectsInYear($project, $year)) {
+                $openPayments[] = [
+                    'id' => $project->id,
+                    'code' => $project->code,
+                    'name' => $project->name,
+                    'group' => $this->groupOf($project, $byId),
+                    'status' => $project->status->value,
+                    'billing' => ($project->billing_month ?? $project->target_date)?->format('Y-m'),
+                    'expected' => (string) $project->expected_amount,
+                    'costs' => $booked[$project->id]['expenses'] ?? '0.00',
+                    'value' => $value,
+                    'people' => $key === [] ? [] : $this->split($value, $key),
+                ];
+            }
             if ($key === []) {
                 if ($counted) {
                     $unshared = Money::add($unshared, $value);
@@ -231,6 +251,7 @@ class SteeringService
         $rows = [];
         foreach ($people as $person) {
             $id = $person->id;
+            $received = array_reduce($jobs[$id], fn (string $sum, array $job) => $job['booked'] ? Money::add($sum, $job['part']) : $sum, '0.00');
             $planned = $items->where('employee_id', $id)->reduce(fn (string $sum, SteeringItem $i) => Money::add($sum, (string) $i->amount), '0.00');
             $drawn = Money::add($planned, $acquired[$id] ?? '0.00');
             $value = Money::add($contribution[$id], Money::subtract($credit[$id], $burden[$id]));
@@ -245,6 +266,10 @@ class SteeringService
                 'prospect_jobs' => collect($prospectJobs[$id])->sortByDesc(fn (array $job) => (float) $job['part'])->values()->all(),
                 'later_jobs' => collect($laterJobs[$id])->sortByDesc(fn (array $job) => (float) $job['part'])->values()->all(),
                 'contribution' => $contribution[$id],
+                // The contribution split: received (revenue booked) and still
+                // expected this year (expected amount less booked costs).
+                'contribution_received' => $received,
+                'contribution_expected' => Money::subtract($contribution[$id], $received),
                 'credit' => $credit[$id],
                 'burden' => Money::negate($burden[$id]),
                 'effect' => Money::subtract($credit[$id], $burden[$id]),
@@ -268,6 +293,12 @@ class SteeringService
                 'id' => $i->id, 'employee_id' => $i->employee_id, 'label' => $i->label, 'amount' => (string) $i->amount,
             ])->values()->all(),
             'unshared' => $unshared,
+            'open_payments' => $this->withInvoices(
+                $organizationId,
+                collect($openPayments)->sortBy(fn (array $p) => $p['billing'] ?? '9999')->values()->all(),
+                array_column($rows, 'name', 'employee_id'),
+            ),
+            'done_without_revenue' => $this->doneWithoutRevenue($organizationId, $projects, $byId),
             'totals' => $this->totals($rows),
         ];
     }
@@ -287,15 +318,93 @@ class SteeringService
             return Money::subtract($revenue, $expenses);
         }
 
-        // No revenue in this year: the expected amount only belongs to the
-        // year the project is to be invoiced in (billing month, else target
-        // date); an undated open project counts for the running year.
+        return Money::subtract($this->expectsInYear($project, $year) ? (string) $project->expected_amount : '0.00', $expenses);
+    }
+
+    /**
+     * Whether a job's expected amount belongs to the year: the year it is to
+     * be invoiced in (billing month, else target date); an undated job not
+     * yet done counts for the running year.
+     */
+    private function expectsInYear(Project $project, int $year): bool
+    {
+        if ($project->expected_amount === null) {
+            return false;
+        }
         $planned = $project->billing_month ?? $project->target_date;
-        $belongs = $planned !== null
+
+        return $planned !== null
             ? (int) $planned->year === $year
             : $project->status !== ProjectStatus::Done && $year === (int) now()->year;
+    }
 
-        return Money::subtract($belongs && $project->expected_amount !== null ? (string) $project->expected_amount : '0.00', $expenses);
+    /**
+     * Names the people of each open payment and adds the invoices linked to
+     * the job, so one sees whether it is billed already.
+     *
+     * @param  array<int, array<string, mixed>>  $payments
+     * @param  array<string, string>  $names
+     * @return array<int, array<string, mixed>>
+     */
+    private function withInvoices(string $organizationId, array $payments, array $names): array
+    {
+        $invoices = InvoiceProject::withoutGlobalScopes()
+            ->where('organization_id', $organizationId)
+            ->whereIn('cost_center_id', array_column($payments, 'id'))
+            ->whereHas('invoice', fn ($q) => $q->where('status', '!=', InvoiceStatus::Cancelled->value))
+            ->with('invoice')
+            ->get()
+            ->groupBy('cost_center_id');
+
+        $named = function (array $parts) use ($names): array {
+            $people = [];
+            foreach ($parts as $id => $part) {
+                $people[] = ['name' => $names[$id] ?? '', 'part' => (string) $part];
+            }
+
+            return $people;
+        };
+
+        return array_map(fn (array $payment) => [
+            ...$payment,
+            'people' => $named((array) $payment['people']),
+            'invoices' => ($invoices->get($payment['id']) ?? collect())
+                ->map(fn (InvoiceProject $link) => [
+                    'id' => $link->invoice->id,
+                    'number' => $link->invoice->number,
+                    'status' => $link->invoice->status->value,
+                    'total' => (string) $link->invoice->total,
+                ])->values()->all(),
+        ], $payments);
+    }
+
+    /**
+     * Jobs marked done without any revenue ever booked on them: either the
+     * payment is missing or it was booked without the job.
+     *
+     * @param  Collection<int, Project>  $projects
+     * @param  Collection<int, Project>  $byId
+     * @return array<int, array<string, mixed>>
+     */
+    private function doneWithoutRevenue(string $organizationId, Collection $projects, Collection $byId): array
+    {
+        $done = $projects->filter(fn (Project $p) => $p->kind === ProjectKind::Project && $p->status === ProjectStatus::Done);
+        if ($done->isEmpty()) {
+            return [];
+        }
+        $ever = $this->reports->totalsByProject($organizationId, '1900-01-01', '2999-12-31');
+
+        return $done
+            ->filter(fn (Project $p) => ! Money::isPositive($ever[$p->id]['revenue'] ?? '0'))
+            ->sortBy('code')
+            ->map(fn (Project $p) => [
+                'id' => $p->id,
+                'code' => $p->code,
+                'name' => $p->name,
+                'group' => $this->groupOf($p, $byId),
+                'expected' => $p->expected_amount !== null ? (string) $p->expected_amount : null,
+                'billing' => ($p->billing_month ?? $p->target_date)?->format('Y-m'),
+            ])->values()->all();
     }
 
     /**

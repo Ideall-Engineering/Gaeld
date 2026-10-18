@@ -152,6 +152,34 @@ class SteeringTest extends TestCase
         $this->assertSame('0.00', $people2027['Anna A']['later']);
     }
 
+    public function test_the_play_splits_into_received_and_still_expected(): void
+    {
+        $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
+        $anna = collect($data['people'])->keyBy('name')['Anna A'];
+
+        $this->assertSame('400.00', $anna['contribution_received']);
+        $this->assertSame('300.00', $anna['contribution_expected']);
+
+        $this->assertCount(1, $data['open_payments'], 'Only C: A is received, B only quoted.');
+        $c = $data['open_payments'][0];
+        $this->assertSame('C', $c['code']);
+        $this->assertSame('300.00', $c['expected']);
+        $this->assertSame('2026-12', $c['billing']);
+        $this->assertSame([['name' => 'Anna A', 'part' => '300.00']], $c['people']);
+        $this->assertSame([], $c['invoices']);
+    }
+
+    public function test_a_done_job_without_any_revenue_is_flagged(): void
+    {
+        $area = Project::query()->where('code', 'AREA')->first();
+        $this->makeProject('D', $area)->update(['status' => ProjectStatus::Done, 'expected_amount' => '450.00', 'billing_month' => '2026-04-01']);
+
+        $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
+
+        $this->assertSame(['D'], array_column($data['done_without_revenue'], 'code'), 'A has its revenue booked.');
+        $this->assertContains('D', array_column($data['open_payments'], 'code'));
+    }
+
     public function test_each_block_shows_how_its_numbers_come_about(): void
     {
         $budgeted = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Office', 'kind' => 'running']);

@@ -14,7 +14,7 @@ import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { Link, router, useForm } from '@inertiajs/vue3'
 import { computed, reactive, ref } from 'vue'
-import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-vue-next'
+import { AlertTriangle, ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-vue-next'
 
 // What each person earned and drew, and the room left for performance pay
 // (spec 009, stage 5; spec 010, US5).
@@ -52,6 +52,9 @@ function editBlock(block) {
 }
 const num = v => Number(v ?? 0)
 
+const openTotal = computed(() => (props.steering.open_payments ?? []).reduce((sum, p) => sum + num(p.expected), 0))
+const currentMonth = new Date().toISOString().slice(0, 7)
+
 // Drawn, one foldable row per person: plan items and acquisitions.
 const drawnRows = computed(() => people.value
   .map(p => ({ ...p, items: itemsOf(p.employee_id) }))
@@ -88,6 +91,19 @@ function removeItem(item) {
           <p v-if="Number(steering.unshared) !== 0" class="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
             {{ t('steering_unshared', { amount: formatCurrency(steering.unshared) }) }}
           </p>
+          <div v-if="steering.done_without_revenue?.length" class="mb-4 rounded-md border border-[hsl(var(--destructive))]/40 bg-[hsl(var(--destructive))]/10 p-3 text-sm" role="alert">
+            <div class="flex items-center gap-2 font-medium text-[hsl(var(--destructive))]">
+              <AlertTriangle class="h-4 w-4 shrink-0" />
+              {{ t('steering_done_without_revenue', { count: steering.done_without_revenue.length }) }}
+            </div>
+            <p class="mt-1 text-[hsl(var(--muted-foreground))]">{{ t('steering_done_without_revenue_hint') }}</p>
+            <ul class="mt-2 space-y-0.5">
+              <li v-for="job in steering.done_without_revenue" :key="job.id" class="flex flex-wrap justify-between gap-x-3">
+                <Link :href="`/projects/${job.id}/report`" class="hover:underline">{{ job.code }} {{ job.name }}<span v-if="job.group" class="text-[hsl(var(--muted-foreground))]"> · {{ job.group }}</span></Link>
+                <span class="tabular-nums text-[hsl(var(--muted-foreground))]">{{ job.expected !== null ? t('job_expected_hint', { amount: formatCurrency(job.expected) }) : '' }}</span>
+              </li>
+            </ul>
+          </div>
           <div class="grid gap-4 md:grid-cols-2">
             <div v-for="person in people" :key="person.employee_id" class="rounded-lg border border-[hsl(var(--border))] p-4">
               <div class="mb-3 text-lg font-semibold">{{ person.name }}</div>
@@ -173,8 +189,51 @@ function removeItem(item) {
                     </td>
                   </tr>
                   <tr class="border-t text-base font-semibold">
-                    <td class="py-2">{{ t('steering_play') }}</td>
+                    <td class="py-2">
+                      <button type="button" class="flex items-center gap-1 hover:underline" @click="toggle('play-' + person.employee_id)">
+                        <component :is="open['play-' + person.employee_id] ? ChevronDown : ChevronRight" class="h-4 w-4" />
+                        {{ t('steering_play') }}
+                      </button>
+                    </td>
                     <td class="py-2 text-right tabular-nums" :class="Number(person.play) < 0 ? 'text-[hsl(var(--destructive))]' : 'text-green-700 dark:text-green-400'">{{ formatCurrency(person.play) }}</td>
+                  </tr>
+                  <tr v-if="open['play-' + person.employee_id]">
+                    <td colspan="2" class="pb-3 pl-5">
+                      <table class="w-full text-xs">
+                        <tbody>
+                          <tr>
+                            <td class="py-1">{{ t('steering_play_received') }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.contribution_received) }}</td>
+                          </tr>
+                          <tr>
+                            <td class="py-1">{{ t('steering_play_expected', { year }) }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.contribution_expected) }}</td>
+                          </tr>
+                          <tr v-for="job in person.jobs.filter(j => !j.booked)" :key="'exp-' + job.id" class="text-[hsl(var(--muted-foreground))]">
+                            <td class="py-0.5 pl-4">
+                              <Link :href="`/projects/${job.id}/report?from=${year}-01-01&to=${year}-12-31`" class="hover:underline">{{ job.name }}</Link>
+                              <span> · {{ t('project_status_' + job.status) }}<template v-if="job.billing"> · {{ job.billing }}</template></span>
+                            </td>
+                            <td class="py-0.5 text-right tabular-nums">{{ formatCurrency(job.part) }}</td>
+                          </tr>
+                          <tr>
+                            <td class="py-1">{{ t('steering_effect') }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.effect) }}</td>
+                          </tr>
+                          <tr>
+                            <td class="py-1">{{ t('steering_drawn') }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(-person.drawn) }}</td>
+                          </tr>
+                          <tr class="border-t font-semibold">
+                            <td class="py-1">= {{ t('steering_play') }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.play) }}</td>
+                          </tr>
+                          <tr v-if="Number(person.play) !== 0 && Number(person.contribution_expected) !== 0" class="text-[hsl(var(--muted-foreground))]">
+                            <td class="pt-1" colspan="2">{{ t('steering_play_if_nothing_comes', { amount: formatCurrency(Number(person.play) - Number(person.contribution_expected)) }) }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
                   </tr>
                   <template v-for="aside in [{ key: 'prospects', jobs: person.prospect_jobs }, { key: 'later', jobs: person.later_jobs }]" :key="aside.key">
                     <tr v-if="aside.jobs?.length" class="text-xs text-[hsl(var(--muted-foreground))]">
@@ -210,6 +269,54 @@ function removeItem(item) {
                 </tbody>
               </table>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>{{ t('steering_open_payments') }} {{ year }}</CardTitle></CardHeader>
+        <CardContent>
+          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_open_payments_desc') }}</p>
+          <p v-if="!steering.open_payments?.length" class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_open_payments_none') }}</p>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
+              <thead>
+                <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
+                  <th class="pb-2">{{ t('project_kind_project') }}</th>
+                  <th class="pb-2">{{ t('status') }}</th>
+                  <th class="pb-2">{{ t('project_billing_month') }}</th>
+                  <th class="pb-2 text-right">{{ t('steering_open_expected') }}</th>
+                  <th class="pb-2 text-right">{{ t('steering_open_costs') }}</th>
+                  <th class="pb-2">{{ t('steering_open_people') }}</th>
+                  <th class="pb-2">{{ t('invoices') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[hsl(var(--border))]">
+                <tr v-for="p in steering.open_payments" :key="p.id">
+                  <td class="py-1">
+                    <Link :href="`/projects/${p.id}/report?from=${year}-01-01&to=${year}-12-31`" class="hover:underline">{{ p.name }}</Link>
+                    <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ p.code }}<template v-if="p.group"> · {{ p.group }}</template></div>
+                  </td>
+                  <td class="py-1">{{ t('project_status_' + p.status) }}</td>
+                  <td class="py-1 tabular-nums" :class="p.billing && p.billing < currentMonth ? 'text-[hsl(var(--destructive))]' : ''">{{ p.billing ?? t('steering_open_undated') }}</td>
+                  <td class="py-1 text-right tabular-nums">{{ formatCurrency(p.expected) }}</td>
+                  <td class="py-1 text-right tabular-nums">{{ Number(p.costs) ? formatCurrency(-p.costs) : '' }}</td>
+                  <td class="py-1 text-xs">
+                    <div v-for="person in p.people" :key="person.name">{{ person.name }} {{ formatCurrency(person.part) }}</div>
+                    <span v-if="!p.people.length" class="text-amber-700 dark:text-amber-300">{{ t('steering_open_nobody') }}</span>
+                  </td>
+                  <td class="py-1 text-xs">
+                    <div v-for="inv in p.invoices" :key="inv.id"><Link :href="`/invoices/${inv.id}`" class="hover:underline">{{ inv.number ?? t('draft') }}</Link> · {{ t('invoice_status_' + inv.status) }}</div>
+                    <span v-if="!p.invoices.length" class="text-[hsl(var(--muted-foreground))]">{{ t('steering_open_no_invoice') }}</span>
+                  </td>
+                </tr>
+                <tr class="font-semibold">
+                  <td class="py-2" colspan="3">{{ t('total') }}</td>
+                  <td class="py-2 text-right tabular-nums">{{ formatCurrency(openTotal) }}</td>
+                  <td colspan="3"></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>

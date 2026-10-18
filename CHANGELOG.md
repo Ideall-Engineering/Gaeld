@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Steering explains the room and lists what is still to come:** the room for
+  performance pay opens to received, still expected (by job), general costs and
+  drawings. A new section lists the payments still outstanding this year, with
+  people's shares and linked invoices. Done jobs that never had revenue booked
+  are flagged at the top.
 - **Steering plans only with what is certain:** a person's net from jobs and
   the room for performance pay now count only jobs in progress or done, and
   only the selected year. Open and quoted jobs, and amounts expected in a later
