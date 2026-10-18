@@ -26,6 +26,7 @@ const props = defineProps({
   limit: Number,
   year: Number,
   withGeneral: Boolean,
+  tab: String,
   projects: Array,
   blocks: Array,
   formOptions: Object,
@@ -64,7 +65,13 @@ function selectSuggested() {
 }
 
 function reload(params) {
-  router.get('/projects/unallocated', { year: props.year, general: props.withGeneral ? 1 : 0, ...params }, { preserveScroll: true })
+  router.get('/projects/unallocated', { year: props.year, tab: props.tab, general: props.withGeneral ? 1 : 0, ...params }, { preserveScroll: true })
+}
+
+// Two tabs, revenue and expenses; switching keeps the year and lets each
+// tab pick its own default for general lines.
+function switchTab(tab) {
+  router.get('/projects/unallocated', { year: props.year, tab }, { preserveScroll: true })
 }
 
 function apply() {
@@ -126,6 +133,26 @@ function submitGeneral() {
       </div>
     </div>
 
+    <div class="mb-4 flex gap-1 border-b border-[hsl(var(--border))]" role="tablist">
+      <button
+        v-for="item in [
+          { value: 'revenue', label: t('unallocated_tab_revenue'), count: coverage.revenue.open.count, general: coverage.revenue.general.count },
+          { value: 'expense', label: t('unallocated_tab_expense'), count: coverage.expense.open.count, general: coverage.expense.general.count },
+        ]"
+        :key="item.value"
+        type="button"
+        role="tab"
+        :aria-selected="tab === item.value"
+        class="-mb-px flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium"
+        :class="tab === item.value ? 'border-[hsl(var(--primary))] text-[hsl(var(--foreground))]' : 'border-transparent text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'"
+        @click="switchTab(item.value)"
+      >
+        {{ item.label }}
+        <Badge :variant="item.count ? 'warning' : 'success'">{{ item.count }} {{ t('unallocated_open_short') }}</Badge>
+        <span v-if="item.general" class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('unallocated_general_short', { count: item.general }) }}</span>
+      </button>
+    </div>
+
     <Card class="mb-4">
       <CardContent class="pt-6">
         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -139,6 +166,7 @@ function submitGeneral() {
           </label>
         </div>
         <p class="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{{ t('unallocated_desc') }}</p>
+        <p v-if="tab === 'expense'" class="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{{ t('unallocated_expense_hint') }}</p>
         <p v-if="lines.length >= limit" class="mt-2 text-sm text-amber-700">{{ t('unallocated_limited', { count: limit }) }}</p>
       </CardContent>
     </Card>
@@ -156,7 +184,7 @@ function submitGeneral() {
         <div class="min-w-[14rem] flex-1">
           <div class="flex flex-wrap items-baseline gap-x-2">
             <span class="font-medium">{{ line.description || line.line_description || line.reference }}</span>
-            <Badge v-if="line.category === 'general'" variant="secondary">{{ t('general') }}</Badge>
+            <Badge v-if="line.category === 'general'" variant="secondary">{{ line.block ? t('unallocated_in_block', { block: line.block }) : t('general') }}</Badge>
           </div>
           <div class="text-xs text-[hsl(var(--muted-foreground))]">
             {{ formatDate(line.date) }} ·

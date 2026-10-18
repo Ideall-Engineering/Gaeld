@@ -288,8 +288,10 @@ class InvoiceProjectTest extends TestCase
             new JournalLineData(accountId: (string) $this->bankAccount->id, debit: '0', credit: '30.00'),
         ]));
 
-        $response = $this->actAsOrg()->get('/projects/unallocated?year=2026')->assertOk();
-        $lines = collect($response->viewData('page')['props']['lines'])->keyBy('reference');
+        // Revenue and expenses sit on two tabs (spec 010).
+        $lines = collect(['revenue', 'expense'])
+            ->flatMap(fn (string $tab) => $this->actAsOrg()->get("/projects/unallocated?year=2026&tab={$tab}")->assertOk()->viewData('page')['props']['lines'])
+            ->keyBy('reference');
 
         $this->assertSame('customer', $lines['INV-2026-001']['suggestion']['source']);
         $this->assertSame($this->website->id, $lines['INV-2026-001']['suggestion']['project_id']);
@@ -303,7 +305,8 @@ class InvoiceProjectTest extends TestCase
         ]])->assertSessionHasNoErrors();
 
         $this->assertSame(3, LineAllocation::count());
-        $after = collect($this->actAsOrg()->get('/projects/unallocated?year=2026')->viewData('page')['props']['lines']);
+        $after = collect(['revenue', 'expense'])
+            ->flatMap(fn (string $tab) => $this->actAsOrg()->get("/projects/unallocated?year=2026&tab={$tab}")->viewData('page')['props']['lines']);
         $this->assertCount(0, $after);
     }
 

@@ -8,11 +8,12 @@ import ConfirmDialog from '@/Components/UI/ConfirmDialog.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
 import EmptyState from '@/Components/UI/EmptyState.vue'
 import ProjectFormModal from '@/Components/Projects/ProjectFormModal.vue'
+import ColumnMenu from '@/Components/Projects/ColumnMenu.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { formatCurrency } from '@/lib/utils'
 import { computed, ref, watch } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
-import { AlertTriangle, CheckCircle2, Download, FolderKanban, FolderPlus, ListChecks, Pencil, Plus, Search, Trash2 } from 'lucide-vue-next'
+import { AlertTriangle, CheckCircle2, Download, FolderKanban, FolderPlus, ListChecks, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
 
 // Jobs grouped by project, with what each brought in net (spec 010, US1
 // and US3). On top: whether every receipt of the year has its place.
@@ -52,29 +53,26 @@ function stored() {
   }
 }
 const search = ref('')
-const statusFilter = ref(stored().status ?? 'not_lost')
-const showInactive = ref(!!stored().inactive)
-const personFilter = ref(stored().person ?? '')
-const groupFilter = ref(stored().group ?? '')
-const sortBy = ref(stored().sort ?? 'code')
-watch([statusFilter, showInactive, personFilter, groupFilter, sortBy], () => {
+const saved = stored()
+const showInactive = ref(!!saved.inactive)
+const groupFilter = ref(typeof saved.group === 'string' ? saved.group : '')
+// Notion-like: each column head filters and sorts (ColumnMenu).
+const statusFilter = ref(Array.isArray(saved.statuses) ? saved.statuses : [])
+const personFilter = ref(Array.isArray(saved.people) ? saved.people : [])
+const sort = ref(saved.sort && typeof saved.sort === 'object' ? saved.sort : { key: 'code', dir: 'asc' })
+watch([showInactive, groupFilter, statusFilter, personFilter, sort], () => {
   try {
     localStorage.setItem(FILTER_KEY, JSON.stringify({
-      status: statusFilter.value,
       inactive: showInactive.value,
-      person: personFilter.value,
       group: groupFilter.value,
-      sort: sortBy.value,
+      statuses: statusFilter.value,
+      people: personFilter.value,
+      sort: sort.value,
     }))
   } catch {
     // Remembering the filter is a convenience only.
   }
-})
-const statusOptions = computed(() => [
-  { value: 'not_lost', label: t('job_status_active') },
-  { value: '', label: t('all') },
-  ...props.statuses,
-])
+}, { deep: true })
 
 const figures = computed(() => Object.fromEntries((props.overview?.rows ?? []).map(r => [r.id, r])))
 const byId = computed(() => Object.fromEntries(props.projects.map(p => [p.id, p])))
@@ -99,39 +97,56 @@ function keyOf(project) {
   }
   return { shares: [], inherited: false }
 }
-const initials = id => {
-  const name = props.employees.find(e => e.id === id)?.name ?? '?'
-  return name.split(' ').map(part => part[0]).join('').slice(0, 3).toUpperCase()
-}
+const nameOf = id => props.employees.find(e => e.id === id)?.name ?? '?'
+const initials = id => nameOf(id).split(' ').map(part => part[0]).join('').slice(0, 3).toUpperCase()
 
-const personOptions = computed(() => [{ value: '', label: t('job_filter_all_people') }, ...props.employees.map(e => ({ value: e.id, label: e.name }))])
 const groupOptions = computed(() => [
   { value: '', label: t('job_filter_all_projects') },
   ...props.projects.filter(p => p.kind === 'area' && !p.parent_id).map(p => ({ value: String(p.id), label: p.name })),
   { value: 'none', label: t('project_no_area') },
 ])
-const sortOptions = computed(() => [
-  { value: 'code', label: t('job_sort_code') },
-  { value: 'net', label: t('job_sort_net') },
-  { value: 'revenue', label: t('job_sort_revenue') },
-  { value: 'margin', label: t('job_sort_margin') },
-])
-const sorters = {
-  net: (a, b) => Number(b.net || 0) - Number(a.net || 0),
-  revenue: (a, b) => Number(b.revenue || 0) - Number(a.revenue || 0),
-  margin: (a, b) => (margin(b) ?? -Infinity) - (margin(a) ?? -Infinity),
+const statusOptions = computed(() => props.statuses.map(s => ({ value: s.value, label: s.label })))
+const personOptions = computed(() => props.employees.map(e => ({ value: e.id, label: e.name })))
+const columnLabel = { code: 'project', status: 'status', revenue: 'revenue', expenses: 'expenses', net: 'project_net', margin: 'job_margin' }
+
+function setSort(key, dir) {
+  sort.value = { key, dir }
+}
+const statusOrder = computed(() => Object.fromEntries(props.statuses.map((s, i) => [s.value, i])))
+const sortValue = {
+  code: j => j.code ?? '',
+  status: j => statusOrder.value[j.status] ?? 99,
+  revenue: j => Number(j.revenue || 0),
+  expenses: j => Number(j.expenses || 0),
+  net: j => Number(j.net || 0),
+  margin: j => margin(j) ?? -Infinity,
+}
+function compare(a, b) {
+  const get = sortValue[sort.value.key] ?? sortValue.code
+  const [x, y] = [get(a), get(b)]
+  const order = typeof x === 'string' ? x.localeCompare(y, undefined, { numeric: true }) : x - y
+  return sort.value.dir === 'desc' ? -order : order
 }
 
 const matches = (job) => {
   if (!showInactive.value && !job.is_active) return false
-  if (personFilter.value && !keyOf(job).shares.some(s => s.employee_id === personFilter.value)) return false
   if (groupFilter.value && String(groupOf(job)?.id ?? 'none') !== groupFilter.value) return false
-  if (statusFilter.value === 'not_lost' && job.status === 'lost') return false
-  if (statusFilter.value && statusFilter.value !== 'not_lost' && job.status !== statusFilter.value) return false
+  // Without a status filter lost jobs stay out, as they count for nobody.
+  if (statusFilter.value.length ? !statusFilter.value.includes(job.status) : job.status === 'lost') return false
+  if (personFilter.value.length && !keyOf(job).shares.some(s => personFilter.value.includes(s.employee_id))) return false
   const q = search.value.trim().toLowerCase()
   if (!q) return true
   const f = figures.value[job.id] ?? {}
   return [job.code, job.name, f.customer, groupOf(job)?.name].some(v => (v ?? '').toLowerCase().includes(q))
+}
+
+const hasFilter = computed(() => statusFilter.value.length > 0 || personFilter.value.length > 0 || groupFilter.value !== '' || search.value !== '')
+function clearFilters() {
+  statusFilter.value = []
+  personFilter.value = []
+  groupFilter.value = ''
+  search.value = ''
+  sort.value = { key: 'code', dir: 'asc' }
 }
 
 const margin = (row) => Number(row.revenue) > 0 ? Math.round((Number(row.net) / Number(row.revenue)) * 100) : null
@@ -153,9 +168,9 @@ const groups = computed(() => {
     .forEach(job => add(groupOf(job)).jobs.push({ ...job, ...(figures.value[job.id] ?? {}), key: keyOf(job) }))
 
   return list
-    .filter(g => g.jobs.length > 0 || (!search.value && !personFilter.value && !groupFilter.value && g.group && (showInactive.value || g.group.is_active)))
+    .filter(g => g.jobs.length > 0 || (!hasFilter.value && g.group && (showInactive.value || g.group.is_active)))
     .map(g => {
-      if (sorters[sortBy.value]) g.jobs.sort(sorters[sortBy.value])
+      g.jobs.sort(compare)
       const sum = g.jobs.reduce((s, j) => ({
         revenue: s.revenue + Number(j.revenue || 0),
         expenses: s.expenses + Number(j.expenses || 0),
@@ -296,9 +311,6 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
         <input v-model="search" type="search" :placeholder="t('job_search')" :aria-label="t('job_search')" class="h-9 w-full rounded-md border border-[hsl(var(--input))] bg-transparent pl-8 pr-3 text-sm" />
       </label>
       <FormSelect id="filter_group" v-model="groupFilter" :options="groupOptions" :aria-label="t('project_area')" class="w-44" />
-      <FormSelect id="filter_status" v-model="statusFilter" :options="statusOptions" :aria-label="t('status')" class="w-40" />
-      <FormSelect v-if="can.steer" id="filter_person" v-model="personFilter" :options="personOptions" :aria-label="t('acquisition_person')" class="w-44" />
-      <FormSelect id="sort_by" v-model="sortBy" :options="sortOptions" :aria-label="t('job_sort')" class="w-44" />
       <label class="flex items-center gap-2 pb-2 text-sm">
         <input v-model="showInactive" type="checkbox" class="h-4 w-4 rounded border-[hsl(var(--input))]" />
         {{ t('project_show_inactive') }}
@@ -306,6 +318,23 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
       <a :href="`/projects/export?year=${year}`">
         <Button size="sm" variant="ghost"><Download class="mr-1 h-4 w-4" /> CSV</Button>
       </a>
+    </div>
+
+    <!-- Active filters and sort, as chips that can be removed (Notion-like). -->
+    <div v-if="hasFilter || sort.key !== 'code' || sort.dir !== 'asc'" class="-mt-2 mb-4 flex flex-wrap items-center gap-2 text-sm">
+      <span v-if="statusFilter.length" class="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-3 py-1">
+        {{ t('status') }}: {{ statusFilter.map(v => statusOptions.find(o => o.value === v)?.label ?? v).join(', ') }}
+        <button type="button" :aria-label="t('column_filter_clear')" @click="statusFilter = []"><X class="h-3 w-3" /></button>
+      </span>
+      <span v-if="personFilter.length" class="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-3 py-1">
+        {{ t('project_shares') }}: {{ personFilter.map(nameOf).join(', ') }}
+        <button type="button" :aria-label="t('column_filter_clear')" @click="personFilter = []"><X class="h-3 w-3" /></button>
+      </span>
+      <span v-if="sort.key !== 'code' || sort.dir !== 'asc'" class="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-3 py-1">
+        {{ t('job_sort') }}: {{ t(columnLabel[sort.key] ?? 'project') }} {{ sort.dir === 'desc' ? '↓' : '↑' }}
+        <button type="button" :aria-label="t('column_filter_clear')" @click="sort = { key: 'code', dir: 'asc' }"><X class="h-3 w-3" /></button>
+      </span>
+      <button type="button" class="text-[hsl(var(--muted-foreground))] hover:underline" @click="clearFilters">{{ t('column_filter_reset') }}</button>
     </div>
 
     <EmptyState
@@ -316,6 +345,39 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
       :action-label="can.manage ? t('job_new') : undefined"
       @action="openCreate()"
     />
+
+    <!-- One head for all projects, like a Notion table: each column sorts
+         and filters the whole list, and stays in reach while scrolling. -->
+    <div class="sticky top-0 z-20 mb-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm">
+      <table class="w-full table-fixed text-sm">
+        <colgroup>
+          <col>
+          <col class="hidden w-32 sm:table-column">
+          <col v-if="can.steer" class="hidden w-44 md:table-column">
+          <col class="w-32 sm:w-36">
+          <col class="hidden w-32 sm:table-column">
+          <col class="w-28 sm:w-32">
+          <col class="hidden w-24 md:table-column">
+          <col class="hidden w-12 sm:table-column">
+        </colgroup>
+        <thead>
+          <tr class="text-left text-xs text-[hsl(var(--muted-foreground))]">
+            <th class="px-3 py-2 font-medium"><ColumnMenu :label="t('project')" column="code" :sort="sort" @sort="dir => setSort('code', dir)" /></th>
+            <th class="hidden w-32 px-1 py-2 font-medium sm:table-cell">
+              <ColumnMenu v-model:selected="statusFilter" :label="t('status')" column="status" :sort="sort" :options="statusOptions" @sort="dir => setSort('status', dir)" />
+            </th>
+            <th v-if="can.steer" class="hidden w-44 px-1 py-2 font-medium md:table-cell">
+              <ColumnMenu v-model:selected="personFilter" :label="t('project_shares')" column="people" :sortable="false" :options="personOptions" />
+            </th>
+            <th class="w-32 px-1 py-2 text-right font-medium sm:w-36"><ColumnMenu :label="t('revenue')" column="revenue" align="right" :sort="sort" @sort="dir => setSort('revenue', dir)" /></th>
+            <th class="hidden w-32 px-1 py-2 text-right font-medium sm:table-cell"><ColumnMenu :label="t('expenses')" column="expenses" align="right" :sort="sort" @sort="dir => setSort('expenses', dir)" /></th>
+            <th class="w-28 px-1 py-2 text-right font-medium sm:w-32"><ColumnMenu :label="t('project_net')" column="net" align="right" :sort="sort" @sort="dir => setSort('net', dir)" /></th>
+            <th class="hidden w-24 px-1 py-2 text-right font-medium md:table-cell"><ColumnMenu :label="t('job_margin')" column="margin" align="right" :sort="sort" @sort="dir => setSort('margin', dir)" /></th>
+            <th class="hidden w-12 px-2 py-2 sm:table-cell"></th>
+          </tr>
+        </thead>
+      </table>
+    </div>
 
     <div class="space-y-4">
       <Card v-for="group in groups" :key="group.key">
@@ -336,21 +398,19 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
             <Button v-if="can.manage" size="sm" variant="outline" @click="openCreate({ parent_id: group.group?.id ?? '' })"><Plus class="mr-1 h-3 w-3" /> {{ t('project') }}</Button>
           </div>
         </div>
-        <div v-if="group.jobs.length" class="overflow-x-auto">
-          <!-- Fixed widths, so the columns line up from one project to the next. -->
+        <div v-if="group.jobs.length">
+          <!-- Same fixed widths as the shared head, so every column lines up. -->
           <table class="w-full table-fixed text-sm">
-            <thead>
-              <tr class="text-left text-xs text-[hsl(var(--muted-foreground))]">
-                <th class="px-4 py-2 font-medium">{{ t('project') }}</th>
-                <th class="hidden w-28 px-2 py-2 font-medium sm:table-cell">{{ t('status') }}</th>
-                <th v-if="can.steer" class="hidden w-40 px-2 py-2 font-medium md:table-cell">{{ t('project_shares') }}</th>
-                <th class="w-32 px-2 py-2 text-right font-medium sm:w-36">{{ t('revenue') }}</th>
-                <th class="hidden w-32 px-2 py-2 text-right font-medium sm:table-cell">{{ t('expenses') }}</th>
-                <th class="w-28 px-2 py-2 text-right font-medium sm:w-32">{{ t('project_net') }}</th>
-                <th class="hidden w-20 px-2 py-2 text-right font-medium md:table-cell">{{ t('job_margin') }}</th>
-                <th class="hidden w-12 px-2 py-2 sm:table-cell"></th>
-              </tr>
-            </thead>
+            <colgroup>
+              <col>
+              <col class="hidden w-32 sm:table-column">
+              <col v-if="can.steer" class="hidden w-44 md:table-column">
+              <col class="w-32 sm:w-36">
+              <col class="hidden w-32 sm:table-column">
+              <col class="w-28 sm:w-32">
+              <col class="hidden w-24 md:table-column">
+              <col class="hidden w-12 sm:table-column">
+            </colgroup>
             <tbody class="divide-y divide-[hsl(var(--border))]">
               <tr
                 v-for="job in group.jobs"

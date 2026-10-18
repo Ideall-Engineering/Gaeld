@@ -31,21 +31,31 @@ class AllocationSuggestionService
     /**
      * The open lines of a year (spec 010): not yet allocated, not general
      * through a cost block, not payroll and not part of a correction. With
-     * $withGeneral the general ones are listed too, to move one of them to
-     * a job after all.
+     * $withGeneral the general ones are listed too (after the open ones), to
+     * move one of them to a job after all; $type keeps revenue or expense
+     * lines only.
      *
      * @return array<int, array<string, mixed>>
      */
-    public function unallocated(string $organizationId, int $year, bool $withGeneral = false): array
+    public function unallocated(string $organizationId, int $year, bool $withGeneral = false, ?string $type = null): array
     {
         $categories = $withGeneral
             ? [AllocationCoverageService::OPEN, AllocationCoverageService::GENERAL]
             : [AllocationCoverageService::OPEN];
 
         $lines = $this->coverage->lines($organizationId, $year)
-            ->filter(fn ($line) => in_array($line->category, $categories, true))
+            ->filter(fn ($line) => in_array($line->category, $categories, true) && ($type === null || $line->type === $type))
+            // Open ones first, the general ones after them.
+            ->sortBy(fn ($line) => $line->category === AllocationCoverageService::OPEN ? 0 : 1, SORT_REGULAR)
             ->take(self::LIMIT)
             ->values();
+
+        // The cost block that makes a general line general, to show it.
+        $blocks = DB::table('budget_group_accounts')
+            ->join('budget_groups', 'budget_groups.id', '=', 'budget_group_accounts.budget_group_id')
+            ->where('budget_groups.organization_id', $organizationId)
+            ->where('budget_groups.year', $year)
+            ->pluck('budget_groups.name', 'budget_group_accounts.account_id');
 
         $projects = Project::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
@@ -61,7 +71,7 @@ class AllocationSuggestionService
 
         $history = $this->history($organizationId);
 
-        return $lines->map(function ($line) use ($projects, $invoices, $history, $organizationId): array {
+        return $lines->map(function ($line) use ($projects, $invoices, $history, $organizationId, $blocks): array {
             $suggestion = null;
             $invoice = $invoices->get($line->journal_entry_id);
 
@@ -94,6 +104,7 @@ class AllocationSuggestionService
                 'account_id' => (int) $line->account_id,
                 'type' => $line->type,
                 'category' => $line->category,
+                'block' => $line->category === AllocationCoverageService::GENERAL ? ($blocks[$line->account_id] ?? null) : null,
                 'amount' => $line->amount,
                 'suggestion' => $project === null ? null : [
                     'project_id' => $project->id,

@@ -12,4 +12,6 @@
 - [x] T010 UI-Durchgang am Bildschirm und auf dem Handy (Demo-Organisation)
 - [x] T012 Rückmeldungen: ältere Stornopaare (nur REV-Referenz) ausgeblendet, Spalten bündig, Filter nach Projekt und Person, Sortierung
 - [x] T013 „Zuordnen“: neuen Auftrag direkt aus einem Beleg anlegen, der Beleg wird gleich zugeordnet (`allocate_line_id`)
+- [x] T014 Filter wie in Notion: eine gemeinsame Kopfzeile, jede Spalte sortiert und filtert (Status, Personen), Filter als Chips
+- [x] T015 „Zuordnen“ mit Reitern Einnahmen und Ausgaben; Ausgaben zeigen auch allgemeine Belege mit ihrem Kostenblock
 - [ ] T011 Review, Merge nach `deployment`, Rollout nach Freigabe

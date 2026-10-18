@@ -38,10 +38,15 @@ class UnallocatedLinesController extends Controller
         $year = $request->integer('year', (int) now()->year);
         $year = $year >= 2000 && $year <= 2100 ? $year : (int) now()->year;
 
-        $withGeneral = $request->boolean('general');
+        // Spec 010: revenue and expenses on two tabs. Expenses mostly sit in
+        // cost blocks, so that tab shows the general ones too unless asked not
+        // to: that is where a cost is moved to a job.
+        $type = $request->input('tab') === 'expense' ? AccountType::Expense->value : AccountType::Revenue->value;
+        $withGeneral = $request->has('general') ? $request->boolean('general') : $type === AccountType::Expense->value;
 
         return Inertia::render('Projects/Unallocated', [
-            'lines' => $suggestions->unallocated($currentOrg->id(), $year, $withGeneral),
+            'lines' => $suggestions->unallocated($currentOrg->id(), $year, $withGeneral, $type),
+            'tab' => $type,
             'coverage' => $coverage->forYear($currentOrg->id(), $year),
             'limit' => AllocationSuggestionService::LIMIT,
             'year' => $year,

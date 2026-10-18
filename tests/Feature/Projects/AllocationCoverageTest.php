@@ -136,17 +136,28 @@ class AllocationCoverageTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('Projects/Unallocated')
+                ->where('tab', 'revenue')
                 ->has('lines', 1)
                 ->where('lines.0.reference', 'R-OPEN')
                 ->where('lines.0.category', 'open')
                 ->where('coverage.open', 1)
                 ->has('blocks', 1));
 
-        $this->actAsOrg()->get('/projects/unallocated?year=2026&general=1')
+        // The expense tab lists general costs too, to move one to a job.
+        $this->entry('E-OPEN', $this->otherExpense, $this->bank, '30.00');
+        $this->actAsOrg()->get('/projects/unallocated?year=2026&tab=expense')
             ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('tab', 'expense')
+                ->where('withGeneral', true)
                 ->has('lines', 2)
+                ->where('lines.0.reference', 'E-OPEN')
+                ->where('lines.0.category', 'open')
                 ->where('lines.1.reference', 'E-BLOCK')
-                ->where('lines.1.category', 'general'));
+                ->where('lines.1.category', 'general')
+                ->where('lines.1.block', 'Rent'));
+
+        $this->actAsOrg()->get('/projects/unallocated?year=2026&tab=expense&general=0')
+            ->assertInertia(fn (AssertableInertia $page) => $page->has('lines', 1));
     }
 
     public function test_a_single_receipt_goes_to_the_internal_job_general(): void
