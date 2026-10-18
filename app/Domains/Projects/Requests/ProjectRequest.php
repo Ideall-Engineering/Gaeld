@@ -108,6 +108,8 @@ class ProjectRequest extends FormRequest
             'expected_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999999.99'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'is_active' => ['sometimes', 'boolean'],
+            // Spec 010: allocate this receipt to the new job right away.
+            'allocate_line_id' => ['sometimes', 'nullable', 'integer'],
             // Stage 5: how the project's value is shared; empty clears it.
             'shares' => [
                 'sometimes',

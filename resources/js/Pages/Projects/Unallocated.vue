@@ -9,11 +9,12 @@ import EmptyState from '@/Components/UI/EmptyState.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
 import Modal from '@/Components/UI/Modal.vue'
 import SearchableSelect from '@/Components/UI/SearchableSelect.vue'
+import ProjectFormModal from '@/Components/Projects/ProjectFormModal.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { Link, router, useForm } from '@inertiajs/vue3'
 import { computed, reactive, ref, watch } from 'vue'
-import { CheckCheck, CheckCircle2, Layers } from 'lucide-vue-next'
+import { CheckCheck, CheckCircle2, Layers, Plus } from 'lucide-vue-next'
 
 // Receipts without a place, worked through like an inbox (spec 010, US2).
 // Each row starts with its suggestion, if any; nothing is allocated until
@@ -27,6 +28,7 @@ const props = defineProps({
   withGeneral: Boolean,
   projects: Array,
   blocks: Array,
+  formOptions: Object,
   can: Object,
 })
 
@@ -73,6 +75,18 @@ function apply() {
   processing.value = true
   router.post('/projects/unallocated', { items }, { preserveScroll: true, onFinish: () => { processing.value = false } })
 }
+
+// A new job straight from a receipt: named after it, and the receipt goes
+// to the job when it is saved.
+const newJobLine = ref(null)
+const newJobPreset = computed(() => newJobLine.value
+  ? {
+      name: (newJobLine.value.description || newJobLine.value.line_description || '').slice(0, 255),
+      kind: 'project',
+      status: newJobLine.value.type === 'revenue' ? 'done' : 'in_progress',
+      parent_id: '',
+    }
+  : {})
 
 // "General"
 const generalLine = ref(null)
@@ -167,10 +181,20 @@ function submitGeneral() {
           <Badge v-if="line.suggestion && String(choice[line.line_id]) === String(line.suggestion.project_id)" :variant="sourceVariant[line.suggestion.source]">
             {{ t('suggestion_source_' + line.suggestion.source) }}
           </Badge>
+          <Button v-if="can.manage" variant="outline" size="sm" class="shrink-0" :title="t('job_new_from_receipt')" @click="newJobLine = line"><Plus class="mr-1 h-4 w-4" /> {{ t('project') }}</Button>
           <Button v-if="line.category !== 'general'" variant="outline" size="sm" class="shrink-0" @click="openGeneral(line)"><Layers class="mr-1 h-4 w-4" /> {{ t('general') }}</Button>
         </div>
       </div>
     </div>
+
+    <ProjectFormModal
+      :open="!!newJobLine"
+      :preset="newJobPreset"
+      :extra="newJobLine ? { allocate_line_id: newJobLine.line_id } : {}"
+      :options="formOptions"
+      :can-steer="can.steer"
+      @close="newJobLine = null"
+    />
 
     <Modal :open="!!generalLine" :title="t('general_dialog_title')" @close="generalLine = null">
       <form v-if="generalLine" class="space-y-4" @submit.prevent="submitGeneral">

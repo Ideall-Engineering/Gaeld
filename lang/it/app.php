@@ -3052,4 +3052,6 @@ return [
     'job_sort_net' => 'Per netto',
     'job_sort_revenue' => 'Per ricavo',
     'job_sort_margin' => 'Per margine',
+    'job_new_from_receipt' => 'Crea un nuovo incarico da questo giustificativo',
+    'job_created_with_receipt' => 'Incarico :code creato e giustificativo assegnato.',
 ];

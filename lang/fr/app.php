@@ -3056,4 +3056,6 @@ return [
     'job_sort_net' => 'Par net',
     'job_sort_revenue' => 'Par produit',
     'job_sort_margin' => 'Par marge',
+    'job_new_from_receipt' => 'Créer un nouveau mandat à partir de cette pièce',
+    'job_created_with_receipt' => 'Mandat :code créé et pièce affectée.',
 ];

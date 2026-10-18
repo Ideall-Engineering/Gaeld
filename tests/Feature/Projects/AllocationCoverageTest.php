@@ -225,6 +225,33 @@ class AllocationCoverageTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_a_new_job_takes_the_receipt_it_was_started_from(): void
+    {
+        $line = $this->lineOn($this->entry('R-SVEB', $this->bank, $this->revenue, '500.00'), $this->revenue->id);
+
+        $this->actAsOrg()->post('/projects', [
+            'name' => 'SVEB 2026',
+            'kind' => 'project',
+            'status' => 'done',
+            'allocate_line_id' => $line->id,
+        ])->assertSessionHasNoErrors();
+
+        $job = Project::query()->where('name', 'SVEB 2026')->sole();
+        $this->assertSame($job->id, $this->allocationsOf($line)[0]['project']);
+        $this->assertSame(0, $this->coverage()['open']);
+    }
+
+    public function test_a_receipt_of_another_organization_cannot_be_taken(): void
+    {
+        $entry = $this->entry('R-1', $this->bank, $this->revenue, '30.00');
+        $line = $this->lineOn($entry, $this->revenue->id);
+        JournalEntry::query()->whereKey($entry->id)->update(['organization_id' => Organization::factory()->create()->id]);
+
+        $this->actAsOrg()->post('/projects', ['name' => 'X', 'kind' => 'project', 'status' => 'done', 'allocate_line_id' => $line->id])
+            ->assertNotFound();
+        $this->assertSame(0, Project::query()->where('name', 'X')->count());
+    }
+
     public function test_the_job_list_shows_the_coverage_of_the_year(): void
     {
         $this->entry('R-OPEN', $this->bank, $this->revenue, '50.00');

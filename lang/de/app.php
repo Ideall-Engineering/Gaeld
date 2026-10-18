@@ -3048,4 +3048,6 @@ return [
     'job_sort_net' => 'Nach Netto',
     'job_sort_revenue' => 'Nach Ertrag',
     'job_sort_margin' => 'Nach Marge',
+    'job_new_from_receipt' => 'Neuen Auftrag aus diesem Beleg anlegen',
+    'job_created_with_receipt' => 'Auftrag :code angelegt und Beleg zugeordnet.',
 ];

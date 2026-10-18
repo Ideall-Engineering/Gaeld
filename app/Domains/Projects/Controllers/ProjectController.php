@@ -2,8 +2,11 @@
 
 namespace App\Domains\Projects\Controllers;
 
+use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Enums\AllocationSource;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\AllocationReview;
@@ -14,6 +17,7 @@ use App\Domains\Projects\Models\ProjectShare;
 use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Requests\ProjectRequest;
 use App\Domains\Projects\Services\AllocationCoverageService;
+use App\Domains\Projects\Services\LineAllocationService;
 use App\Domains\Projects\Services\ProjectOverviewService;
 use App\Http\Controllers\Controller;
 use App\Support\CsvExportService;
@@ -82,19 +86,45 @@ class ProjectController extends Controller
         return $csv->export($headers, $rows, "projects-{$year}.csv");
     }
 
-    public function store(ProjectRequest $request, CurrentOrganization $currentOrg): RedirectResponse
+    public function store(ProjectRequest $request, CurrentOrganization $currentOrg, LineAllocationService $allocations): RedirectResponse
     {
         $this->authorize('create', Project::class);
 
         $validated = $request->validated();
-        $project = Project::create([
-            ...collect($validated)->except('shares')->all(),
-            'organization_id' => $currentOrg->id(),
-            'is_active' => $request->boolean('is_active', true),
-        ]);
-        $this->syncShares($request, $project, $validated);
+        $lineId = $validated['allocate_line_id'] ?? null;
+        if ($lineId !== null) {
+            $this->authorize('allocate', Project::class);
+        }
 
-        return back()->with('success', __('app.saved'));
+        $project = DB::transaction(function () use ($request, $validated, $currentOrg, $lineId, $allocations): Project {
+            $project = Project::create([
+                ...collect($validated)->except(['shares', 'allocate_line_id'])->all(),
+                'organization_id' => $currentOrg->id(),
+                'is_active' => $request->boolean('is_active', true),
+            ]);
+            $this->syncShares($request, $project, $validated);
+
+            // Spec 010: a job started from a receipt in the allocate inbox
+            // takes that receipt right away.
+            if ($lineId !== null) {
+                $line = TransactionLine::query()
+                    ->whereKey($lineId)
+                    ->whereHas('journalEntry', fn ($q) => $q->where('organization_id', $currentOrg->id()))
+                    ->firstOrFail();
+                $allocations->replaceForEntry(
+                    JournalEntry::query()->findOrFail($line->journal_entry_id),
+                    [(int) $line->id => $allocations->withProject((int) $line->id, $project->id, AllocationSource::Manual)],
+                    AllocationSource::Manual,
+                    $request->user()?->id,
+                );
+            }
+
+            return $project;
+        });
+
+        return back()->with('success', $lineId !== null
+            ? __('app.job_created_with_receipt', ['code' => $project->code])
+            : __('app.saved'));
     }
 
     public function update(ProjectRequest $request, Project $project): RedirectResponse

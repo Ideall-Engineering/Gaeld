@@ -5,9 +5,12 @@ namespace App\Domains\Projects\Controllers;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Contacts\Models\Contact;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Projects\Enums\AllocationSource;
 use App\Domains\Projects\Enums\BudgetGroupKind;
+use App\Domains\Projects\Enums\ProjectKind;
+use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Queries\ProjectQuery;
@@ -45,7 +48,18 @@ class UnallocatedLinesController extends Controller
             'withGeneral' => $withGeneral,
             'projects' => ProjectQuery::options(),
             'blocks' => BudgetGroup::query()->where('year', $year)->orderBy('position')->orderBy('name')->get(['id', 'name']),
-            'can' => ['manage' => $request->user()?->can('create', Project::class) ?? false],
+            // For "new job" straight from a receipt.
+            'formOptions' => [
+                'projects' => ProjectQuery::tree(),
+                'contacts' => Contact::query()->orderBy('name')->get(['id', 'name']),
+                'employees' => ProjectQuery::employeeOptions(),
+                'kinds' => array_map(fn (ProjectKind $k) => ['value' => $k->value, 'label' => $k->label()], ProjectKind::cases()),
+                'statuses' => array_map(fn (ProjectStatus $s) => ['value' => $s->value, 'label' => $s->label()], ProjectStatus::cases()),
+            ],
+            'can' => [
+                'manage' => $request->user()?->can('create', Project::class) ?? false,
+                'steer' => $request->user()?->can('steer', Project::class) ?? false,
+            ],
         ]);
     }
 

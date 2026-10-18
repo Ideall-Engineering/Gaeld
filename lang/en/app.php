@@ -3110,4 +3110,6 @@ return [
     'job_sort_net' => 'By net',
     'job_sort_revenue' => 'By revenue',
     'job_sort_margin' => 'By margin',
+    'job_new_from_receipt' => 'Create a new job from this receipt',
+    'job_created_with_receipt' => 'Job :code created and the receipt allocated.',
 ];

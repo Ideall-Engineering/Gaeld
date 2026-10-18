@@ -20,6 +20,9 @@ const props = defineProps({
   preset: { type: Object, default: () => ({}) },
   options: { type: Object, required: true },
   canSteer: { type: Boolean, default: false },
+  // Sent along with a new record, e.g. { allocate_line_id: 12 } to give the
+  // new job a receipt right away (spec 010).
+  extra: { type: Object, default: () => ({}) },
 })
 
 const emit = defineEmits(['close'])
@@ -105,7 +108,7 @@ function submit() {
   if (props.project) {
     form.put(`/projects/${props.project.id}`, options)
   } else {
-    form.post('/projects', options)
+    form.transform(data => ({ ...data, ...props.extra })).post('/projects', options)
   }
 }
 </script>
