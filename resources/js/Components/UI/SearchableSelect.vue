@@ -105,6 +105,10 @@ function openDropdown() {
   nextTick(() => inputRef.value?.focus())
 }
 
+// Lets a parent open the list at once, e.g. when a table cell turns into
+// this picker on click.
+defineExpose({ openDropdown })
+
 function onKeydown(e) {
   const max = optionsOnly.value.length - 1
   if (e.key === 'ArrowDown') {

@@ -15,4 +15,5 @@
 - [x] T014 Filter wie in Notion: eine gemeinsame Kopfzeile, jede Spalte sortiert und filtert (Status, Personen), Filter als Chips
 - [x] T015 „Zuordnen“ mit Reitern Einnahmen und Ausgaben; Ausgaben zeigen auch allgemeine Belege mit ihrem Kostenblock
 - [x] T016 Kostenblöcke als „Allgemeine Kosten“ auf der Seite „Aufträge“ (`BudgetGroupFormModal`, Schnellknöpfe gemeinsam oder allein), `/projects/plan` leitet um; Personen: allgemeine Kosten und Bezogen aufklappbar, Kostenblöcke dort bearbeitbar; Anschaffungen mit Filtern wie in Notion
+- [x] T017 Seite „Journal“ unter Projekte: Ertrags- und Aufwandszeilen wie in Banana mit Projekt, Auftrag und Personen, Auftrag in der Zeile ändern, Aufteilen über den Zuordnungsdialog (`ProjectJournalService`, `ProjectJournalTest`)
 - [ ] T011 Review, Merge nach `deployment`, Rollout nach Freigabe

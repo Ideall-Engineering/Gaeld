@@ -210,6 +210,7 @@ const navigation = computed(() => {
         // Spec 010: the three everyday pages first, the planning tools after.
         { key: 'jobs', href: '/projects', exact: true },
         ...(can('projects.allocate') ? [{ key: 'unallocated_lines', href: '/projects/unallocated' }] : []),
+        { key: 'project_journal', href: '/projects/journal' },
         ...(can('organization.delete') ? [{ key: 'steering', href: '/projects/steering' }] : []),
         { key: 'acquisitions', href: '/projects/acquisitions' },
       ]},

@@ -63,10 +63,12 @@ function toggle(value) {
         <template v-if="options.length">
           <div v-if="sortable" class="my-1 border-t border-[hsl(var(--border))]" />
           <div class="px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">{{ t('column_filter_show') }}</div>
-          <label v-for="option in options" :key="option.value" class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-[hsl(var(--muted))]">
-            <input type="checkbox" class="h-4 w-4 rounded border-[hsl(var(--input))]" :checked="selected.includes(option.value)" @change="toggle(option.value)" />
-            {{ option.label }}
-          </label>
+          <div class="max-h-72 overflow-y-auto">
+            <label v-for="option in options" :key="option.value" class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-[hsl(var(--muted))]">
+              <input type="checkbox" class="h-4 w-4 rounded border-[hsl(var(--input))]" :checked="selected.includes(option.value)" @change="toggle(option.value)" />
+              {{ option.label }}
+            </label>
+          </div>
           <button v-if="filtered" type="button" class="mt-1 flex w-full items-center gap-2 rounded px-2 py-1.5 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" @click="emit('update:selected', []); close()">
             <X class="h-4 w-4" /> {{ t('column_filter_clear') }}
           </button>

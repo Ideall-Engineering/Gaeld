@@ -6,6 +6,7 @@ use App\Domains\Projects\Controllers\BudgetGroupController;
 use App\Domains\Projects\Controllers\InvoiceProjectController;
 use App\Domains\Projects\Controllers\JournalAllocationController;
 use App\Domains\Projects\Controllers\ProjectController;
+use App\Domains\Projects\Controllers\ProjectJournalController;
 use App\Domains\Projects\Controllers\ProjectReportController;
 use App\Domains\Projects\Controllers\SteeringController;
 use App\Domains\Projects\Controllers\UnallocatedLinesController;
@@ -33,6 +34,7 @@ Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::get('/projects/steering/export/{format}', [SteeringController::class, 'export'])->name('projects.steering.export');
     Route::post('/projects/steering/items', [SteeringController::class, 'storeItem'])->name('projects.steering.items.store');
     Route::delete('/projects/steering/items/{steeringItem}', [SteeringController::class, 'destroyItem'])->name('projects.steering.items.destroy');
+    Route::get('/projects/journal', [ProjectJournalController::class, 'index'])->name('projects.journal');
     Route::get('/projects/unallocated', [UnallocatedLinesController::class, 'index'])->name('projects.unallocated');
     Route::post('/projects/unallocated', [UnallocatedLinesController::class, 'apply'])->name('projects.unallocated.apply');
     Route::post('/projects/unallocated/general', [UnallocatedLinesController::class, 'general'])->name('projects.unallocated.general');

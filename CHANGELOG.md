@@ -132,6 +132,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bears what" can be edited in place. Acquisitions sort and filter by column
   like a Notion table (category, people, status), with chips and a total of
   what is shown.
+- **Projects journal:** a new page lists the revenue and expense lines of a
+  year like a Banana journal (date, reference, text, debit and credit account,
+  amount) with project, job and people on every line. The job is changed in
+  the line itself (a job, "General" or none), a split opens the allocation
+  dialog of the entry, and every column sorts or filters like a Notion table.
 - **Accountants may discard a draft invoice.** The role could prepare, edit,
   finalise and collect an invoice but not throw a draft away, and the delete
   button was shown anyway and then refused with a 403. A draft carries no
