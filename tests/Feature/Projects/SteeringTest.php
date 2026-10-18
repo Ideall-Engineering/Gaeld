@@ -122,7 +122,7 @@ class SteeringTest extends TestCase
 
     public function test_a_project_without_any_key_is_reported_as_unshared(): void
     {
-        $this->makeProject('LOOSE')->update(['status' => ProjectStatus::Pipeline, 'expected_amount' => '123.00', 'billing_month' => '2026-09-01']);
+        $this->makeProject('LOOSE')->update(['status' => ProjectStatus::Possible, 'expected_amount' => '123.00', 'billing_month' => '2026-09-01']);
 
         $this->assertSame('123.00', app(SteeringService::class)->forYear($this->organization->id, 2026)['unshared']);
     }
@@ -159,7 +159,7 @@ class SteeringTest extends TestCase
         $project = $this->makeProject('NEWKEY');
 
         $this->actAsOrg()->put("/projects/{$project->id}", [
-            'code' => 'NEWKEY', 'name' => 'New', 'kind' => 'project', 'status' => 'pipeline',
+            'code' => 'NEWKEY', 'name' => 'New', 'kind' => 'project', 'status' => 'possible',
             'shares' => [['employee_id' => $this->anna->id, 'share' => '25'], ['employee_id' => $this->ben->id, 'share' => '75']],
         ])->assertSessionHasNoErrors();
         $this->assertSame(['25.0000', '75.0000'], ProjectShare::query()->where('cost_center_id', $project->id)->orderBy('share')->pluck('share')->map(fn ($s) => (string) $s)->all());

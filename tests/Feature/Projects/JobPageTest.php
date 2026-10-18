@@ -131,9 +131,9 @@ class JobPageTest extends TestCase
         $prefix = 'P'.now()->format('y').'-';
         $this->makeProject($prefix.'07');
 
-        $this->actAsOrg()->post('/projects', ['name' => 'Workshop', 'kind' => 'project', 'status' => 'pipeline', 'code' => ''])
+        $this->actAsOrg()->post('/projects', ['name' => 'Workshop', 'kind' => 'project', 'status' => 'possible', 'code' => ''])
             ->assertSessionHasNoErrors();
-        $this->actAsOrg()->post('/projects', ['name' => 'Workshop 2', 'kind' => 'project', 'status' => 'pipeline']);
+        $this->actAsOrg()->post('/projects', ['name' => 'Workshop 2', 'kind' => 'project', 'status' => 'possible']);
 
         $this->assertSame($prefix.'08', Project::query()->where('name', 'Workshop')->sole()->code);
         $this->assertSame($prefix.'09', Project::query()->where('name', 'Workshop 2')->sole()->code);

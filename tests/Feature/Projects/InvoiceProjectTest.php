@@ -247,7 +247,7 @@ class InvoiceProjectTest extends TestCase
         $cases = [
             ['2026-05-31', ProjectStatus::InProgress, 'overdue'],
             ['2026-06-15', ProjectStatus::InProgress, 'critical'],
-            ['2026-06-16', ProjectStatus::Pipeline, 'on_track'],
+            ['2026-06-16', ProjectStatus::Possible, 'on_track'],
             [null, ProjectStatus::Possible, 'none'],
             ['2026-01-01', ProjectStatus::Done, 'done'],
             ['2026-01-01', ProjectStatus::Lost, 'done'],

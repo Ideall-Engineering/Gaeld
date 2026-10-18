@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Jobs follow their quotes:** a quote with a job sets the job's status:
+  sent makes it "quote sent", accepted (or converted to an invoice) "in
+  progress", declined "lost". A done job is left alone, and a job in progress
+  does not fall back. A job without an expected amount takes the quote's net
+  total. The status "pipeline" is gone; jobs that had it are in progress, and
+  "possible" now reads "quote sent".
 - **Quotes (offers):** write a quote to a customer with the same lines,
   discounts, VAT and totals as an invoice, under Sales › Quotes. Quotes are
   numbered `OF-YYYY-NNN`, carry a subject and a validity date, and print as a

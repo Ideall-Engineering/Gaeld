@@ -44,7 +44,7 @@ class ProjectManagementTest extends TestCase
             'name' => 'Website',
             'parent_id' => $area->id,
             'kind' => 'project',
-            'status' => 'pipeline',
+            'status' => 'possible',
             'contact_id' => $contact->id,
             'responsible_employee_id' => $employee->id,
             'target_date' => '2026-12-15',
@@ -54,7 +54,7 @@ class ProjectManagementTest extends TestCase
 
         $project = Project::query()->where('code', 'P-1')->sole();
         $this->assertSame($area->id, $project->parent_id);
-        $this->assertSame(ProjectStatus::Pipeline, $project->status);
+        $this->assertSame(ProjectStatus::Possible, $project->status);
         $this->assertSame($contact->id, $project->contact_id);
         $this->assertSame($employee->id, $project->responsible_employee_id);
         $this->assertSame('2026-12-15', $project->target_date->toDateString());
@@ -143,7 +143,7 @@ class ProjectManagementTest extends TestCase
         $this->organization->update(['enabled_modules' => ['projects' => false]]);
 
         $this->actAsOrg()->get('/projects')->assertForbidden();
-        $this->actAsOrg()->post('/projects', ['code' => 'X', 'name' => 'X', 'kind' => 'project', 'status' => 'pipeline'])->assertForbidden();
+        $this->actAsOrg()->post('/projects', ['code' => 'X', 'name' => 'X', 'kind' => 'project', 'status' => 'possible'])->assertForbidden();
     }
 
     public function test_the_module_is_off_for_an_organization_that_never_chose(): void
@@ -165,7 +165,7 @@ class ProjectManagementTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('can.manage', false));
         $this->actingAs($viewer)->withSession($session)
-            ->post('/projects', ['code' => 'X', 'name' => 'X', 'kind' => 'project', 'status' => 'pipeline'])
+            ->post('/projects', ['code' => 'X', 'name' => 'X', 'kind' => 'project', 'status' => 'possible'])
             ->assertForbidden();
     }
 

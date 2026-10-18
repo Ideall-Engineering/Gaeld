@@ -3,11 +3,11 @@
 namespace App\Domains\Projects\Enums;
 
 /**
- * Where a project stands, from a first lead to done or lost.
+ * Where a job stands: a quote is out (possible), it is being done, done or
+ * lost. A job's quotes set it as they are sent, accepted or declined.
  */
 enum ProjectStatus: string
 {
-    case Pipeline = 'pipeline';
     case Possible = 'possible';
     case InProgress = 'in_progress';
     case Done = 'done';

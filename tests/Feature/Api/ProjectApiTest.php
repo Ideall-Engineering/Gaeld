@@ -53,13 +53,13 @@ class ProjectApiTest extends SecurityTestCase
                 'code' => 'WEB',
                 'name' => 'Website',
                 'parent_code' => 'AREA',
-                'status' => 'pipeline',
+                'status' => 'possible',
                 'expected_amount' => '5000.00',
                 'target_date' => '2026-12-01',
             ])
             ->assertCreated()
             ->assertJsonPath('data.parent_code', 'AREA')
-            ->assertJsonPath('data.status', 'pipeline')
+            ->assertJsonPath('data.status', 'possible')
             ->assertJsonPath('data.kind', 'project');
 
         $id = $created->json('data.id');

@@ -11,6 +11,7 @@ use App\Domains\Invoicing\Models\Quote;
 use App\Domains\Invoicing\Models\QuoteLine;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
 use App\Domains\Projects\Services\InvoiceProjectService;
+use App\Domains\Projects\Services\QuoteJobStatusService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -25,6 +26,7 @@ class ConvertQuoteToInvoiceAction
         private CreateInvoiceAction $createInvoice,
         private InvoiceNumberGenerator $invoiceNumbers,
         private InvoiceProjectService $invoiceProjects,
+        private QuoteJobStatusService $jobStatus,
     ) {}
 
     public function execute(Quote $quote, ?int $userId = null): Invoice
@@ -76,6 +78,7 @@ class ConvertQuoteToInvoiceAction
                 'decided_at' => $quote->decided_at ?? now(),
                 'invoice_id' => $invoice->id,
             ])->save();
+            $this->jobStatus->follow($quote);
 
             return $invoice;
         });

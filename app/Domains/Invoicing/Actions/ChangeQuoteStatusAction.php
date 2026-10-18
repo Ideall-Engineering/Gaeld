@@ -5,12 +5,17 @@ namespace App\Domains\Invoicing\Actions;
 use App\Domains\Invoicing\Enums\QuoteStatus;
 use App\Domains\Invoicing\Exceptions\InvalidQuoteStateException;
 use App\Domains\Invoicing\Models\Quote;
+use App\Domains\Projects\Services\QuoteJobStatusService;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Moves a quote along its lifecycle: sent, accepted, declined, or back.
+ * The quote's job follows (see QuoteJobStatusService).
  */
 class ChangeQuoteStatusAction
 {
+    public function __construct(private QuoteJobStatusService $jobStatus) {}
+
     public function execute(Quote $quote, QuoteStatus $target): Quote
     {
         if ($quote->status === $target) {
@@ -38,7 +43,11 @@ class ChangeQuoteStatusAction
             $quote->sent_at ??= now();
         }
         $quote->decided_at = in_array($target, [QuoteStatus::Accepted, QuoteStatus::Declined], true) ? now() : null;
-        $quote->save();
+
+        DB::transaction(function () use ($quote): void {
+            $quote->save();
+            $this->jobStatus->follow($quote);
+        });
 
         return $quote;
     }

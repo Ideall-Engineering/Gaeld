@@ -8,10 +8,13 @@ use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\QuoteStatus;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Models\Quote;
+use App\Domains\Projects\Enums\ProjectStatus;
+use App\Domains\Projects\Models\InvoiceProject;
 use App\Domains\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
+use Tests\Traits\BuildsProjects;
 use Tests\Traits\WithAuthenticatedOrganization;
 
 /**
@@ -20,7 +23,7 @@ use Tests\Traits\WithAuthenticatedOrganization;
  */
 class QuoteFlowTest extends TestCase
 {
-    use RefreshDatabase, WithAuthenticatedOrganization;
+    use BuildsProjects, RefreshDatabase, WithAuthenticatedOrganization;
 
     private Contact $customer;
 
@@ -174,5 +177,50 @@ class QuoteFlowTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', false)->where('can.convert', false));
         $as()->post('/quotes', ['issue_date' => '2026-10-18', 'lines' => [['description' => 'x', 'quantity' => 1, 'unit_price' => 1]]])->assertForbidden();
         $as()->post("/quotes/{$quote->id}/status", ['status' => 'sent'])->assertForbidden();
+    }
+
+    public function test_the_job_follows_its_quote(): void
+    {
+        $this->enableProjects();
+        $job = $this->makeProject('P26-90');
+        $job->update(['status' => ProjectStatus::Lost, 'expected_amount' => null]);
+
+        $quote = $this->storeQuote(['project_id' => $job->id]);
+        $this->assertSame($job->id, $quote->cost_center_id);
+        $this->assertSame(ProjectStatus::Lost, $job->refresh()->status, 'A draft changes nothing.');
+
+        $this->actAsOrg()->post("/quotes/{$quote->id}/status", ['status' => 'sent']);
+        $job->refresh();
+        $this->assertSame(ProjectStatus::Possible, $job->status);
+        $this->assertSame('1800.00', $job->expected_amount, 'An empty expected amount takes the net total.');
+
+        $this->actAsOrg()->post("/quotes/{$quote->id}/status", ['status' => 'declined']);
+        $this->assertSame(ProjectStatus::Lost, $job->refresh()->status);
+
+        $this->actAsOrg()->post("/quotes/{$quote->id}/status", ['status' => 'sent']);
+        $this->actAsOrg()->post("/quotes/{$quote->id}/convert");
+        $job->refresh();
+        $this->assertSame(ProjectStatus::InProgress, $job->status);
+        $this->assertSame('1800.00', $job->expected_amount);
+        $this->assertSame($job->id, InvoiceProject::query()->where('invoice_id', $quote->refresh()->invoice_id)->value('cost_center_id'));
+
+        // A further quote declined does not undo the work in progress.
+        $second = $this->storeQuote(['project_id' => $job->id]);
+        $this->actAsOrg()->post("/quotes/{$second->id}/status", ['status' => 'declined']);
+        $this->assertSame(ProjectStatus::InProgress, $job->refresh()->status);
+    }
+
+    public function test_a_done_job_is_left_alone(): void
+    {
+        $this->enableProjects();
+        $job = $this->makeProject('P26-91');
+        $job->update(['status' => ProjectStatus::Done, 'expected_amount' => '700.00']);
+
+        $quote = $this->storeQuote(['project_id' => $job->id]);
+        $this->actAsOrg()->post("/quotes/{$quote->id}/status", ['status' => 'accepted']);
+
+        $job->refresh();
+        $this->assertSame(ProjectStatus::Done, $job->status);
+        $this->assertSame('700.00', $job->expected_amount);
     }
 }
