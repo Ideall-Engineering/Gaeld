@@ -65,10 +65,12 @@ class PrepareJournalCorrectionAction
 
             $reversalData = $this->buildReversalData($locked, $correctionDate);
             $reversalDraft = $this->ledgerService->createDraft($locked->organization_id, $reversalData);
-            $reversalDraft->update(['reversal_of_entry_id' => $locked->id]);
+            // Both halves point to the same receipt as the entry they fix.
+            $reversalDraft->update(['reversal_of_entry_id' => $locked->id, 'document_url' => $locked->document_url]);
 
             [$replacementData, $leftOverAllocations] = $this->buildReplacementData($locked, $correctionDate, $replacement);
             $replacementDraft = $this->ledgerService->createDraft($locked->organization_id, $replacementData);
+            $replacementDraft->update(['document_url' => $locked->document_url]);
             $this->allocations->flagLeftOver($replacementDraft, $leftOverAllocations);
 
             $correction = JournalCorrection::create([

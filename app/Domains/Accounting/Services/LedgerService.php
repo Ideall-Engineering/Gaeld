@@ -226,7 +226,7 @@ class LedgerService
 
             // Structured link alongside the REV- reference prefix, which
             // remains a readable label only (see journal_corrections).
-            $reversalEntry->update(['reversal_of_entry_id' => $original->id]);
+            $reversalEntry->update(['reversal_of_entry_id' => $original->id, 'document_url' => $original->document_url]);
 
             JournalEntryReversed::dispatch($reversalEntry, $original);
 

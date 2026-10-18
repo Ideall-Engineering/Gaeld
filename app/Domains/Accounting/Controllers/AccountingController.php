@@ -480,6 +480,7 @@ class AccountingController extends Controller
                 'correct' => $user?->can('correct', $journalEntry) ?? false,
                 'reverse' => $user?->can('reverse', $journalEntry) ?? false,
                 'amend' => $mayAmend,
+                'link_document' => $user?->can('linkDocument', $journalEntry) ?? false,
             ],
         ]);
     }
@@ -685,6 +686,23 @@ class AccountingController extends Controller
             : redirect()->route('accounting.journal');
 
         return $target->with('success', __($journalEntry->is_posted ? 'app.journal_entry_amended' : 'app.journal_entry_updated'));
+    }
+
+    /**
+     * Set or clear the link to where the entry's receipt is kept. A pointer
+     * only, so posted entries take it without a revision.
+     */
+    public function linkJournalEntryDocument(Request $request, JournalEntry $journalEntry): RedirectResponse
+    {
+        $this->authorize('linkDocument', $journalEntry);
+
+        $validated = $request->validate([
+            'document_url' => ['nullable', 'string', 'url:http,https', 'max:2048'],
+        ]);
+
+        $journalEntry->update(['document_url' => $validated['document_url'] ?: null]);
+
+        return back()->with('success', __('app.journal_entry_document_saved'));
     }
 
     /**

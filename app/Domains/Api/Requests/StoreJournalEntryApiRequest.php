@@ -69,6 +69,7 @@ class StoreJournalEntryApiRequest extends FormRequest
                 new NotSystemReference($this->route('journalEntry') instanceof JournalEntry ? $this->route('journalEntry')->reference : null),
             ],
             'description' => ['nullable', 'string', 'max:1000'],
+            'document_url' => ['nullable', 'string', 'url:http,https', 'max:2048'],
             'status' => ['required', Rule::in(['draft', 'posted'])],
             'lines' => ['required', 'array', 'max:100'],
             'lines.*.account_code' => $accountRule,

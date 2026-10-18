@@ -20,6 +20,8 @@ class JournalEntryResource extends JsonResource
             'date' => $this->date->toDateString(),
             'reference' => $this->reference,
             'description' => $this->description,
+            // Where the original receipt is kept; a pointer, not part of the booking.
+            'document_url' => $this->document_url,
             'status' => $this->is_posted ? 'posted' : 'draft',
             'is_posted' => $this->is_posted,
             'source' => $this->type ?? 'manual',

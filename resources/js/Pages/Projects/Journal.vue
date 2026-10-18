@@ -13,7 +13,7 @@ import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { Link, router } from '@inertiajs/vue3'
 import { computed, nextTick, ref, watch } from 'vue'
-import { BookOpen, Pencil, Search, Split, X } from 'lucide-vue-next'
+import { BookOpen, FileText, Pencil, Search, Split, X } from 'lucide-vue-next'
 
 // The revenue and expense lines of a year as a journal, like Banana, with
 // project, job and people on every line (spec 010). The job is changed in
@@ -304,7 +304,7 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
                   <Link :href="`/accounting/journal-entries/${row.entry_id}`" class="block max-w-[9rem] truncate font-mono text-xs hover:underline" :title="row.reference">{{ row.reference || t('journal_entry') }}</Link>
                 </td>
                 <td class="max-w-[15rem] px-2 py-1.5">
-                  <div class="truncate" :title="row.description">{{ row.description }}</div>
+                  <div class="truncate" :title="row.description">{{ row.description }}<a v-if="row.document_url" :href="row.document_url" target="_blank" rel="noopener noreferrer" class="ml-1 inline-flex align-middle text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]" :title="t('journal_entry_document_open')" :aria-label="t('journal_entry_document_open')"><FileText class="h-3.5 w-3.5" /></a></div>
                   <div class="truncate text-xs text-[hsl(var(--muted-foreground))] 2xl:hidden">
                     <Link :href="`/accounting/journal-entries/${row.entry_id}`" class="font-mono hover:underline">{{ row.reference || t('journal_entry') }}</Link><span class="lg:hidden"> · {{ row.debit_account }} / {{ row.credit_account }}</span>
                   </div>

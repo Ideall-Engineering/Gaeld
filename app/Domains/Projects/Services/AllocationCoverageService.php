@@ -123,6 +123,7 @@ class AllocationCoverageService
                 'journal_entries.date',
                 'journal_entries.reference',
                 'journal_entries.description',
+                'journal_entries.document_url',
                 'accounts.code',
                 'accounts.name',
                 'accounts.type',

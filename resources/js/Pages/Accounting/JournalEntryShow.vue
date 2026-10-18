@@ -16,7 +16,7 @@ import JournalEntryFormModal from '@/Components/Accounting/JournalEntryFormModal
 import JournalLinesEditor, { lineFromEntry, serializeLines } from '@/Components/Accounting/JournalLinesEditor.vue'
 import JournalEntryHistory from '@/Components/Accounting/JournalEntryHistory.vue'
 import AllocationDialog from '@/Components/Projects/AllocationDialog.vue'
-import { FolderKanban, Lock, Pencil, Replace, RotateCcw, Trash2 } from 'lucide-vue-next'
+import { ExternalLink, FileText, FolderKanban, Lock, Pencil, Replace, RotateCcw, Trash2 } from 'lucide-vue-next'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 
@@ -44,6 +44,22 @@ const showsLockHint = computed(
   () => isFlexible.value && props.entry.is_posted && !props.entry.can_amend && props.entry.edit_state !== 'open',
 )
 const vatTypeLabels = computed(() => Object.fromEntries(props.vatTypes.map(type => [type.value, type.label])))
+
+// Link to where the original receipt is kept; a pointer, so it can be set
+// on posted entries too.
+const editingDocument = ref(false)
+const documentForm = useForm({ document_url: props.entry.document_url || '' })
+function startDocument() {
+  documentForm.document_url = props.entry.document_url || ''
+  documentForm.clearErrors()
+  editingDocument.value = true
+}
+function saveDocument() {
+  documentForm.put(`/accounting/journal-entries/${props.entry.id}/document`, {
+    preserveScroll: true,
+    onSuccess: () => { editingDocument.value = false },
+  })
+}
 
 // Amend or delete a posted entry in place
 const editing = ref(false)
@@ -249,6 +265,46 @@ function allocationLabel(line) {
             <div>
               <dt class="text-[hsl(var(--muted-foreground))]">{{ t('description') }}</dt>
               <dd class="font-medium">{{ entry.description || '—' }}</dd>
+            </div>
+            <div class="sm:col-span-3">
+              <dt class="text-[hsl(var(--muted-foreground))]">{{ t('journal_entry_document') }}</dt>
+              <dd v-if="editingDocument">
+                <form class="mt-1 flex flex-wrap items-start gap-2" @submit.prevent="saveDocument">
+                  <FormInput
+                    id="document_url"
+                    v-model="documentForm.document_url"
+                    type="url"
+                    class="min-w-0 flex-1"
+                    :placeholder="t('journal_entry_document_placeholder')"
+                    :aria-label="t('journal_entry_document')"
+                    :error="documentForm.errors.document_url"
+                  />
+                  <Button type="submit" size="sm" :loading="documentForm.processing">{{ t('save') }}</Button>
+                  <Button type="button" size="sm" variant="outline" @click="editingDocument = false">{{ t('cancel') }}</Button>
+                </form>
+              </dd>
+              <dd v-else class="flex items-center gap-2 font-medium">
+                <a
+                  v-if="entry.document_url"
+                  :href="entry.document_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1 text-[hsl(var(--primary))] hover:underline"
+                >
+                  <FileText class="h-4 w-4" />{{ t('journal_entry_document_open') }}<ExternalLink class="h-3 w-3" />
+                </a>
+                <span v-else>—</span>
+                <button
+                  v-if="can.link_document"
+                  type="button"
+                  class="rounded p-1 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))]"
+                  :title="entry.document_url ? t('journal_entry_document_edit') : t('journal_entry_document_add')"
+                  :aria-label="entry.document_url ? t('journal_entry_document_edit') : t('journal_entry_document_add')"
+                  @click="startDocument"
+                >
+                  <Pencil class="h-3.5 w-3.5" />
+                </button>
+              </dd>
             </div>
           </dl>
         </CardContent>

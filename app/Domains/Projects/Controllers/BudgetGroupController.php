@@ -112,6 +112,7 @@ class BudgetGroupController extends Controller
                     'entry_id' => $row['entry_id'],
                     'date' => $row['date'],
                     'reference' => $row['reference'],
+                    'document_url' => $row['document_url'],
                     'description' => $row['description'],
                     'account' => $row['account']['code'],
                     'counter' => $row['debit_account'] === $row['account']['code'] ? $row['credit_account'] : $row['debit_account'],

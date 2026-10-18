@@ -85,6 +85,33 @@ class JournalEntryApiController extends Controller
     }
 
     /**
+     * Link the receipt
+     *
+     * Sets or clears the link to where the entry's original receipt is kept,
+     * for example a Google Drive file. The link is a pointer, not part of the
+     * booking, so posted entries take it without a revision. Send `null` to
+     * clear it.
+     *
+     * @urlParam journalEntry string required The journal entry UUID. Example: 9c8f1b2a-3d4e-5f67-8901-abcdef123456
+     */
+    public function document(
+        Request $request,
+        JournalEntry $journalEntry,
+        CurrentOrganization $currentOrganization,
+    ): JournalEntryResource {
+        $this->ensureOrganization($journalEntry, $currentOrganization->id());
+        $this->authorize('linkDocument', $journalEntry);
+
+        $validated = $request->validate([
+            'document_url' => ['present', 'nullable', 'string', 'url:http,https', 'max:2048'],
+        ]);
+
+        $journalEntry->update(['document_url' => $validated['document_url'] ?: null]);
+
+        return new JournalEntryResource($journalEntry->load($this->lineRelations()));
+    }
+
+    /**
      * Create journal entry
      *
      * Creates a draft or posted journal entry in the current organisation.
@@ -127,6 +154,9 @@ class JournalEntryApiController extends Controller
             $entry = $request->string('status')->value() === 'posted'
                 ? $ledger->postEntry($currentOrganization->id(), $entryData)
                 : $ledger->createDraft($currentOrganization->id(), $entryData);
+            if (($validated['document_url'] ?? null) !== null) {
+                $entry->update(['document_url' => $validated['document_url']]);
+            }
 
             $response = (new JournalEntryResource($entry->load($this->lineRelations())))
                 ->response()

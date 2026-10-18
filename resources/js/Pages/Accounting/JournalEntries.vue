@@ -21,7 +21,7 @@ import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 import AllocationDialog from '@/Components/Projects/AllocationDialog.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
-import { BookText, Plus, Check, RotateCcw, Replace, Trash2, Pencil, HelpCircle, Lock, History, FolderKanban } from 'lucide-vue-next'
+import { BookText, Plus, Check, RotateCcw, Replace, Trash2, Pencil, HelpCircle, Lock, History, FolderKanban, FileText } from 'lucide-vue-next'
 
 const props = defineProps({
   entries: Object,
@@ -375,6 +375,16 @@ function doDelete() {
               {{ value || t('journal_entry') }}
             </Link>
             <span v-else>{{ value }}</span>
+            <a
+              v-if="row.document_url"
+              :href="row.document_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ml-1 inline-flex align-middle text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]"
+              :title="t('journal_entry_document_open')"
+              :aria-label="t('journal_entry_document_open')"
+              @click.stop
+            ><FileText class="h-3.5 w-3.5" /></a>
           </template>
           <template #cell-debit_account="{ value, row }">
             <JournalAccountCell :account="value" :is-split="row.is_split" :show-name="showsAccountNames" />

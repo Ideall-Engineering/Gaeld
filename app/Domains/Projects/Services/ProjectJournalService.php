@@ -75,6 +75,7 @@ class ProjectJournalService
                 'entry_id' => $line->journal_entry_id,
                 'date' => (string) $line->date,
                 'reference' => $line->reference,
+                'document_url' => $line->document_url,
                 'description' => $line->line_description ?: $line->description,
                 'account' => ['id' => (int) $line->account_id, 'code' => (string) $line->code, 'name' => (string) $line->name],
                 'type' => $line->type,

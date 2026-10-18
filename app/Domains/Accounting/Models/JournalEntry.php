@@ -27,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $date
  * @property string|null $reference
  * @property string|null $description
+ * @property string|null $document_url
  * @property bool $is_posted
  * @property int $revision
  * @property string|null $reversal_of_entry_id
@@ -49,6 +50,7 @@ class JournalEntry extends Model
         'date',
         'reference',
         'description',
+        'document_url',
         'is_posted',
         'reversal_of_entry_id',
         'type',

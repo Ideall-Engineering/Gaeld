@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Receipt link on journal entries:** an entry can point to where its
+  original receipt is kept (for example a Google Drive file). The link is
+  shown on the entry page, as a small icon in the journal, in the project
+  journal and in an unfolded cost block, and opens in a new tab. It is a
+  pointer only, not part of the booking, so it can be set or changed on
+  posted entries without a revision; only http and https addresses are
+  accepted. Corrections and reversals keep the link of the entry they fix.
+  The API returns `document_url`, accepts it when creating an entry and sets
+  it at `PUT /api/v1/journal-entries/{id}/document`.
 - **Projects and allocation of journal lines (module `projects`, off by
   default):** keep areas and projects with kind, status, customer, person
   responsible, target date and expected amount, and allocate any journal line

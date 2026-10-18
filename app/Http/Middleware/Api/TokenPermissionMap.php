@@ -171,6 +171,7 @@ final class TokenPermissionMap
                 'post' => Permission::AccountingEdit,
                 'reverse' => Permission::AccountingEdit,
                 'update' => Permission::AccountingEdit,
+                'linkDocument' => Permission::AccountingEdit,
                 'delete' => Permission::AccountingDelete,
                 'attemptAmend' => Permission::AccountingAmendPosted,
                 'amend' => Permission::AccountingAmendPosted,

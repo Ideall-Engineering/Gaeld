@@ -116,6 +116,7 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
     Route::get('/journal-entries/{journalEntry}', [JournalEntryApiController::class, 'show'])->name('api.journal-entries.show');
     Route::post('/journal-entries', [JournalEntryApiController::class, 'store'])->name('api.journal-entries.store');
     Route::patch('/journal-entries/{journalEntry}', [JournalEntryApiController::class, 'update'])->name('api.journal-entries.update');
+    Route::put('/journal-entries/{journalEntry}/document', [JournalEntryApiController::class, 'document'])->name('api.journal-entries.document');
     Route::post('/journal-entries/{journalEntry}/post', [JournalEntryApiController::class, 'post'])->name('api.journal-entries.post');
     Route::post('/journal-entries/{journalEntry}/reverse', [JournalEntryApiController::class, 'reverse'])->name('api.journal-entries.reverse');
     Route::delete('/journal-entries/{journalEntry}', [JournalEntryApiController::class, 'destroy'])->name('api.journal-entries.destroy');

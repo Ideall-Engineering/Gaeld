@@ -43,6 +43,17 @@ class JournalEntryPolicy extends BasePolicy
             && ! $entry->is_posted;
     }
 
+    /**
+     * The receipt link is a pointer, not part of the booking, so it may be
+     * set on posted entries as well.
+     */
+    public function linkDocument(User $user, JournalEntry $entry): bool
+    {
+        return $entry->archived_at === null
+            && $this->belongsToOrganization($user, $entry)
+            && $user->hasPermissionTo(Permission::AccountingEdit);
+    }
+
     public function delete(User $user, JournalEntry $entry): bool
     {
         if ($entry->archived_at !== null) {

@@ -15,7 +15,7 @@ import { formatCurrency } from '@/lib/utils'
 import { useFormatters } from '@/lib/useFormatters'
 import { computed, ref, watch } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Copy, Download, FolderKanban, FolderPlus, ListChecks, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Copy, Download, FileText, FolderKanban, FolderPlus, ListChecks, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
 
 // Jobs grouped by project, with what each brought in net (spec 010, US1
 // and US3). On top: whether every receipt of the year has its place.
@@ -582,7 +582,7 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
                         <Link :href="`/accounting/journal-entries/${line.entry_id}`" class="font-mono hover:underline">{{ line.reference || t('journal_entry') }}</Link>
                       </td>
                       <td class="py-1 pr-2">
-                        <Link :href="`/accounting/journal-entries/${line.entry_id}`" class="hover:underline sm:no-underline">{{ line.description }}</Link>
+                        <Link :href="`/accounting/journal-entries/${line.entry_id}`" class="hover:underline sm:no-underline">{{ line.description }}</Link><a v-if="line.document_url" :href="line.document_url" target="_blank" rel="noopener noreferrer" class="ml-1 inline-flex align-middle text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]" :title="t('journal_entry_document_open')" :aria-label="t('journal_entry_document_open')"><FileText class="h-3.5 w-3.5" /></a>
                         <span v-if="line.jobs.length" class="ml-1 italic text-[hsl(var(--muted-foreground))]">{{ t('block_line_at_job', { amount: formatCurrency(line.at_jobs), jobs: line.jobs.join(', ') }) }}</span>
                       </td>
                       <td class="hidden w-28 py-1 pr-2 font-mono whitespace-nowrap md:table-cell">{{ line.account }} / {{ line.counter }}</td>
