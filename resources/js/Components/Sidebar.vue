@@ -211,7 +211,6 @@ const navigation = computed(() => {
         { key: 'jobs', href: '/projects', exact: true },
         ...(can('projects.allocate') ? [{ key: 'unallocated_lines', href: '/projects/unallocated' }] : []),
         ...(can('organization.delete') ? [{ key: 'steering', href: '/projects/steering' }] : []),
-        { key: 'budget_groups', href: '/projects/plan' },
         { key: 'acquisitions', href: '/projects/acquisitions' },
       ]},
     ] : []),

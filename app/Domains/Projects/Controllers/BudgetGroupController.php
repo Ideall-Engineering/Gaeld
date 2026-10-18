@@ -2,13 +2,9 @@
 
 namespace App\Domains\Projects\Controllers;
 
-use App\Domains\Accounting\Enums\AccountType;
-use App\Domains\Accounting\Models\Account;
 use App\Domains\Organizations\Services\CurrentOrganization;
-use App\Domains\Projects\Enums\BudgetGroupKind;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\Project;
-use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Requests\BudgetGroupRequest;
 use App\Domains\Projects\Services\PlanActualService;
 use App\Http\Controllers\Controller;
@@ -16,8 +12,6 @@ use App\Support\CsvExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
-use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 /**
@@ -25,28 +19,15 @@ use Symfony\Component\HttpFoundation\Response as HttpResponse;
  */
 class BudgetGroupController extends Controller
 {
-    public function index(Request $request, PlanActualService $plans, CurrentOrganization $currentOrg): Response
+    /**
+     * Spec 010: the cost blocks live on the jobs page now; the old address
+     * keeps working.
+     */
+    public function index(Request $request): RedirectResponse
     {
         $this->authorize('viewAny', Project::class);
 
-        $year = $this->year($request);
-
-        return Inertia::render('Projects/Plan', [
-            'year' => $year,
-            'plan' => $plans->forYear($currentOrg->id(), $year, withKeys: $request->user()?->can('steer', Project::class) ?? false),
-            'accounts' => Account::query()
-                ->where('type', AccountType::Expense->value)
-                ->orderBy('code')
-                ->get(['id', 'code', 'name'])
-                ->map(fn (Account $a) => ['id' => $a->id, 'code' => $a->code, 'name' => $a->display_name]),
-            'kinds' => array_map(fn (BudgetGroupKind $k) => ['value' => $k->value, 'label' => __('app.budget_group_kind_'.$k->value)], BudgetGroupKind::cases()),
-            'hasPreviousYear' => BudgetGroup::query()->where('year', $year - 1)->exists(),
-            'employees' => ProjectQuery::employeeOptions(),
-            'can' => [
-                'manage' => $request->user()?->can('create', Project::class) ?? false,
-                'steer' => $request->user()?->can('steer', Project::class) ?? false,
-            ],
-        ]);
+        return redirect()->to(route('projects.index', ['year' => $this->year($request)]).'#general-costs');
     }
 
     public function store(BudgetGroupRequest $request, CurrentOrganization $currentOrg): RedirectResponse

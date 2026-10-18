@@ -123,6 +123,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its receipts and the net share of every person, and the people page breaks
   each person's net down by job. A job or project created without a code gets
   the next free one. No new table and no migration.
+- **General costs on the jobs page:** the cost blocks moved from their own page
+  to the bottom of the jobs page, with who bears each block (shared or one
+  person alone), plan, actual, rest and projection; a click on a row edits it.
+  The form has quick buttons for "shared", "X alone" and who did the work.
+  The old address `/projects/plan` redirects there. On the people page the
+  general costs and the drawings open line by line, and every block in "who
+  bears what" can be edited in place. Acquisitions sort and filter by column
+  like a Notion table (category, people, status), with chips and a total of
+  what is shown.
 - **Accountants may discard a draft invoice.** The role could prepare, edit,
   finalise and collect an invoice but not throw a draft away, and the delete
   button was shown anyway and then refused with a 403. A draft carries no

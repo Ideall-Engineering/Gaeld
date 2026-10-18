@@ -2,7 +2,10 @@
 
 namespace App\Domains\Projects\Queries;
 
+use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Models\Account;
 use App\Domains\Payroll\Models\Employee;
+use App\Domains\Projects\Enums\BudgetGroupKind;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\ProjectShare;
 use Illuminate\Support\Collection;
@@ -104,6 +107,24 @@ class ProjectQuery
             ->orderBy('first_name')
             ->get(['id', 'first_name', 'last_name'])
             ->map(fn (Employee $e) => ['id' => $e->id, 'name' => trim("{$e->first_name} {$e->last_name}")]);
+    }
+
+    /**
+     * What the cost block form needs: expense accounts and kinds (spec 010,
+     * the form sits on the jobs page and the people page).
+     *
+     * @return array{accounts: Collection<int, array{id: int, code: string, name: string}>, kinds: array<int, array{value: string, label: string}>}
+     */
+    public static function blockOptions(): array
+    {
+        return [
+            'accounts' => Account::query()
+                ->where('type', AccountType::Expense->value)
+                ->orderBy('code')
+                ->get(['id', 'code', 'name'])
+                ->map(fn (Account $a) => ['id' => (int) $a->id, 'code' => (string) $a->code, 'name' => (string) $a->display_name]),
+            'kinds' => array_map(fn (BudgetGroupKind $k) => ['value' => $k->value, 'label' => (string) __('app.budget_group_kind_'.$k->value)], BudgetGroupKind::cases()),
+        ];
     }
 
     /**

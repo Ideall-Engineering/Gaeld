@@ -131,7 +131,7 @@ class SteeringTest extends TestCase
     {
         $this->actAsOrg()->get('/projects/steering?year=2026')
             ->assertOk()
-            ->assertInertia(fn (AssertableInertia $page) => $page->component('Projects/Steering')->has('steering.people', 2));
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('Projects/Steering')->has('steering.people', 2)->has('groups')->has('blockOptions.kinds')->has('steering.blocks.0.id'));
         $this->assertStringContainsString('Anna A', $this->actAsOrg()->get('/projects/steering/export/csv?year=2026')->streamedContent());
         $this->actAsOrg()->get('/projects/steering/export/pdf?year=2026')->assertOk();
 
@@ -238,7 +238,7 @@ class SteeringTest extends TestCase
         $this->assignOrganizationRole($viewer, $this->organization, 'viewer');
 
         $this->actingAs($viewer)->withSession(['current_organization_id' => $this->organization->id])
-            ->get('/projects/plan?year=2026')
+            ->get('/projects?year=2026')
             ->assertInertia(fn (AssertableInertia $page) => $page->where('plan.groups.0.people', []));
     }
 

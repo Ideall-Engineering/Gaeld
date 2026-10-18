@@ -9,11 +9,12 @@ import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import ExportDropdown from '@/Components/UI/ExportDropdown.vue'
 import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
+import BudgetGroupFormModal from '@/Components/Projects/BudgetGroupFormModal.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { Link, router, useForm } from '@inertiajs/vue3'
-import { computed, reactive } from 'vue'
-import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
+import { computed, reactive, ref } from 'vue'
+import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-vue-next'
 
 // What each person earned and drew, and the room left for performance pay
 // (spec 009, stage 5; spec 010, US5).
@@ -21,6 +22,8 @@ const props = defineProps({
   year: Number,
   steering: Object,
   employees: Array,
+  groups: { type: Array, default: () => [] },
+  blockOptions: { type: Object, default: () => ({ accounts: [], kinds: [] }) },
 })
 
 const { t } = useTranslations()
@@ -32,8 +35,21 @@ const yearOptions = computed(() => {
   return [now + 1, now, now - 1, now - 2].map(y => ({ value: String(y), label: String(y) }))
 })
 
+// Each line of a person can be opened: jobs, general costs, drawings.
 const open = reactive({})
-const toggle = id => { open[id] = !open[id] }
+const toggle = key => { open[key] = !open[key] }
+const itemsOf = id => props.steering.items.filter(i => i.employee_id === id)
+const blocksOf = id => props.steering.blocks
+  .map(b => ({ ...b, effect: b.people[id]?.effect ?? '0.00' }))
+  .filter(b => Number(b.effect) !== 0)
+
+// Spec 010: a cost block is edited where its effect is seen.
+const showBlockForm = ref(false)
+const editingBlock = ref(null)
+function editBlock(block) {
+  editingBlock.value = props.groups.find(g => g.id === block.id) ?? null
+  if (editingBlock.value) showBlockForm.value = true
+}
 const nameOf = id => props.employees.find(e => e.id === id)?.name ?? ''
 
 const itemForm = useForm({ year: props.year, employee_id: props.employees[0]?.id ?? '', label: '', amount: '' })
@@ -99,16 +115,57 @@ function removeItem(item) {
                     </td>
                   </tr>
                   <tr>
-                    <td class="py-1 pl-5">{{ t('steering_effect') }}</td>
+                    <td class="py-1">
+                      <button type="button" class="flex items-center gap-1 hover:underline" @click="toggle('effect-' + person.employee_id)">
+                        <component :is="open['effect-' + person.employee_id] ? ChevronDown : ChevronRight" class="h-4 w-4" />
+                        {{ t('steering_effect') }}
+                      </button>
+                    </td>
                     <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.effect) }}</td>
+                  </tr>
+                  <tr v-if="open['effect-' + person.employee_id]">
+                    <td colspan="2" class="pb-2 pl-5">
+                      <table class="w-full text-xs">
+                        <tbody class="divide-y divide-[hsl(var(--border))]">
+                          <tr v-for="block in blocksOf(person.employee_id)" :key="block.id">
+                            <td class="py-1"><button type="button" class="text-left hover:underline" @click="editBlock(block)">{{ block.name }}</button></td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.effect) }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
                   </tr>
                   <tr class="border-t font-semibold">
                     <td class="py-2">{{ t('steering_value') }}</td>
                     <td class="py-2 text-right tabular-nums">{{ formatCurrency(person.value) }}</td>
                   </tr>
                   <tr>
-                    <td class="py-1 pl-5">{{ t('steering_drawn') }}</td>
+                    <td class="py-1">
+                      <button type="button" class="flex items-center gap-1 hover:underline" @click="toggle('drawn-' + person.employee_id)">
+                        <component :is="open['drawn-' + person.employee_id] ? ChevronDown : ChevronRight" class="h-4 w-4" />
+                        {{ t('steering_drawn') }}
+                      </button>
+                    </td>
                     <td class="py-1 text-right tabular-nums">{{ formatCurrency(-person.drawn) }}</td>
+                  </tr>
+                  <tr v-if="open['drawn-' + person.employee_id]">
+                    <td colspan="2" class="pb-2 pl-5">
+                      <table class="w-full text-xs">
+                        <tbody class="divide-y divide-[hsl(var(--border))]">
+                          <tr v-for="item in itemsOf(person.employee_id)" :key="item.id">
+                            <td class="py-1">{{ item.label }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(-item.amount) }}</td>
+                          </tr>
+                          <tr v-if="Number(person.acquisitions) !== 0">
+                            <td class="py-1"><Link :href="`/projects/acquisitions?year=${year}`" class="hover:underline">{{ t('acquisitions') }}</Link></td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(-person.acquisitions) }}</td>
+                          </tr>
+                          <tr v-if="!itemsOf(person.employee_id).length && Number(person.acquisitions) === 0">
+                            <td colspan="2" class="py-1 text-[hsl(var(--muted-foreground))]">{{ t('steering_drawn_empty') }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
                   </tr>
                   <tr class="border-t text-base font-semibold">
                     <td class="py-2">{{ t('steering_play') }}</td>
@@ -140,14 +197,18 @@ function removeItem(item) {
                   <th class="pb-2">{{ t('name') }}</th>
                   <th class="pb-2 text-right">{{ t('budget_group_plan') }}</th>
                   <th v-for="person in people" :key="person.employee_id" class="pb-2 text-right">{{ person.name }}</th>
+                  <th class="w-12 pb-2"></th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-[hsl(var(--border))]">
-                <tr v-for="block in steering.blocks" :key="block.name">
+                <tr v-for="block in steering.blocks" :key="block.id" class="cursor-pointer hover:bg-[hsl(var(--muted))]/40" @click="editBlock(block)">
                   <td class="py-1">{{ block.name }}</td>
                   <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.plan) }}</td>
                   <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">
                     {{ formatCurrency(block.people[person.employee_id]?.effect ?? 0) }}
+                  </td>
+                  <td class="py-1 text-right" @click.stop>
+                    <Button variant="ghost" size="icon" :aria-label="t('edit')" @click="editBlock(block)"><Pencil class="h-4 w-4" /></Button>
                   </td>
                 </tr>
               </tbody>
@@ -187,5 +248,16 @@ function removeItem(item) {
         </CardContent>
       </Card>
     </div>
+
+    <BudgetGroupFormModal
+      :open="showBlockForm"
+      :group="editingBlock"
+      :year="year"
+      :accounts="blockOptions.accounts"
+      :kinds="blockOptions.kinds"
+      :employees="employees"
+      can-steer
+      @close="showBlockForm = false"
+    />
   </AppLayout>
 </template>

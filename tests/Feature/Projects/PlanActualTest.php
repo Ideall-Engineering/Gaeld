@@ -133,9 +133,14 @@ class PlanActualTest extends TestCase
         $this->assertNull($group->plan_amount);
         $this->assertSame([$this->software1->id], $group->accounts->pluck('id')->all());
 
-        $this->actAsOrg()->get('/projects/plan?year=2026')
+        // Spec 010: the blocks live on the jobs page; the old address leads there.
+        $this->actAsOrg()->get('/projects/plan?year=2026')->assertRedirect('/projects?year=2026#general-costs');
+        $this->actAsOrg()->get('/projects?year=2026')
             ->assertOk()
-            ->assertInertia(fn (AssertableInertia $page) => $page->component('Projects/Plan')->where('plan.groups.0.name', 'Software & SaaS'));
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('Projects/Index')
+                ->where('plan.groups.0.name', 'Software & SaaS')
+                ->has('blockOptions.accounts')
+                ->has('blockOptions.kinds'));
         $this->assertStringContainsString('Software & SaaS', $this->actAsOrg()->get('/projects/plan/export?year=2026')->streamedContent());
 
         $this->actAsOrg()->delete("/projects/plan/{$group->id}")->assertSessionHasNoErrors();
@@ -164,7 +169,7 @@ class PlanActualTest extends TestCase
         $this->assignOrganizationRole($viewer, $this->organization, 'viewer');
         $session = ['current_organization_id' => $this->organization->id];
 
-        $this->actingAs($viewer)->withSession($session)->get('/projects/plan')->assertOk();
+        $this->actingAs($viewer)->withSession($session)->get('/projects')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('plan.groups'));
         $this->actingAs($viewer)->withSession($session)->post('/projects/plan', ['year' => 2026, 'name' => 'X', 'kind' => 'running'])->assertForbidden();
     }
 

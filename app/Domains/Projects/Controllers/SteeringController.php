@@ -6,6 +6,7 @@ use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\SteeringItem;
 use App\Domains\Projects\Queries\ProjectQuery;
+use App\Domains\Projects\Services\PlanActualService;
 use App\Domains\Projects\Services\SteeringService;
 use App\Domains\Reporting\Services\ExportReportService;
 use App\Http\Controllers\Controller;
@@ -23,7 +24,7 @@ use Symfony\Component\HttpFoundation\Response as HttpResponse;
  */
 class SteeringController extends Controller
 {
-    public function index(Request $request, SteeringService $steering, CurrentOrganization $currentOrg): Response
+    public function index(Request $request, SteeringService $steering, PlanActualService $plans, CurrentOrganization $currentOrg): Response
     {
         $this->authorize('steer', Project::class);
 
@@ -33,6 +34,9 @@ class SteeringController extends Controller
             'year' => $year,
             'steering' => $steering->forYear($currentOrg->id(), $year),
             'employees' => ProjectQuery::employeeOptions(),
+            // Spec 010: each cost block can be edited right here.
+            'groups' => $plans->forYear($currentOrg->id(), $year, withKeys: true)['groups'],
+            'blockOptions' => ProjectQuery::blockOptions(),
         ]);
     }
 

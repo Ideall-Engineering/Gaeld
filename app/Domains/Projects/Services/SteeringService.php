@@ -145,7 +145,7 @@ class SteeringService
             }
             $credited = $group->people->mapWithKeys(fn (Employee $e) => [$e->id => (string) data_get($e, 'pivot.credit_share')])->filter(fn ($s) => Money::isPositive($s))->all();
 
-            $row = ['name' => $group->name, 'plan' => $plan, 'people' => []];
+            $row = ['id' => $group->id, 'name' => $group->name, 'plan' => $plan, 'people' => []];
             $carryParts = $this->split($plan, $carry);
             $creditParts = $credited === [] ? [] : $this->split($plan, $credited);
             foreach ($ids as $id) {

@@ -13,11 +13,12 @@ import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
 import FormTextarea from '@/Components/UI/FormTextarea.vue'
 import Modal from '@/Components/UI/Modal.vue'
+import ColumnMenu from '@/Components/Projects/ColumnMenu.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { Link, router, useForm } from '@inertiajs/vue3'
-import { computed, ref } from 'vue'
-import { Download, Package, Pencil, Plus, Trash2, X } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { Download, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
 
 // Material and devices assigned to people (spec 009, stage 4). The net
 // amount charges the people; a returned article charges nobody.
@@ -43,9 +44,83 @@ const yearOptions = computed(() => {
 })
 const employeeOptions = computed(() => [{ value: '', label: t('select_placeholder') }, ...props.employees.map(e => ({ value: String(e.id), label: e.name }))])
 
-function applyFilters(changes) {
-  router.get('/projects/acquisitions', { year: props.year, ...props.filters, ...changes }, { preserveScroll: true, preserveState: true })
+function changeYear(year) {
+  router.get('/projects/acquisitions', { year }, { preserveScroll: true, preserveState: true })
 }
+
+// Notion-like (spec 010): each column head sorts and filters the list in
+// the browser; active filters show as chips. Remembered per browser only.
+const FILTER_KEY = 'gaeld.acquisitions.filter'
+function stored() {
+  try {
+    return JSON.parse(localStorage.getItem(FILTER_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+const saved = stored()
+const search = ref('')
+const statusFilter = ref(props.filters?.status ? [props.filters.status] : (Array.isArray(saved.statuses) ? saved.statuses : []))
+const personFilter = ref(props.filters?.employee_id ? [props.filters.employee_id] : (Array.isArray(saved.people) ? saved.people : []))
+const categoryFilter = ref(Array.isArray(saved.categories) ? saved.categories : [])
+const defaultSort = { key: 'date', dir: 'asc' }
+const sort = ref(saved.sort && typeof saved.sort === 'object' ? saved.sort : { ...defaultSort })
+watch([statusFilter, personFilter, categoryFilter, sort], () => {
+  try {
+    localStorage.setItem(FILTER_KEY, JSON.stringify({ statuses: statusFilter.value, people: personFilter.value, categories: categoryFilter.value, sort: sort.value }))
+  } catch {
+    // Remembering the filter is a convenience only.
+  }
+}, { deep: true })
+
+const NO_CATEGORY = '__none'
+const personOptions = computed(() => props.employees.map(e => ({ value: e.id, label: e.name })))
+const categoryOptions = computed(() => {
+  const names = [...new Set(props.overview.rows.map(r => r.category).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const list = names.map(c => ({ value: c, label: c }))
+  if (props.overview.rows.some(r => !r.category)) list.push({ value: NO_CATEGORY, label: t('acquisition_no_category') })
+  return list
+})
+const columnLabel = { date: 'date', item: 'acquisition_item', gross: 'acquisition_gross', net: 'acquisition_net', status: 'status', return: 'acquisition_return_until', warranty: 'acquisition_warranty_until' }
+const sortValue = {
+  date: r => r.purchased_on ?? '',
+  item: r => r.item ?? '',
+  gross: r => Number(r.gross_amount || 0),
+  net: r => Number(r.net_amount || 0),
+  status: r => statuses.indexOf(r.status),
+  // Empty dates go last either way.
+  return: r => r.return_until ?? '9999',
+  warranty: r => r.warranty_until ?? '9999',
+}
+function compare(a, b) {
+  const get = sortValue[sort.value.key] ?? sortValue.date
+  const [x, y] = [get(a), get(b)]
+  const order = typeof x === 'string' ? x.localeCompare(y, undefined, { numeric: true }) : x - y
+  return sort.value.dir === 'desc' ? -order : order
+}
+const rows = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return props.overview.rows
+    .filter(r => !statusFilter.value.length || statusFilter.value.includes(r.status))
+    .filter(r => !personFilter.value.length || r.people.some(p => personFilter.value.includes(p.employee_id)))
+    .filter(r => !categoryFilter.value.length || categoryFilter.value.includes(r.category || NO_CATEGORY))
+    .filter(r => !q || [r.item, r.category, r.supplier, r.journal_reference, ...r.people.map(p => p.name)].some(v => (v ?? '').toLowerCase().includes(q)))
+    .sort(compare)
+})
+const visibleTotals = computed(() => rows.value.filter(r => r.status !== 'returned').reduce((s, r) => ({
+  gross: s.gross + Number(r.gross_amount || 0),
+  net: s.net + Number(r.net_amount || 0),
+}), { gross: 0, net: 0 }))
+const hasFilter = computed(() => statusFilter.value.length > 0 || personFilter.value.length > 0 || categoryFilter.value.length > 0 || search.value !== '')
+const sorted = computed(() => sort.value.key !== defaultSort.key || sort.value.dir !== defaultSort.dir)
+function clearFilters() {
+  statusFilter.value = []
+  personFilter.value = []
+  categoryFilter.value = []
+  search.value = ''
+  sort.value = { ...defaultSort }
+}
+const labelOf = (options, value) => options.find(o => o.value === value)?.label ?? value
 
 const showForm = ref(false)
 const editing = ref(null)
@@ -124,9 +199,7 @@ const peopleError = computed(() => form.errors.people || Object.entries(form.err
         <div class="flex flex-wrap items-end justify-between gap-3">
           <CardTitle>{{ t('acquisitions') }}</CardTitle>
           <div class="flex flex-wrap items-end gap-2">
-            <FormSelect id="year" :model-value="String(year)" :label="t('year')" :options="yearOptions" @update:model-value="v => applyFilters({ year: v })" />
-            <FormSelect id="filter_person" :model-value="filters.employee_id" :label="t('acquisition_person')" :options="[{ value: '', label: t('all') }, ...employeeOptions.slice(1)]" @update:model-value="v => applyFilters({ employee_id: v })" />
-            <FormSelect id="filter_status" :model-value="filters.status" :label="t('status')" :options="[{ value: '', label: t('all') }, ...statusOptions]" @update:model-value="v => applyFilters({ status: v })" />
+            <FormSelect id="year" :model-value="String(year)" :label="t('year')" :options="yearOptions" @update:model-value="changeYear" />
             <a :href="`/projects/acquisitions/export?year=${year}`"><Button size="sm" variant="outline"><Download class="mr-1 h-4 w-4" /> CSV</Button></a>
             <Button v-if="can.manage" size="sm" @click="openCreate"><Plus class="mr-1 h-4 w-4" /> {{ t('add') }}</Button>
           </div>
@@ -146,24 +219,48 @@ const peopleError = computed(() => form.errors.people || Object.entries(form.err
           </div>
         </div>
 
+        <div v-if="overview.rows.length" class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+          <label class="relative min-w-[14rem] flex-1 sm:max-w-sm">
+            <Search class="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+            <input v-model="search" type="search" :placeholder="t('search')" :aria-label="t('search')" class="h-9 w-full rounded-md border border-[hsl(var(--input))] bg-transparent pl-8 pr-3 text-sm" />
+          </label>
+          <span v-if="categoryFilter.length" class="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-3 py-1">
+            {{ t('acquisition_category') }}: {{ categoryFilter.map(v => labelOf(categoryOptions, v)).join(', ') }}
+            <button type="button" :aria-label="t('column_filter_clear')" @click="categoryFilter = []"><X class="h-3 w-3" /></button>
+          </span>
+          <span v-if="personFilter.length" class="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-3 py-1">
+            {{ t('acquisition_people') }}: {{ personFilter.map(v => labelOf(personOptions, v)).join(', ') }}
+            <button type="button" :aria-label="t('column_filter_clear')" @click="personFilter = []"><X class="h-3 w-3" /></button>
+          </span>
+          <span v-if="statusFilter.length" class="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-3 py-1">
+            {{ t('status') }}: {{ statusFilter.map(v => labelOf(statusOptions, v)).join(', ') }}
+            <button type="button" :aria-label="t('column_filter_clear')" @click="statusFilter = []"><X class="h-3 w-3" /></button>
+          </span>
+          <span v-if="sorted" class="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-3 py-1">
+            {{ t('job_sort') }}: {{ t(columnLabel[sort.key] ?? 'date') }} {{ sort.dir === 'desc' ? '↓' : '↑' }}
+            <button type="button" :aria-label="t('column_filter_clear')" @click="sort = { ...defaultSort }"><X class="h-3 w-3" /></button>
+          </span>
+          <button v-if="hasFilter || sorted" type="button" class="text-[hsl(var(--muted-foreground))] hover:underline" @click="clearFilters">{{ t('column_filter_reset') }}</button>
+        </div>
+
         <EmptyState v-if="overview.rows.length === 0" :icon="Package" :title="t('acquisitions_empty_title')" :description="t('acquisitions_empty_desc')" :action-label="can.manage ? t('create_first') : undefined" @action="openCreate" />
         <div v-else class="overflow-x-auto">
           <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
             <thead>
-              <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
-                <th class="pb-2">{{ t('date') }}</th>
-                <th class="pb-2">{{ t('acquisition_item') }}</th>
-                <th class="pb-2">{{ t('acquisition_people') }}</th>
-                <th class="pb-2 text-right">{{ t('acquisition_gross') }}</th>
-                <th class="pb-2 text-right">{{ t('acquisition_net') }}</th>
-                <th class="pb-2">{{ t('status') }}</th>
-                <th class="pb-2">{{ t('acquisition_return_until') }}</th>
-                <th class="pb-2">{{ t('acquisition_warranty_until') }}</th>
+              <tr class="border-b text-left text-xs text-[hsl(var(--muted-foreground))]">
+                <th class="pb-2 font-medium"><ColumnMenu :label="t('date')" column="date" :sort="sort" @sort="dir => sort = { key: 'date', dir }" /></th>
+                <th class="pb-2 font-medium"><ColumnMenu v-model:selected="categoryFilter" :label="t('acquisition_item')" column="item" :sort="sort" :options="categoryOptions" @sort="dir => sort = { key: 'item', dir }" /></th>
+                <th class="pb-2 font-medium"><ColumnMenu v-model:selected="personFilter" :label="t('acquisition_people')" column="people" :sortable="false" :options="personOptions" /></th>
+                <th class="pb-2 text-right font-medium"><ColumnMenu :label="t('acquisition_gross')" column="gross" align="right" :sort="sort" @sort="dir => sort = { key: 'gross', dir }" /></th>
+                <th class="pb-2 text-right font-medium"><ColumnMenu :label="t('acquisition_net')" column="net" align="right" :sort="sort" @sort="dir => sort = { key: 'net', dir }" /></th>
+                <th class="pb-2 font-medium"><ColumnMenu v-model:selected="statusFilter" :label="t('status')" column="status" :sort="sort" :options="statusOptions" @sort="dir => sort = { key: 'status', dir }" /></th>
+                <th class="pb-2 font-medium"><ColumnMenu :label="t('acquisition_return_until')" column="return" :sort="sort" @sort="dir => sort = { key: 'return', dir }" /></th>
+                <th class="pb-2 font-medium"><ColumnMenu :label="t('acquisition_warranty_until')" column="warranty" :sort="sort" @sort="dir => sort = { key: 'warranty', dir }" /></th>
                 <th class="pb-2"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-[hsl(var(--border))]">
-              <tr v-for="row in overview.rows" :key="row.id" :class="row.status === 'returned' ? 'text-[hsl(var(--muted-foreground))]' : ''">
+              <tr v-for="row in rows" :key="row.id" :class="row.status === 'returned' ? 'text-[hsl(var(--muted-foreground))]' : ''">
                 <td class="py-2 whitespace-nowrap">{{ formatDate(row.purchased_on) }}</td>
                 <td class="py-2">
                   <div class="font-medium">{{ row.item }}</div>
@@ -189,6 +286,15 @@ const peopleError = computed(() => form.errors.people || Object.entries(form.err
                     <Button variant="ghost" size="icon" :aria-label="t('delete')" @click="deleting = row"><Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" /></Button>
                   </div>
                 </td>
+              </tr>
+              <tr v-if="rows.length === 0">
+                <td colspan="9" class="py-6 text-center text-[hsl(var(--muted-foreground))]">{{ t('acquisitions_none_match') }}</td>
+              </tr>
+              <tr v-else class="font-semibold">
+                <td class="py-2" colspan="3">{{ hasFilter ? t('acquisitions_total_shown', { count: rows.length }) : t('total') }}</td>
+                <td class="py-2 text-right tabular-nums whitespace-nowrap">{{ formatCurrency(visibleTotals.gross) }}</td>
+                <td class="py-2 text-right tabular-nums whitespace-nowrap">{{ formatCurrency(visibleTotals.net) }}</td>
+                <td colspan="4"></td>
               </tr>
             </tbody>
           </table>
