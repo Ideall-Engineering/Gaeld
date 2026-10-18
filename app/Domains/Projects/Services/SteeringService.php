@@ -14,6 +14,7 @@ use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\ProjectShare;
 use App\Domains\Projects\Models\SteeringItem;
 use App\Support\Money;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -108,7 +109,10 @@ class SteeringService
                     'name' => $project->name,
                     'group' => $this->groupOf($project, $byId),
                     'status' => $project->status->value,
-                    'billing' => ($project->billing_month ?? $project->target_date)?->format('Y-m'),
+                    'billing' => $this->plannedOn($project)?->format('Y-m'),
+                    'payment_expected_on' => $project->payment_expected_on?->toDateString(),
+                    'billing_month' => $project->billing_month?->format('Y-m'),
+                    'sort' => $this->plannedOn($project)?->toDateString(),
                     'expected' => (string) $project->expected_amount,
                     'costs' => $booked[$project->id]['expenses'] ?? '0.00',
                     'value' => $value,
@@ -129,7 +133,7 @@ class SteeringService
                 'group' => $this->groupOf($project, $byId),
                 'status' => $project->status->value,
                 'booked' => Money::isPositive($booked[$project->id]['revenue'] ?? '0'),
-                'billing' => ($project->billing_month ?? $project->target_date)?->format('Y-m'),
+                'billing' => $this->plannedOn($project)?->format('Y-m'),
                 'share' => (string) (float) $key[$employeeId],
                 'value' => $amount,
                 'part' => $part,
@@ -295,7 +299,7 @@ class SteeringService
             'unshared' => $unshared,
             'open_payments' => $this->withInvoices(
                 $organizationId,
-                collect($openPayments)->sortBy(fn (array $p) => $p['billing'] ?? '9999')->values()->all(),
+                collect($openPayments)->sortBy(fn (array $p) => $p['sort'] ?? '9999')->values()->all(),
                 array_column($rows, 'name', 'employee_id'),
             ),
             'done_without_revenue' => $this->doneWithoutRevenue($organizationId, $projects, $byId),
@@ -322,6 +326,15 @@ class SteeringService
     }
 
     /**
+     * When a job's money is planned to come in: the day its payment is
+     * expected, else its billing month, else its target date.
+     */
+    private function plannedOn(Project $project): ?Carbon
+    {
+        return $project->payment_expected_on ?? $project->billing_month ?? $project->target_date;
+    }
+
+    /**
      * Whether a job's expected amount belongs to the year: the year it is to
      * be invoiced in (billing month, else target date); an undated job not
      * yet done counts for the running year.
@@ -331,7 +344,7 @@ class SteeringService
         if ($project->expected_amount === null) {
             return false;
         }
-        $planned = $project->billing_month ?? $project->target_date;
+        $planned = $this->plannedOn($project);
 
         return $planned !== null
             ? (int) $planned->year === $year
@@ -403,7 +416,7 @@ class SteeringService
                 'name' => $p->name,
                 'group' => $this->groupOf($p, $byId),
                 'expected' => $p->expected_amount !== null ? (string) $p->expected_amount : null,
-                'billing' => ($p->billing_month ?? $p->target_date)?->format('Y-m'),
+                'billing' => $this->plannedOn($p)?->format('Y-m'),
             ])->values()->all();
     }
 
@@ -415,7 +428,7 @@ class SteeringService
      */
     private function expectedLater(Project $project, ?array $booked, int $year): ?string
     {
-        $planned = $project->billing_month ?? $project->target_date;
+        $planned = $this->plannedOn($project);
         if ($planned === null || (int) $planned->year <= $year || $project->expected_amount === null
             || $project->status === ProjectStatus::Done || Money::isPositive($booked['revenue'] ?? '0')) {
             return null;

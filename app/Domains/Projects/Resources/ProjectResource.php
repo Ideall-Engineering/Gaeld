@@ -26,6 +26,7 @@ class ProjectResource extends JsonResource
             'responsible_employee_id' => $this->responsible_employee_id,
             'target_date' => $this->target_date?->toDateString(),
             'billing_month' => $this->billing_month?->format('Y-m'),
+            'payment_expected_on' => $this->payment_expected_on?->toDateString(),
             'expected_amount' => $this->expected_amount,
             'notes' => $this->notes,
             'created_at' => $this->created_at?->toIso8601String(),

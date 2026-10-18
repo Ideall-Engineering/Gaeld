@@ -44,6 +44,7 @@ Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::get('/projects/{project}/report', [ProjectReportController::class, 'show'])->name('projects.report');
     Route::get('/projects/{project}/report/export/{format}', [ProjectReportController::class, 'export'])->name('projects.report.export');
     Route::put('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
+    Route::put('/projects/{project}/payment-date', [ProjectController::class, 'paymentDate'])->name('projects.payment-date');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 
     Route::put('/invoices/{invoice}/project', [InvoiceProjectController::class, 'update'])->name('invoices.project.update');

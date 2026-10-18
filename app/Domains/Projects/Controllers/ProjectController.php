@@ -148,6 +148,20 @@ class ProjectController extends Controller
         return back()->with('success', __('app.saved'));
     }
 
+    /**
+     * Set only the day a job's payment is expected, from the list of
+     * outstanding payments.
+     */
+    public function paymentDate(Request $request, Project $project): RedirectResponse
+    {
+        $this->authorize('update', $project);
+
+        $validated = $request->validate(['payment_expected_on' => ['nullable', 'date']]);
+        $project->update(['payment_expected_on' => $validated['payment_expected_on'] ?? null]);
+
+        return back()->with('success', __('app.saved'));
+    }
+
     public function destroy(Request $request, Project $project): RedirectResponse
     {
         $this->authorize('delete', $project);

@@ -53,7 +53,12 @@ function editBlock(block) {
 const num = v => Number(v ?? 0)
 
 const openTotal = computed(() => (props.steering.open_payments ?? []).reduce((sum, p) => sum + num(p.expected), 0))
-const currentMonth = new Date().toISOString().slice(0, 7)
+const today = new Date().toISOString().slice(0, 10)
+
+// The day a payment is expected, changed right in the list.
+function setPaymentDate(payment, value) {
+  router.put(`/projects/${payment.id}/payment-date`, { payment_expected_on: value || null }, { preserveScroll: true })
+}
 
 // Drawn, one foldable row per person: plan items and acquisitions.
 const drawnRows = computed(() => people.value
@@ -284,7 +289,7 @@ function removeItem(item) {
                 <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
                   <th class="pb-2">{{ t('project_kind_project') }}</th>
                   <th class="pb-2">{{ t('status') }}</th>
-                  <th class="pb-2">{{ t('project_billing_month') }}</th>
+                  <th class="pb-2">{{ t('project_payment_expected_on') }}</th>
                   <th class="pb-2 text-right">{{ t('steering_open_expected') }}</th>
                   <th class="pb-2 text-right">{{ t('steering_open_costs') }}</th>
                   <th class="pb-2">{{ t('steering_open_people') }}</th>
@@ -298,7 +303,19 @@ function removeItem(item) {
                     <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ p.code }}<template v-if="p.group"> · {{ p.group }}</template></div>
                   </td>
                   <td class="py-1">{{ t('project_status_' + p.status) }}</td>
-                  <td class="py-1 tabular-nums" :class="p.billing && p.billing < currentMonth ? 'text-[hsl(var(--destructive))]' : ''">{{ p.billing ?? t('steering_open_undated') }}</td>
+                  <td class="py-1">
+                    <input
+                      type="date"
+                      :value="p.payment_expected_on ?? ''"
+                      :aria-label="t('project_payment_expected_on')"
+                      class="h-8 rounded-md border border-[hsl(var(--input))] bg-transparent px-2 text-sm tabular-nums"
+                      :class="p.sort && p.sort < today ? 'border-[hsl(var(--destructive))] text-[hsl(var(--destructive))]' : ''"
+                      @change="setPaymentDate(p, $event.target.value)"
+                    />
+                    <div v-if="!p.payment_expected_on" class="text-xs text-[hsl(var(--muted-foreground))]">
+                      {{ p.billing_month ? t('steering_open_from_billing', { month: p.billing_month }) : (p.billing ? t('steering_open_from_target', { month: p.billing }) : t('steering_open_undated')) }}
+                    </div>
+                  </td>
                   <td class="py-1 text-right tabular-nums">{{ formatCurrency(p.expected) }}</td>
                   <td class="py-1 text-right tabular-nums">{{ Number(p.costs) ? formatCurrency(-p.costs) : '' }}</td>
                   <td class="py-1 text-xs">

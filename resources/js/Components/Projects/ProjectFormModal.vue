@@ -42,6 +42,7 @@ const blank = () => ({
   responsible_employee_id: '',
   target_date: '',
   billing_month: '',
+  payment_expected_on: '',
   expected_amount: '',
   notes: '',
   is_active: true,
@@ -67,6 +68,7 @@ watch(() => [props.open, props.project?.id], ([open]) => {
         responsible_employee_id: p.responsible_employee_id ?? '',
         target_date: p.target_date ?? '',
         billing_month: p.billing_month ?? '',
+        payment_expected_on: p.payment_expected_on ?? '',
         expected_amount: p.expected_amount ?? '',
         notes: p.notes ?? '',
         is_active: p.is_active,
@@ -74,7 +76,7 @@ watch(() => [props.open, props.project?.id], ([open]) => {
       }
     : { ...props.preset })
   form.clearErrors()
-  showMore.value = !!(p && (p.notes || p.responsible_employee_id || p.billing_month))
+  showMore.value = !!(p && (p.notes || p.responsible_employee_id || p.billing_month || p.payment_expected_on))
 }, { immediate: true })
 
 const isGroup = computed(() => form.kind === 'area')
@@ -187,6 +189,7 @@ function submit() {
         <div class="grid gap-4 sm:grid-cols-2">
           <FormInput id="code" v-model="form.code" :label="t('code')" :error="form.errors.code" />
           <FormInput v-if="!isGroup" id="billing_month" v-model="form.billing_month" type="month" :label="t('project_billing_month')" :error="form.errors.billing_month" />
+          <FormInput v-if="!isGroup" id="payment_expected_on" v-model="form.payment_expected_on" type="date" :label="t('project_payment_expected_on')" :error="form.errors.payment_expected_on" />
         </div>
         <SearchableSelect v-if="!isGroup" id="responsible_employee_id" v-model="form.responsible_employee_id" :label="t('project_responsible')" :options="employeeOptions" :error="form.errors.responsible_employee_id" />
         <FormTextarea id="notes" v-model="form.notes" :label="t('notes')" :error="form.errors.notes" />

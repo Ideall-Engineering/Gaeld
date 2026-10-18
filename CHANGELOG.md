@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Payment expected on:** a job can carry the day its payment is expected
+  (edit window, API, and right in the list of outstanding payments). It places
+  the expected amount in its year ahead of billing month and target date.
 - **Steering explains the room and lists what is still to come:** the room for
   performance pay opens to received, still expected (by job), general costs and
   drawings. A new section lists the payments still outstanding this year, with

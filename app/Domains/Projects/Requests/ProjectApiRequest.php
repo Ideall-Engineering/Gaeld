@@ -59,6 +59,7 @@ class ProjectApiRequest extends FormRequest
             'responsible_employee_id' => ['sometimes', 'nullable', 'uuid', Rule::exists('employees', 'id')->where('organization_id', $orgId)],
             'target_date' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
             'billing_month' => ['sometimes', 'nullable', 'date_format:Y-m'],
+            'payment_expected_on' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
             'expected_amount' => ['sometimes', 'nullable', 'string', 'regex:/^\d{1,11}(?:\.\d{1,2})?$/'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'is_active' => ['sometimes', 'boolean'],

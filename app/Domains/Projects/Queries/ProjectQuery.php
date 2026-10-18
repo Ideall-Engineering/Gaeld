@@ -151,6 +151,7 @@ class ProjectQuery
                 : null,
             'target_date' => $project->target_date?->toDateString(),
             'billing_month' => $project->billing_month?->format('Y-m'),
+            'payment_expected_on' => $project->payment_expected_on?->toDateString(),
             'expected_amount' => $project->expected_amount,
             'notes' => $project->notes,
         ];

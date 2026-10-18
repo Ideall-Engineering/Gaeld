@@ -169,6 +169,28 @@ class SteeringTest extends TestCase
         $this->assertSame([], $c['invoices']);
     }
 
+    public function test_the_payment_date_is_set_from_the_list_and_places_the_amount(): void
+    {
+        $c = Project::query()->where('code', 'C')->first();
+
+        $this->actAsOrg()->put("/projects/{$c->id}/payment-date", ['payment_expected_on' => '2027-01-15'])->assertSessionHasNoErrors();
+        $this->assertSame('2027-01-15', $c->refresh()->payment_expected_on?->toDateString());
+
+        $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
+        $anna = collect($data['people'])->keyBy('name')['Anna A'];
+        $this->assertSame('0.00', $anna['contribution_expected'], 'The payment date wins over the target date.');
+        $this->assertSame('300.00', $anna['later']);
+        $this->assertSame([], $data['open_payments']);
+
+        $this->actAsOrg()->put("/projects/{$c->id}/payment-date", ['payment_expected_on' => '2026-11-30']);
+        $open = app(SteeringService::class)->forYear($this->organization->id, 2026)['open_payments'];
+        $this->assertSame('2026-11-30', $open[0]['payment_expected_on']);
+        $this->assertSame('2026-11', $open[0]['billing']);
+
+        $this->actAsOrg()->put("/projects/{$c->id}/payment-date", ['payment_expected_on' => null]);
+        $this->assertNull($c->refresh()->payment_expected_on);
+    }
+
     public function test_a_done_job_without_any_revenue_is_flagged(): void
     {
         $area = Project::query()->where('code', 'AREA')->first();

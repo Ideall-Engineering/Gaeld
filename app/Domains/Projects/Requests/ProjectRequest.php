@@ -43,7 +43,7 @@ class ProjectRequest extends FormRequest
             $this->merge(['billing_month' => $this->input('billing_month').'-01']);
         }
 
-        foreach (['parent_id', 'contact_id', 'responsible_employee_id', 'target_date', 'billing_month', 'expected_amount'] as $field) {
+        foreach (['parent_id', 'contact_id', 'responsible_employee_id', 'target_date', 'billing_month', 'payment_expected_on', 'expected_amount'] as $field) {
             if ($this->input($field) === '') {
                 $this->merge([$field => null]);
             }
@@ -105,6 +105,7 @@ class ProjectRequest extends FormRequest
             'responsible_employee_id' => ['nullable', 'uuid', Rule::exists('employees', 'id')->where('organization_id', $orgId)],
             'target_date' => ['nullable', 'date'],
             'billing_month' => ['nullable', 'date'],
+            'payment_expected_on' => ['nullable', 'date'],
             'expected_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999999.99'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'is_active' => ['sometimes', 'boolean'],
