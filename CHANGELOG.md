@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Steering shows its workings:** each general cost block opens to show where
+  its plan comes from (fixed amount, or monthly budget × 12 per account) and
+  each person's carry and credit percentage. Drawings are grouped per person
+  with a total and open to their items.
 - **Jobs follow their quotes:** a quote with a job sets the job's status:
   sent makes it "quote sent", accepted (or converted to an invoice) "in
   progress", declined "lost". A done job is left alone, and a job in progress

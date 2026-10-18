@@ -119,7 +119,7 @@ class SteeringService
         $groups = BudgetGroup::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
             ->where('year', $year)
-            ->with(['people', 'accounts:id'])
+            ->with(['people', 'accounts:id,code,name'])
             ->get();
         $budgets = Budget::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
@@ -130,11 +130,20 @@ class SteeringService
         $burden = $zero();
         $blocks = [];
         foreach ($groups as $group) {
+            // How the plan comes about, shown when a block is opened: a set
+            // amount, or twelve times the monthly budget of each account.
+            $sources = $group->accounts->sortBy('code')->map(fn ($a) => [
+                'code' => $a->code,
+                'name' => $a->name,
+                'monthly' => (string) ($budgets[$a->id] ?? '0.00'),
+                'yearly' => Money::round(Money::multiply((string) ($budgets[$a->id] ?? '0'), '12')),
+            ])->values()->all();
             $plan = $group->plan_amount !== null
                 ? (string) $group->plan_amount
-                : Money::round($group->accounts->reduce(fn (string $sum, $a) => Money::add($sum, Money::multiply((string) ($budgets[$a->id] ?? '0'), '12')), '0.00'));
+                : Money::round(array_reduce($sources, fn (string $sum, array $s) => Money::add($sum, $s['yearly']), '0.00'));
 
             $carry = $group->people->mapWithKeys(fn (Employee $e) => [$e->id => (string) data_get($e, 'pivot.carry_share')])->filter(fn ($s) => Money::isPositive($s))->all();
+            $carryEqual = $carry === [];
             if ($carry === [] && $ids !== []) {
                 // Nobody named: everyone bears an equal part, the last one
                 // the remainder, so the whole plan is borne.
@@ -145,7 +154,15 @@ class SteeringService
             }
             $credited = $group->people->mapWithKeys(fn (Employee $e) => [$e->id => (string) data_get($e, 'pivot.credit_share')])->filter(fn ($s) => Money::isPositive($s))->all();
 
-            $row = ['id' => $group->id, 'name' => $group->name, 'plan' => $plan, 'people' => []];
+            $row = [
+                'id' => $group->id,
+                'name' => $group->name,
+                'plan' => $plan,
+                'plan_fixed' => $group->plan_amount !== null,
+                'accounts' => $sources,
+                'carry_equal' => $carryEqual,
+                'people' => [],
+            ];
             $carryParts = $this->split($plan, $carry);
             $creditParts = $credited === [] ? [] : $this->split($plan, $credited);
             foreach ($ids as $id) {
@@ -153,7 +170,13 @@ class SteeringService
                 $b = $carryParts[$id] ?? '0.00';
                 $credit[$id] = Money::add($credit[$id], $c);
                 $burden[$id] = Money::add($burden[$id], $b);
-                $row['people'][$id] = ['credit' => $c, 'burden' => Money::negate($b), 'effect' => Money::subtract($c, $b)];
+                $row['people'][$id] = [
+                    'carry_share' => isset($carry[$id]) ? (string) (float) $carry[$id] : '0',
+                    'credit_share' => isset($credited[$id]) ? (string) (float) $credited[$id] : '0',
+                    'credit' => $c,
+                    'burden' => Money::negate($b),
+                    'effect' => Money::subtract($c, $b),
+                ];
             }
             $blocks[] = $row;
         }

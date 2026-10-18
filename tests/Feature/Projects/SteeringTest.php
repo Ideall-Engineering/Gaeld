@@ -4,6 +4,7 @@ namespace Tests\Feature\Projects;
 
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
+use App\Domains\Accounting\Models\Budget;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
@@ -118,6 +119,31 @@ class SteeringTest extends TestCase
 
         $this->assertSame('600.00', $people['Anna A']['effect']);
         $this->assertSame('-800.00', $people['Ben B']['effect']);
+    }
+
+    public function test_each_block_shows_how_its_numbers_come_about(): void
+    {
+        $budgeted = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Office', 'kind' => 'running']);
+        $budgeted->accounts()->sync([$this->expense->id]);
+        Budget::create(['organization_id' => $this->organization->id, 'account_id' => $this->expense->id, 'fiscal_year' => 2026, 'monthly_amount' => '25.00']);
+
+        $blocks = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['blocks'])->keyBy('name');
+
+        $rent = $blocks['Rent'];
+        $this->assertTrue($rent['plan_fixed']);
+        $this->assertFalse($rent['carry_equal']);
+        $this->assertSame('30', $rent['people'][$this->anna->id]['carry_share']);
+        $this->assertSame('100', $rent['people'][$this->anna->id]['credit_share']);
+        $this->assertSame('-300.00', $rent['people'][$this->anna->id]['burden']);
+        $this->assertSame('1000.00', $rent['people'][$this->anna->id]['credit']);
+
+        $office = $blocks['Office'];
+        $this->assertFalse($office['plan_fixed']);
+        $this->assertTrue($office['carry_equal']);
+        $this->assertSame('300.00', $office['plan']);
+        $this->assertSame('300.00', $office['accounts'][0]['yearly']);
+        $this->assertSame('50', $office['people'][$this->ben->id]['carry_share']);
+        $this->assertSame('0', $office['people'][$this->ben->id]['credit_share']);
     }
 
     public function test_a_project_without_any_key_is_reported_as_unshared(): void

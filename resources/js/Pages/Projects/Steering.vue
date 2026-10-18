@@ -50,7 +50,12 @@ function editBlock(block) {
   editingBlock.value = props.groups.find(g => g.id === block.id) ?? null
   if (editingBlock.value) showBlockForm.value = true
 }
-const nameOf = id => props.employees.find(e => e.id === id)?.name ?? ''
+const num = v => Number(v ?? 0)
+
+// Drawn, one foldable row per person: plan items and acquisitions.
+const drawnRows = computed(() => people.value
+  .map(p => ({ ...p, items: itemsOf(p.employee_id) }))
+  .filter(p => p.items.length || num(p.acquisitions) !== 0))
 
 const itemForm = useForm({ year: props.year, employee_id: props.employees[0]?.id ?? '', label: '', amount: '' })
 function addItem() {
@@ -201,16 +206,52 @@ function removeItem(item) {
                 </tr>
               </thead>
               <tbody class="divide-y divide-[hsl(var(--border))]">
-                <tr v-for="block in steering.blocks" :key="block.id" class="cursor-pointer hover:bg-[hsl(var(--muted))]/40" @click="editBlock(block)">
-                  <td class="py-1">{{ block.name }}</td>
-                  <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.plan) }}</td>
-                  <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">
-                    {{ formatCurrency(block.people[person.employee_id]?.effect ?? 0) }}
-                  </td>
-                  <td class="py-1 text-right" @click.stop>
-                    <Button variant="ghost" size="icon" :aria-label="t('edit')" @click="editBlock(block)"><Pencil class="h-4 w-4" /></Button>
-                  </td>
-                </tr>
+                <template v-for="block in steering.blocks" :key="block.id">
+                  <tr class="cursor-pointer hover:bg-[hsl(var(--muted))]/40" @click="toggle('block-' + block.id)">
+                    <td class="py-1">
+                      <span class="flex items-center gap-1">
+                        <component :is="open['block-' + block.id] ? ChevronDown : ChevronRight" class="h-4 w-4 shrink-0" />
+                        {{ block.name }}
+                      </span>
+                    </td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.plan) }}</td>
+                    <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">
+                      {{ formatCurrency(block.people[person.employee_id]?.effect ?? 0) }}
+                    </td>
+                    <td class="py-1 text-right" @click.stop>
+                      <Button variant="ghost" size="icon" :aria-label="t('edit')" @click="editBlock(block)"><Pencil class="h-4 w-4" /></Button>
+                    </td>
+                  </tr>
+                  <template v-if="open['block-' + block.id]">
+                    <tr class="text-xs text-[hsl(var(--muted-foreground))]">
+                      <td class="py-1 pl-5" colspan="2">
+                        <template v-if="block.plan_fixed">{{ t('steering_block_plan_fixed') }}</template>
+                        <template v-else-if="block.accounts?.length">
+                          <div v-for="a in block.accounts" :key="a.code" class="flex justify-between gap-3">
+                            <span>{{ a.code }} {{ a.name }}: {{ t('steering_block_monthly', { amount: formatCurrency(a.monthly) }) }}</span>
+                            <span class="tabular-nums">{{ formatCurrency(a.yearly) }}</span>
+                          </div>
+                        </template>
+                        <template v-else>{{ t('steering_block_plan_none') }}</template>
+                      </td>
+                      <td :colspan="people.length + 1"></td>
+                    </tr>
+                    <tr class="text-xs text-[hsl(var(--muted-foreground))]">
+                      <td class="py-1 pl-5" colspan="2">{{ block.carry_equal ? t('steering_block_carry_equal') : t('steering_block_carry') }}</td>
+                      <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">
+                        {{ num(block.people[person.employee_id]?.carry_share) }} % · {{ formatCurrency(block.people[person.employee_id]?.burden ?? 0) }}
+                      </td>
+                      <td></td>
+                    </tr>
+                    <tr class="text-xs text-[hsl(var(--muted-foreground))]">
+                      <td class="py-1 pl-5" colspan="2">{{ Object.values(block.people).some(p => num(p.credit_share) > 0) ? t('steering_block_credit') : t('steering_block_credit_none') }}</td>
+                      <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">
+                        {{ num(block.people[person.employee_id]?.credit_share) }} % · {{ formatCurrency(block.people[person.employee_id]?.credit ?? 0) }}
+                      </td>
+                      <td></td>
+                    </tr>
+                  </template>
+                </template>
               </tbody>
             </table>
           </div>
@@ -223,20 +264,35 @@ function removeItem(item) {
           <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_items_desc') }}</p>
           <table class="mb-4 w-full max-w-3xl text-sm">
             <tbody class="divide-y divide-[hsl(var(--border))]">
-              <tr v-for="item in steering.items" :key="item.id">
-                <td class="py-1">{{ nameOf(item.employee_id) }}</td>
-                <td class="py-1">{{ item.label }}</td>
-                <td class="py-1 text-right tabular-nums">{{ formatCurrency(item.amount) }}</td>
-                <td class="py-1 text-right">
-                  <Button variant="ghost" size="icon" :aria-label="t('delete')" @click="removeItem(item)"><Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" /></Button>
-                </td>
-              </tr>
-              <tr v-for="person in people" :key="'acq-' + person.employee_id" class="text-[hsl(var(--muted-foreground))]">
-                <td class="py-1">{{ person.name }}</td>
-                <td class="py-1">{{ t('acquisitions') }}</td>
-                <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.acquisitions) }}</td>
-                <td></td>
-              </tr>
+              <template v-for="person in drawnRows" :key="'drawn-' + person.employee_id">
+                <tr class="cursor-pointer hover:bg-[hsl(var(--muted))]/40" @click="toggle('items-' + person.employee_id)">
+                  <td class="py-1 font-medium">
+                    <span class="flex items-center gap-1">
+                      <component :is="open['items-' + person.employee_id] ? ChevronDown : ChevronRight" class="h-4 w-4 shrink-0" />
+                      {{ person.name }}
+                    </span>
+                  </td>
+                  <td class="py-1 text-[hsl(var(--muted-foreground))]">{{ t('steering_items_count', { count: person.items.length }) }}</td>
+                  <td class="py-1 text-right font-medium tabular-nums">{{ formatCurrency(person.drawn) }}</td>
+                  <td></td>
+                </tr>
+                <template v-if="open['items-' + person.employee_id]">
+                  <tr v-for="item in person.items" :key="item.id">
+                    <td></td>
+                    <td class="py-1">{{ item.label }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(item.amount) }}</td>
+                    <td class="py-1 text-right">
+                      <Button variant="ghost" size="icon" :aria-label="t('delete')" @click="removeItem(item)"><Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" /></Button>
+                    </td>
+                  </tr>
+                  <tr v-if="num(person.acquisitions) !== 0" class="text-[hsl(var(--muted-foreground))]">
+                    <td></td>
+                    <td class="py-1"><Link :href="`/projects/acquisitions?year=${year}`" class="hover:underline">{{ t('acquisitions') }}</Link></td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.acquisitions) }}</td>
+                    <td></td>
+                  </tr>
+                </template>
+              </template>
             </tbody>
           </table>
           <form class="flex flex-wrap items-end gap-2" @submit.prevent="addItem">
