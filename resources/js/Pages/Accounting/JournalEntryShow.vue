@@ -420,7 +420,7 @@ function allocationLabel(line) {
                 <tr v-for="line in entry.lines" :key="line.id">
                   <td class="py-2">{{ line.account?.code }} — {{ line.account?.name }}</td>
                   <td v-if="editingText && lineText(line.id)" class="py-1 pr-2">
-                    <input v-model="lineText(line.id).description" type="text" maxlength="500" :aria-label="t('description')" class="h-8 w-full min-w-[12rem] rounded-md border border-[hsl(var(--input))] bg-transparent px-2 text-sm" />
+                    <input v-model="lineText(line.id).description" type="text" maxlength="255" :aria-label="t('description')" class="h-8 w-full min-w-[12rem] rounded-md border border-[hsl(var(--input))] bg-transparent px-2 text-sm" />
                   </td>
                   <td v-else class="py-2">{{ line.description || '—' }}</td>
                   <td class="py-2">

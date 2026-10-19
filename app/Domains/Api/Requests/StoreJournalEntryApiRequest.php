@@ -73,7 +73,7 @@ class StoreJournalEntryApiRequest extends FormRequest
             'status' => ['required', Rule::in(['draft', 'posted'])],
             'lines' => ['required', 'array', 'max:100'],
             'lines.*.account_code' => $accountRule,
-            'lines.*.description' => ['nullable', 'string', 'max:500'],
+            'lines.*.description' => ['nullable', 'string', 'max:255'],
         ];
 
         if ($this->usesShorthand()) {

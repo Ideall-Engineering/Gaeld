@@ -424,7 +424,7 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
                 </td>
                 <td class="max-w-[15rem] px-2 py-1.5">
                   <form v-if="textEditing === row.line_id" class="flex items-center gap-1" @submit.prevent="saveText(row)">
-                    <input ref="textInput" v-model="textDraft" type="text" maxlength="500" :aria-label="t('description')" class="h-7 w-full min-w-[10rem] rounded border border-[hsl(var(--input))] bg-transparent px-2 text-sm" :disabled="textSaving" @keydown.esc.prevent="textEditing = null" />
+                    <input ref="textInput" v-model="textDraft" type="text" :maxlength="row.own_line_text ? 255 : 1000" :aria-label="t('description')" class="h-7 w-full min-w-[10rem] rounded border border-[hsl(var(--input))] bg-transparent px-2 text-sm" :disabled="textSaving" @keydown.esc.prevent="textEditing = null" />
                     <button type="button" class="text-[hsl(var(--muted-foreground))]" :aria-label="t('cancel')" @click="textEditing = null"><X class="h-3.5 w-3.5" /></button>
                   </form>
                   <p v-if="textEditing === row.line_id && textError" class="text-xs text-[hsl(var(--destructive))]">{{ textError }}</p>

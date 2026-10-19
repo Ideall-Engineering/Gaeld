@@ -543,7 +543,7 @@ class AccountingController extends Controller
             ],
             'lines.*.debit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
             'lines.*.credit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
-            'lines.*.description' => ['nullable', 'string', 'max:500'],
+            'lines.*.description' => ['nullable', 'string', 'max:255'],
             ...StoreJournalEntryRequest::lineVatRules($orgId),
             ...($this->mayAllocate()
                 ? AllocationRules::for($orgId, keptProjectIds: [
@@ -704,7 +704,7 @@ class AccountingController extends Controller
             'description' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'lines' => ['sometimes', 'array'],
             'lines.*.id' => ['required', 'integer'],
-            'lines.*.description' => ['nullable', 'string', 'max:500'],
+            'lines.*.description' => ['nullable', 'string', 'max:255'],
             'change_reason' => ['nullable', 'string', 'max:1000'],
         ]);
 

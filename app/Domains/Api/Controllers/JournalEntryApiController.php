@@ -142,7 +142,7 @@ class JournalEntryApiController extends Controller
             'description' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'lines' => ['sometimes', 'array'],
             'lines.*.id' => ['required', 'integer'],
-            'lines.*.description' => ['present', 'nullable', 'string', 'max:500'],
+            'lines.*.description' => ['present', 'nullable', 'string', 'max:255'],
             'reason' => ['nullable', 'string', 'max:1000'],
         ]);
 

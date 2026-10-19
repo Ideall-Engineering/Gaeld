@@ -55,6 +55,20 @@ class AmendJournalEntryTextTest extends TestCase
         $this->assertSame('genauer', $revision->reason);
     }
 
+    public function test_a_line_text_longer_than_its_column_is_refused(): void
+    {
+        $entry = $this->postSimpleEntry();
+        $line = $entry->lines()->orderBy('id')->first();
+
+        $this->actAsOrg()->put("/accounting/journal-entries/{$entry->id}/text", [
+            'revision' => 1,
+            'description' => str_repeat('a', 400),
+            'lines' => [['id' => $line->id, 'description' => str_repeat('b', 256)]],
+        ])->assertSessionHasErrors('lines.0.description');
+
+        $this->assertSame(1, $entry->fresh()->revision);
+    }
+
     public function test_an_unchanged_text_leaves_no_revision(): void
     {
         $entry = $this->postSimpleEntry();
