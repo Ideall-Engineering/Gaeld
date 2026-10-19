@@ -6,6 +6,7 @@ use App\Domains\Api\Controllers\ApiTokenController;
 use App\Domains\Api\Controllers\BankAccountApiController;
 use App\Domains\Api\Controllers\BankImportApiController;
 use App\Domains\Api\Controllers\ContactApiController;
+use App\Domains\Api\Controllers\ContactPersonApiController;
 use App\Domains\Api\Controllers\ExpenseApiController;
 use App\Domains\Api\Controllers\InvoiceApiController;
 use App\Domains\Api\Controllers\InvoicePdfApiController;
@@ -125,6 +126,13 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
             'update' => 'api.customers.update',
             'destroy' => 'api.customers.destroy',
         ]);
+    Route::apiResource('contacts.persons', ContactPersonApiController::class)->names([
+        'index' => 'api.contacts.persons.index',
+        'show' => 'api.contacts.persons.show',
+        'store' => 'api.contacts.persons.store',
+        'update' => 'api.contacts.persons.update',
+        'destroy' => 'api.contacts.persons.destroy',
+    ]);
 
     // Journal entries
     Route::get('/journal-entries', [JournalEntryApiController::class, 'index'])->name('api.journal-entries.index');

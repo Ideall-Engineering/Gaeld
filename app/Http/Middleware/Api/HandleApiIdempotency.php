@@ -114,6 +114,14 @@ class HandleApiIdempotency
             }
         }
 
+        // Several persons are added to the same contact, so the contact
+        // alone cannot identify one request.
+        if ($request->route()?->getName() === 'api.contacts.persons.store') {
+            $contact = $request->route('contact');
+
+            return 'contact:'.(is_object($contact) ? $contact->id : $contact).':payload:'.hash('sha256', $request->getContent());
+        }
+
         foreach ($request->route()?->parameters() ?? [] as $parameter) {
             if (is_object($parameter) && isset($parameter->id)) {
                 return (string) $parameter->id;
