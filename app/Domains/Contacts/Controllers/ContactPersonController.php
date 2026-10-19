@@ -11,6 +11,7 @@ use App\Domains\Contacts\Requests\UpdateContactPersonRequest;
 use App\Http\Controllers\Controller;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Str;
 
 /**
  * CRUD for contact persons attached to customers or suppliers.
@@ -44,7 +45,7 @@ class ContactPersonController extends Controller
         $parent = $this->resolveParent($contactableType, $contactableId);
         $this->authorizeParent('update', $parent);
 
-        abort_unless($contactPerson->contactable_id === $parent->id, 404);
+        abort_unless((string) $contactPerson->contactable_id === (string) $parent->id, 404);
 
         $validated = $request->validated();
 
@@ -67,7 +68,7 @@ class ContactPersonController extends Controller
         $parent = $this->resolveParent($contactableType, $contactableId);
         $this->authorizeParent('update', $parent);
 
-        abort_unless($contactPerson->contactable_id === $parent->id, 404);
+        abort_unless((string) $contactPerson->contactable_id === (string) $parent->id, 404);
 
         $contactPerson->delete();
 
@@ -77,7 +78,8 @@ class ContactPersonController extends Controller
     private function resolveParent(string $type, string $id): Model
     {
         return match ($type) {
-            'contacts' => Contact::withoutGlobalScopes()->findOrFail($id),
+            // The page addresses a contact by its public uuid, not its id.
+            'contacts' => Str::isUuid($id) ? Contact::query()->where('uuid', $id)->firstOrFail() : abort(404),
             default => abort(404),
         };
     }
