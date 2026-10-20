@@ -83,7 +83,9 @@ class SaveQuoteAction
                 ->where('organization_id', $data->organizationId)
                 ->findOrFail($data->customerId);
         $data->taxTreatment->validateCustomer($customer);
-        $person = DocumentContactPerson::of($customer, $data->contactPersonId);
+        $person = $data->contactPersonNamed
+            ? DocumentContactPerson::of($customer, $data->contactPersonId)
+            : DocumentContactPerson::primaryOf($customer);
 
         $quote->fill([
             'customer_id' => $data->customerId,

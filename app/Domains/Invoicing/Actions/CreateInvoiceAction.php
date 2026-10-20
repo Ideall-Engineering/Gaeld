@@ -61,7 +61,9 @@ class CreateInvoiceAction
                     ->where('organization_id', $data->organizationId)
                     ->findOrFail($data->customerId);
             $data->taxTreatment->validateCustomer($customer);
-            $person = DocumentContactPerson::of($customer, $data->contactPersonId);
+            $person = $data->contactPersonNamed
+                ? DocumentContactPerson::of($customer, $data->contactPersonId)
+                : DocumentContactPerson::primaryOf($customer);
             $customerSnapshot = $customer?->toInvoiceSnapshot($person);
 
             $invoice = Invoice::create([

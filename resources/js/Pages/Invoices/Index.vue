@@ -11,9 +11,13 @@ import { Plus, Pencil, Trash2, Copy, Eye, FileText, Download } from 'lucide-vue-
 import HelpText from '@/Components/HelpText.vue'
 import EmptyState from '@/Components/UI/EmptyState.vue'
 import { ref, computed } from 'vue'
+import { usePermissions } from '@/lib/usePermissions'
+import StatusMenu from '@/Components/Invoices/StatusMenu.vue'
+import InlineDate from '@/Components/Invoices/InlineDate.vue'
 
 const { t } = useTranslations()
 const { formatCurrency, formatDate } = useFormatters()
+const { can } = usePermissions()
 
 function daysOverdue(dueDate) {
   if (!dueDate) return 0
@@ -73,6 +77,65 @@ function handleSearch(search) {
 
 function handleFilter({ key, value }) {
   applyQuery({ filter: { ...props.query.filter, [key]: value } })
+}
+
+// Changes right in the list: dates of a draft, and the next status step.
+function setDate(invoice, field, value) {
+  if (field === 'issue_date' && !value) return
+  router.patch(`/invoices/${invoice.id}/dates`, { [field]: value || null }, { preserveScroll: true, preserveState: true })
+}
+
+const isDraftEditable = row => row.status === 'draft' && !row.archived_at && can('invoicing.edit')
+const totalLink = row => (isDraftEditable(row) ? `/invoices/${row.id}/edit#lines` : `/invoices/${row.id}`)
+
+function statusOptions(row) {
+  if (row.archived_at) return []
+  const options = []
+  if (row.status === 'draft' && can('invoicing.finalize')) {
+    options.push({ key: 'finalize', label: t('finalize') })
+  }
+  if (row.status === 'sent' || row.status === 'overdue') {
+    if (can('invoicing.record-payment')) options.push({ key: 'payment', label: t('record_payment') })
+    if (can('invoicing.edit') && !Number(row.payments_sum_amount ?? 0)) options.push({ key: 'revert', label: t('revert_to_draft') })
+    if (can('invoicing.edit')) options.push({ key: 'cancel', label: t('cancel_invoice'), destructive: true })
+  }
+  return options
+}
+
+const pendingStep = ref(null)
+const stepping = ref(false)
+
+const stepConfirm = computed(() => {
+  const step = pendingStep.value
+  if (!step) return {}
+  const number = step.invoice.number
+  return {
+    finalize: { title: t('finalize'), message: t('invoice_finalize_confirm', { number }), label: t('finalize'), variant: 'default' },
+    revert: { title: t('revert_to_draft'), message: t('revert_to_draft_confirm', { number }), label: t('revert_to_draft'), variant: 'default' },
+    cancel: { title: t('cancel_invoice'), message: t('cancel_invoice_confirm', { number }), label: t('cancel_invoice'), variant: 'destructive' },
+  }[step.key] ?? {}
+})
+
+function chooseStep(invoice, option) {
+  if (option.key === 'payment') {
+    router.visit(`/invoices/${invoice.id}?payment=1`)
+    return
+  }
+  pendingStep.value = { invoice, key: option.key }
+}
+
+function runStep() {
+  const step = pendingStep.value
+  if (!step) return
+  const path = { finalize: 'finalize', revert: 'revert-to-draft', cancel: 'cancel' }[step.key]
+  stepping.value = true
+  router.post(`/invoices/${step.invoice.id}/${path}`, { stay: true }, {
+    preserveScroll: true,
+    onFinish: () => {
+      stepping.value = false
+      pendingStep.value = null
+    },
+  })
 }
 
 const columns = computed(() => [
@@ -153,26 +216,44 @@ const statusFilters = computed(() => [
       @search="handleSearch"
       @filter="handleFilter"
     >
-      <template #cell-status="{ value }">
-        <Badge :variant="statusVariant[value] ?? 'secondary'">
-          {{ t(`invoice_status_${value}`) }}
-        </Badge>
+      <template #cell-number="{ value, row, mobile }">
+        <span class="flex items-center gap-1.5">
+          <span v-if="mobile">{{ value }}</span>
+          <Link v-else :href="`/invoices/${row.id}`" class="font-medium hover:underline">{{ value }}</Link>
+          <Badge v-if="row.type === 'credit_note'" variant="destructive" class="text-xs">
+            {{ t('credit_note') }}
+          </Badge>
+        </span>
       </template>
-      <template #cell-due_date="{ value, row }">
+      <template #cell-customer="{ value, mobile }">
+        <Link v-if="value?.uuid && !mobile" :href="`/contacts/${value.uuid}`" class="hover:underline" :title="t('open_contact')">{{ value.name }}</Link>
+        <span v-else>{{ value?.name ?? '—' }}</span>
+      </template>
+      <template #cell-issue_date="{ value, row, mobile }">
+        <InlineDate :model-value="value" :editable="!mobile && isDraftEditable(row)" :label="t('issue_date')" @change="date => setDate(row, 'issue_date', date)" />
+      </template>
+      <template #cell-due_date="{ value, row, mobile }">
         <span class="flex flex-wrap items-center gap-1.5">
-          {{ formatDate(value) }}
+          <InlineDate :model-value="value" :editable="!mobile && isDraftEditable(row)" :label="t('due_date')" @change="date => setDate(row, 'due_date', date)" />
           <Badge v-if="isInvoiceOverdue(row)" variant="destructive" class="text-xs">
             {{ t('overdue_days', { days: daysOverdue(value) }) }}
           </Badge>
         </span>
       </template>
-      <template #cell-number="{ value, row }">
-        <span class="flex items-center gap-1.5">
-          {{ value }}
-          <Badge v-if="row.type === 'credit_note'" variant="destructive" class="text-xs">
-            {{ t('credit_note') }}
-          </Badge>
-        </span>
+      <template #cell-total="{ value, row, mobile }">
+        <span v-if="mobile">{{ formatCurrency(value) }}</span>
+        <Link v-else :href="totalLink(row)" class="tabular-nums hover:underline" :title="isDraftEditable(row) ? t('edit_lines') : t('view')">{{ formatCurrency(value) }}</Link>
+      </template>
+      <template #cell-status="{ value, row, mobile }">
+        <Badge v-if="mobile" :variant="statusVariant[value] ?? 'secondary'">{{ t(`invoice_status_${value}`) }}</Badge>
+        <StatusMenu
+          v-else
+          :label="t(`invoice_status_${value}`)"
+          :variant="statusVariant[value] ?? 'secondary'"
+          :options="statusOptions(row)"
+          :aria-label="t('change_status')"
+          @select="option => chooseStep(row, option)"
+        />
       </template>
       <template #cell-actions="{ row }">
         <div class="flex justify-end gap-1">
@@ -258,6 +339,17 @@ const statusFilters = computed(() => [
       :processing="deleting"
       @confirm="executeDelete"
       @cancel="deleteTarget = null"
+    />
+
+    <ConfirmDialog
+      :open="!!pendingStep"
+      :title="stepConfirm.title"
+      :message="stepConfirm.message"
+      :confirm-label="stepConfirm.label"
+      :confirm-variant="stepConfirm.variant"
+      :processing="stepping"
+      @confirm="runStep"
+      @cancel="pendingStep = null"
     />
   </AppLayout>
 </template>

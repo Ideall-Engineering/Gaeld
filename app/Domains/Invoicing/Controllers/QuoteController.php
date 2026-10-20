@@ -26,6 +26,7 @@ use App\Support\Exceptions\DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -137,6 +138,28 @@ class QuoteController extends Controller
         }
 
         return back()->with('success', __('app.quote_status_changed', ['status' => $quote->status->label()]));
+    }
+
+    /**
+     * Changes only the dates of a draft, right in the quote list.
+     */
+    public function dates(Request $request, Quote $quote): RedirectResponse
+    {
+        $this->authorize('update', $quote);
+
+        $validated = $request->validate([
+            'issue_date' => ['sometimes', 'required', 'date'],
+            'valid_until' => ['sometimes', 'nullable', 'date'],
+        ]);
+        $issue = $validated['issue_date'] ?? $quote->issue_date->toDateString();
+        $validUntil = array_key_exists('valid_until', $validated) ? $validated['valid_until'] : $quote->valid_until?->toDateString();
+        if ($validUntil !== null && Carbon::parse($validUntil)->lt(Carbon::parse($issue))) {
+            return $this->backWithError(__('app.quote_valid_before_issue'));
+        }
+
+        $quote->update(['issue_date' => $issue, 'valid_until' => $validUntil]);
+
+        return back()->with('success', __('app.quote_dates_updated'));
     }
 
     public function convert(Request $request, Quote $quote, ConvertQuoteToInvoiceAction $convert): RedirectResponse

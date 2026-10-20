@@ -23,6 +23,7 @@ use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -33,7 +34,7 @@ class InvoiceLifecycleController extends Controller
 {
     use HandlesFlashErrorResponses;
 
-    public function finalize(Invoice $invoice, FinalizeInvoiceAction $action): RedirectResponse
+    public function finalize(Request $request, Invoice $invoice, FinalizeInvoiceAction $action): RedirectResponse
     {
         $this->authorize('finalize', $invoice);
 
@@ -43,11 +44,13 @@ class InvoiceLifecycleController extends Controller
             return $this->backWithError($e);
         }
 
-        return redirect()->route('invoices.show', $invoice)
-            ->with('success', __('app.invoice_finalized'));
+        // From the invoice list the user stays on the list.
+        $target = $request->boolean('stay') ? back() : redirect()->route('invoices.show', $invoice);
+
+        return $target->with('success', __('app.invoice_finalized'));
     }
 
-    public function cancel(Invoice $invoice, CancelInvoiceAction $action): RedirectResponse
+    public function cancel(Request $request, Invoice $invoice, CancelInvoiceAction $action): RedirectResponse
     {
         $this->authorize('cancel', $invoice);
 
@@ -57,8 +60,10 @@ class InvoiceLifecycleController extends Controller
             return $this->backWithError($e);
         }
 
-        return redirect()->route('invoices.show', $invoice)
-            ->with('success', __('app.invoice_cancelled'));
+        // From the invoice list the user stays on the list.
+        $target = $request->boolean('stay') ? back() : redirect()->route('invoices.show', $invoice);
+
+        return $target->with('success', __('app.invoice_cancelled'));
     }
 
     public function revertToDraft(Invoice $invoice, RevertInvoiceToDraftAction $action): RedirectResponse

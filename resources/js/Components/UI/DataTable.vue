@@ -321,7 +321,7 @@ function exportCsv() {
             <div v-for="col in visibleColumns" :key="col.key" class="flex justify-between gap-2 text-sm py-0.5">
               <span class="text-[hsl(var(--muted-foreground))] shrink-0">{{ col.label }}</span>
               <span :class="col.class" class="text-right min-w-0 break-words">
-                <slot :name="`cell-${col.key}`" :row="row" :value="row[col.key]">
+                <slot :name="`cell-${col.key}`" :row="row" :value="row[col.key]" :mobile="true">
                   {{ col.format ? col.format(row[col.key], row) : row[col.key] }}
                 </slot>
               </span>

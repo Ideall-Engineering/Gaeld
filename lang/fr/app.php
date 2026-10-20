@@ -3257,4 +3257,12 @@ return [
     'steering_outlook_flow' => 'Recettes et dépenses',
     'steering_outlook_bank' => 'Solde bancaire',
     'steering_outlook_result_cumulative' => 'Résultat cumulé',
+    'edit_lines' => 'Modifier les positions',
+    'open_contact' => 'Ouvrir le contact',
+    'change_status' => 'Changer le statut',
+    'invoice_finalize_confirm' => 'Finaliser la facture :number ? Elle sera comptabilisée au grand livre et ne pourra ensuite être modifiée que via « Remettre en brouillon ».',
+    'invoice_dates_updated' => 'Date de la facture modifiée.',
+    'invoice_due_before_issue' => 'L\'échéance ne peut pas précéder la date de facture.',
+    'quote_dates_updated' => 'Date de l\'offre modifiée.',
+    'quote_valid_before_issue' => '« Valable jusqu\'au » ne peut pas précéder la date de l\'offre.',
 ];

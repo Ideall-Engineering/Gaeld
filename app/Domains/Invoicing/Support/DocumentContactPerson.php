@@ -27,6 +27,27 @@ final class DocumentContactPerson
     }
 
     /**
+     * The person a new document gets when none was named: the customer's
+     * primary person, or its only one.
+     */
+    public static function primaryOf(?Contact $customer): ?ContactPerson
+    {
+        if ($customer === null) {
+            return null;
+        }
+
+        $persons = ContactPerson::query()
+            ->where('contactable_type', $customer->getMorphClass())
+            ->where('contactable_id', $customer->id)
+            ->orderByDesc('is_primary')
+            ->limit(2)
+            ->get();
+        $first = $persons->first();
+
+        return $first !== null && ($first->is_primary || $persons->count() === 1) ? $first : null;
+    }
+
+    /**
      * Validation rule: the person belongs to the customer the request names,
      * found by the given lookup.
      *

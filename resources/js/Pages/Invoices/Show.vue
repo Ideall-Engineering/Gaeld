@@ -16,7 +16,7 @@ import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Pencil, Trash2, Copy, Download, Paperclip, Ban, FileMinus, Bell, Mail, Eye, X, RotateCcw, FileText, RefreshCw } from 'lucide-vue-next'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import InvoiceProjectCard from '@/Components/Projects/InvoiceProjectCard.vue'
@@ -159,6 +159,11 @@ function openPaymentModal() {
   paymentForm.clearErrors()
   showPaymentModal.value = true
 }
+
+// "?payment=1" (from the status menu in the invoice list) opens the payment form.
+onMounted(() => {
+  if (props.canRecordPayment && new URLSearchParams(window.location.search).get('payment') === '1') openPaymentModal()
+})
 
 function openPaymentDateModal(payment) {
   paymentToEdit.value = payment

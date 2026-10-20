@@ -3253,4 +3253,12 @@ return [
     'steering_outlook_flow' => 'Entrate e spese',
     'steering_outlook_bank' => 'Saldo bancario',
     'steering_outlook_result_cumulative' => 'Risultato cumulato',
+    'edit_lines' => 'Modifica posizioni',
+    'open_contact' => 'Apri contatto',
+    'change_status' => 'Cambia stato',
+    'invoice_finalize_confirm' => 'Finalizzare la fattura :number? Verrà registrata nel libro mastro e in seguito potrà essere modificata solo tramite «Ripristina come bozza».',
+    'invoice_dates_updated' => 'Data della fattura modificata.',
+    'invoice_due_before_issue' => 'La scadenza non può precedere la data della fattura.',
+    'quote_dates_updated' => 'Data dell\'offerta modificata.',
+    'quote_valid_before_issue' => '«Valida fino al» non può precedere la data dell\'offerta.',
 ];

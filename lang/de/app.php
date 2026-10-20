@@ -3249,4 +3249,12 @@ return [
     'steering_outlook_flow' => 'Einnahmen und Ausgaben',
     'steering_outlook_bank' => 'Bankstand',
     'steering_outlook_result_cumulative' => 'Ergebnis kumuliert',
+    'edit_lines' => 'Positionen bearbeiten',
+    'open_contact' => 'Kontakt öffnen',
+    'change_status' => 'Status ändern',
+    'invoice_finalize_confirm' => 'Rechnung :number abschliessen? Sie wird ins Hauptbuch gebucht und lässt sich danach nur noch über „In Entwurf zurücksetzen“ ändern.',
+    'invoice_dates_updated' => 'Datum der Rechnung geändert.',
+    'invoice_due_before_issue' => 'Das Fälligkeitsdatum darf nicht vor dem Rechnungsdatum liegen.',
+    'quote_dates_updated' => 'Datum der Offerte geändert.',
+    'quote_valid_before_issue' => '„Gültig bis“ darf nicht vor dem Offertdatum liegen.',
 ];

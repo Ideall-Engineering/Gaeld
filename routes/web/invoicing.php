@@ -20,6 +20,7 @@ Route::post('/invoices/catalog-items', [InvoiceCatalogItemController::class, 'st
 Route::delete('/invoices/catalog-items/{catalogItem}', [InvoiceCatalogItemController::class, 'destroy'])->name('invoices.catalog-items.destroy');
 
 Route::resource('invoices', InvoiceController::class);
+Route::patch('/invoices/{invoice}/dates', [InvoiceController::class, 'dates'])->name('invoices.dates');
 Route::post('/invoices/{invoice}/finalize', [InvoiceLifecycleController::class, 'finalize'])->name('invoices.finalize');
 Route::post('/invoices/{invoice}/cancel', [InvoiceLifecycleController::class, 'cancel'])->name('invoices.cancel');
 Route::post('/invoices/{invoice}/revert-to-draft', [InvoiceLifecycleController::class, 'revertToDraft'])->name('invoices.revertToDraft');

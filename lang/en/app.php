@@ -3311,4 +3311,12 @@ return [
     'steering_outlook_flow' => 'Income and expenses',
     'steering_outlook_bank' => 'Bank balance',
     'steering_outlook_result_cumulative' => 'Result to date',
+    'edit_lines' => 'Edit line items',
+    'open_contact' => 'Open contact',
+    'change_status' => 'Change status',
+    'invoice_finalize_confirm' => 'Finalize invoice :number? It is posted to the ledger and can afterwards only be changed via "Revert to draft".',
+    'invoice_dates_updated' => 'Invoice date changed.',
+    'invoice_due_before_issue' => 'The due date cannot be before the invoice date.',
+    'quote_dates_updated' => 'Quote date changed.',
+    'quote_valid_before_issue' => '"Valid until" cannot be before the quote date.',
 ];

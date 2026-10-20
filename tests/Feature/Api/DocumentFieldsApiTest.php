@@ -70,4 +70,24 @@ class DocumentFieldsApiTest extends SecurityTestCase
             ->assertJsonPath('data.contact_person_id', $this->person->id)
             ->assertJsonPath('data.lines.0.unit', 'Stunde');
     }
+
+    public function test_a_document_without_a_named_person_addresses_the_customers_only_person(): void
+    {
+        $line = ['description' => 'Beratung', 'quantity' => 1, 'unit_price' => 150, 'vat_rate_code' => 'NORMAL'];
+
+        $this->withToken($this->tokenA)->postJson('/api/v1/invoices', [
+            'customer_id' => $this->customer->uuid, 'issue_date' => '2026-10-20', 'lines' => [$line],
+        ], ['Idempotency-Key' => 'inv-default-person'])->assertCreated()
+            ->assertJsonPath('data.contact_person_id', $this->person->id);
+
+        $this->withToken($this->tokenA)->postJson('/api/v1/invoices', [
+            'customer_id' => $this->customer->uuid, 'contact_person_id' => null, 'issue_date' => '2026-10-20', 'lines' => [$line],
+        ], ['Idempotency-Key' => 'inv-no-person'])->assertCreated()
+            ->assertJsonPath('data.contact_person_id', null);
+
+        $this->withToken($this->tokenA)->postJson('/api/v1/quotes', [
+            'customer_id' => $this->customer->uuid, 'issue_date' => '2026-10-20', 'lines' => [$line],
+        ])->assertCreated()
+            ->assertJsonPath('data.contact_person_id', $this->person->id);
+    }
 }

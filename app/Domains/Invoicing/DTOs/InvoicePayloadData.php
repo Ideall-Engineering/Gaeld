@@ -31,6 +31,7 @@ abstract readonly class InvoicePayloadData
         public ?string $contactPersonId = null,
         public ?string $deliveryNote = null,
         public ?string $introText = null,
+        public bool $contactPersonNamed = true,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -53,6 +54,7 @@ abstract readonly class InvoicePayloadData
             contactPersonId: blank($data['contact_person_id'] ?? null) ? null : (string) $data['contact_person_id'],
             deliveryNote: blank($data['delivery_note'] ?? null) ? null : $data['delivery_note'],
             introText: blank($data['intro_text'] ?? null) ? null : $data['intro_text'],
+            contactPersonNamed: array_key_exists('contact_person_id', $data),
         );
     }
 

@@ -1,5 +1,5 @@
 <script setup>
-import { router } from '@inertiajs/vue3'
+import { Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Button from '@/Components/UI/Button.vue'
 import Badge from '@/Components/UI/Badge.vue'
@@ -8,7 +8,11 @@ import EmptyState from '@/Components/UI/EmptyState.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 import { Eye, FileSignature, FileText, Pencil, Plus } from 'lucide-vue-next'
-import { computed } from 'vue'
+import ConfirmDialog from '@/Components/UI/ConfirmDialog.vue'
+import StatusMenu from '@/Components/Invoices/StatusMenu.vue'
+import InlineDate from '@/Components/Invoices/InlineDate.vue'
+import { usePermissions } from '@/lib/usePermissions'
+import { computed, ref } from 'vue'
 
 // Quotes (offers): listed like invoices, with their validity and answer.
 const props = defineProps({
@@ -20,6 +24,7 @@ const props = defineProps({
 
 const { t } = useTranslations()
 const { formatCurrency, formatDate } = useFormatters()
+const { can: hasPermission } = usePermissions()
 
 function applyQuery(params) {
   router.get('/quotes', { ...props.query, ...params, page: 1 }, { preserveState: true, replace: true })
@@ -27,13 +32,59 @@ function applyQuery(params) {
 
 const isExpired = row => row.status === 'sent' && row.valid_until && new Date(row.valid_until) < new Date(new Date().toDateString())
 
+// Changes right in the list: dates of a draft, and the next status step.
+const isDraftEditable = row => row.status === 'draft' && hasPermission('invoicing.edit')
+const totalLink = row => (isDraftEditable(row) ? `/quotes/${row.id}/edit#lines` : `/quotes/${row.id}`)
+
+function setDate(quote, field, value) {
+  if (field === 'issue_date' && !value) return
+  router.patch(`/quotes/${quote.id}/dates`, { [field]: value || null }, { preserveScroll: true, preserveState: true })
+}
+
+// The same steps as on the quote page (QuoteStatus::allowedTransitions).
+function statusOptions(row) {
+  if (row.invoice || !hasPermission('invoicing.edit')) return []
+  const s = row.status
+  const options = []
+  if (s === 'draft') options.push({ key: 'sent', label: t('quote_mark_sent') })
+  if (s === 'draft' || s === 'sent') {
+    options.push({ key: 'accepted', label: t('quote_mark_accepted') })
+    options.push({ key: 'declined', label: t('quote_mark_declined') })
+  }
+  if (s === 'sent' || s === 'declined') options.push({ key: 'draft', label: t('quote_back_to_draft') })
+  if (s === 'accepted') options.push({ key: 'sent', label: t('quote_undo_decision') })
+  if ((s === 'sent' || s === 'accepted') && hasPermission('invoicing.create')) options.push({ key: 'convert', label: t('quote_convert') })
+  return options
+}
+
+const converting = ref(null)
+const busy = ref(false)
+
+function chooseStep(quote, option) {
+  if (option.key === 'convert') {
+    converting.value = quote
+    return
+  }
+  router.post(`/quotes/${quote.id}/status`, { status: option.key }, { preserveScroll: true })
+}
+
+function convert() {
+  busy.value = true
+  router.post(`/quotes/${converting.value.id}/convert`, {}, {
+    onFinish: () => {
+      busy.value = false
+      converting.value = null
+    },
+  })
+}
+
 const columns = computed(() => [
   { key: 'number', label: t('number'), sortable: true },
   { key: 'customer', label: t('client'), format: v => v?.name ?? '—' },
   { key: 'title', label: t('quote_title') },
-  { key: 'issue_date', label: t('date'), format: v => formatDate(v), sortable: true },
+  { key: 'issue_date', label: t('date'), sortable: true },
   { key: 'valid_until', label: t('quote_valid_until'), sortable: true },
-  { key: 'total', label: t('total'), class: 'text-right', format: v => formatCurrency(v), sortable: true },
+  { key: 'total', label: t('total'), class: 'text-right', sortable: true },
   { key: 'status', label: t('status'), sortable: true },
   { key: 'actions', label: '', class: 'text-right w-auto' },
 ])
@@ -71,18 +122,41 @@ const filters = computed(() => [{
       @search="search => applyQuery({ search })"
       @filter="({ key, value }) => applyQuery({ filter: { ...query.filter, [key]: value } })"
     >
+      <template #cell-number="{ value, row, mobile }">
+        <span v-if="mobile">{{ value }}</span>
+        <Link v-else :href="`/quotes/${row.id}`" class="font-medium hover:underline">{{ value }}</Link>
+      </template>
+      <template #cell-customer="{ value, mobile }">
+        <Link v-if="value?.uuid && !mobile" :href="`/contacts/${value.uuid}`" class="hover:underline" :title="t('open_contact')">{{ value.name }}</Link>
+        <span v-else>{{ value?.name ?? '—' }}</span>
+      </template>
       <template #cell-title="{ value }">
         <span class="block max-w-[16rem] truncate" :title="value">{{ value || '—' }}</span>
       </template>
-      <template #cell-valid_until="{ value, row }">
+      <template #cell-issue_date="{ value, row, mobile }">
+        <InlineDate :model-value="value" :editable="!mobile && isDraftEditable(row)" :label="t('date')" @change="date => setDate(row, 'issue_date', date)" />
+      </template>
+      <template #cell-valid_until="{ value, row, mobile }">
         <span class="flex flex-wrap items-center gap-1.5">
-          {{ value ? formatDate(value) : '—' }}
+          <InlineDate :model-value="value" :editable="!mobile && isDraftEditable(row)" :label="t('quote_valid_until')" @change="date => setDate(row, 'valid_until', date)" />
           <Badge v-if="isExpired(row)" variant="warning" class="text-xs">{{ t('quote_expired') }}</Badge>
         </span>
       </template>
-      <template #cell-status="{ value, row }">
+      <template #cell-total="{ value, row, mobile }">
+        <span v-if="mobile">{{ formatCurrency(value) }}</span>
+        <Link v-else :href="totalLink(row)" class="tabular-nums hover:underline" :title="isDraftEditable(row) ? t('edit_lines') : t('view')">{{ formatCurrency(value) }}</Link>
+      </template>
+      <template #cell-status="{ value, row, mobile }">
         <span class="flex flex-wrap items-center gap-1.5">
-          <Badge :variant="statusVariant[value] ?? 'secondary'">{{ t(`quote_status_${value}`) }}</Badge>
+          <Badge v-if="mobile" :variant="statusVariant[value] ?? 'secondary'">{{ t(`quote_status_${value}`) }}</Badge>
+          <StatusMenu
+            v-else
+            :label="t(`quote_status_${value}`)"
+            :variant="statusVariant[value] ?? 'secondary'"
+            :options="statusOptions(row)"
+            :aria-label="t('change_status')"
+            @select="option => chooseStep(row, option)"
+          />
           <span v-if="row.invoice" class="text-xs text-[hsl(var(--muted-foreground))]">→ {{ row.invoice.number }}</span>
         </span>
       </template>
@@ -103,5 +177,16 @@ const filters = computed(() => [{
         <EmptyState :icon="FileSignature" :title="t('quotes_empty')" :description="t('quotes_empty_desc')" :action-label="can.create ? t('quote_new') : null" action-href="/quotes/create" />
       </template>
     </DataTable>
+
+    <ConfirmDialog
+      :open="!!converting"
+      :title="t('quote_convert')"
+      :message="t('quote_convert_confirm', { number: converting?.number })"
+      :confirm-label="t('quote_convert')"
+      confirm-variant="default"
+      :processing="busy"
+      @confirm="convert"
+      @cancel="converting = null"
+    />
   </AppLayout>
 </template>

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
@@ -120,6 +120,11 @@ function onCustomerCreated(customer) {
   clientOptions.value = customerList.map(c => ({ value: String(c.id), label: c.name }))
   form.customer_id = String(customer.id)
 }
+
+// "#lines" (from the total in the list) opens the form at the positions.
+onMounted(() => {
+  if (window.location.hash === '#lines') document.getElementById('lines')?.scrollIntoView({ block: 'start' })
+})
 </script>
 
 <template>
@@ -226,6 +231,8 @@ function onCustomerCreated(customer) {
           <!-- Line items -->
           <hr class="border-[hsl(var(--border))]" />
           <InvoiceLineItems
+            id="lines"
+            class="scroll-mt-20"
             v-model="form.lines"
             :vat-rates="vatRates"
             :catalog-items="catalogItems"

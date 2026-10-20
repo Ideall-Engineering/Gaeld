@@ -325,6 +325,28 @@ class InvoiceController extends Controller
             ->with('success', __('app.invoice_updated'));
     }
 
+    /**
+     * Changes only the dates of a draft, right in the invoice list.
+     */
+    public function dates(Request $request, Invoice $invoice): RedirectResponse
+    {
+        $this->authorize('update', $invoice);
+
+        $validated = $request->validate([
+            'issue_date' => ['sometimes', 'required', 'date'],
+            'due_date' => ['sometimes', 'nullable', 'date'],
+        ]);
+        $issue = $validated['issue_date'] ?? $invoice->issue_date->toDateString();
+        $due = array_key_exists('due_date', $validated) ? $validated['due_date'] : $invoice->due_date?->toDateString();
+        if ($due !== null && Carbon::parse($due)->lt(Carbon::parse($issue))) {
+            return $this->backWithError(__('app.invoice_due_before_issue'));
+        }
+
+        $invoice->update(['issue_date' => $issue, 'due_date' => $due]);
+
+        return back()->with('success', __('app.invoice_dates_updated'));
+    }
+
     public function destroy(Invoice $invoice, DeleteInvoiceAction $action): RedirectResponse
     {
         $this->authorize('delete', $invoice);

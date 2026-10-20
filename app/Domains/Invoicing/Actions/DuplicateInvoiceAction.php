@@ -7,6 +7,7 @@ use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
+use App\Domains\Invoicing\Support\DocumentContactPerson;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -22,11 +23,17 @@ class DuplicateInvoiceAction
     public function execute(Invoice $invoice): Invoice
     {
         return DB::transaction(function () use ($invoice): Invoice {
+            // The copy addresses the customer as it is today, not as the
+            // original was sent: current address and contact person.
+            $customer = $invoice->customer;
+            $person = DocumentContactPerson::of($customer, $invoice->contact_person_id)
+                ?? DocumentContactPerson::primaryOf($customer);
+
             $newInvoice = Invoice::create([
                 'organization_id' => $invoice->organization_id,
                 'customer_id' => $invoice->customer_id,
-                'customer_snapshot' => $invoice->customer_snapshot,
-                'contact_person_id' => $invoice->contact_person_id,
+                'customer_snapshot' => $customer?->toInvoiceSnapshot($person) ?? $invoice->customer_snapshot,
+                'contact_person_id' => $person?->id,
                 'delivery_note' => $invoice->delivery_note,
                 'intro_text' => $invoice->intro_text,
                 'number' => $this->numberGenerator->next($invoice->organization_id),

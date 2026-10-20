@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
@@ -99,6 +99,11 @@ function submit() {
 }
 
 const title = computed(() => (props.quote ? t('quote_edit') : t('quote_new')))
+
+// "#lines" (from the total in the list) opens the form at the positions.
+onMounted(() => {
+  if (window.location.hash === '#lines') document.getElementById('lines')?.scrollIntoView({ block: 'start' })
+})
 </script>
 
 <template>
@@ -165,6 +170,8 @@ const title = computed(() => (props.quote ? t('quote_edit') : t('quote_new')))
           </section>
 
           <InvoiceLineItems
+            id="lines"
+            class="scroll-mt-20"
             v-model="form.lines"
             :vat-rates="vatRates"
             :errors="form.errors"
