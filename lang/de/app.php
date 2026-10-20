@@ -3257,4 +3257,5 @@ return [
     'invoice_due_before_issue' => 'Das Fälligkeitsdatum darf nicht vor dem Rechnungsdatum liegen.',
     'quote_dates_updated' => 'Datum der Offerte geändert.',
     'quote_valid_before_issue' => '„Gültig bis“ darf nicht vor dem Offertdatum liegen.',
+    'contact_person_default' => 'Hauptkontakt (:name)',
 ];

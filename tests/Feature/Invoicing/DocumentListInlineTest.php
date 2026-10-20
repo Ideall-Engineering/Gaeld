@@ -167,4 +167,47 @@ class DocumentListInlineTest extends TestCase
             ->component('Quotes/Index')
             ->where('quotes.data.0.customer.uuid', $this->customer->uuid));
     }
+
+    public function test_a_draft_shows_the_primary_person_even_when_added_later(): void
+    {
+        $this->primary->update(['is_primary' => false]);
+        $invoice = $this->storeInvoice();
+        $this->assertNull(data_get($invoice->fresh()->customerDetailsForDocument(), 'contact_person'));
+
+        $this->primary->update(['is_primary' => true]);
+        $this->customer->update(['address' => 'Im Grindel 31']);
+
+        $details = $invoice->fresh()->customerDetailsForDocument();
+        $this->assertSame('Anna Haupt', data_get($details, 'contact_person.name'));
+        $this->assertSame('Im Grindel 31', data_get($details, 'address'));
+    }
+
+    public function test_finalizing_freezes_the_address_the_draft_showed(): void
+    {
+        foreach ([['1100', AccountType::Asset], ['3000', AccountType::Revenue], ['2200', AccountType::Liability]] as [$code, $type]) {
+            Account::create(['organization_id' => $this->org->id, 'code' => $code, 'name' => $code, 'type' => $type->value]);
+        }
+        $invoice = $this->storeInvoice();
+
+        $this->actAsOrg()->post("/invoices/{$invoice->id}/finalize")->assertSessionMissing('error');
+        $this->customer->update(['address' => 'Später umgezogen 9']);
+        $this->primary->update(['first_name' => 'Anders']);
+
+        $invoice->refresh();
+        $this->assertSame($this->primary->id, $invoice->contact_person_id);
+        $this->assertSame('Anna Haupt', data_get($invoice->customerDetailsForDocument(), 'contact_person.name'));
+        $this->assertSame('Hauptstrasse 1', data_get($invoice->customerDetailsForDocument(), 'address'));
+    }
+
+    public function test_sending_a_quote_freezes_the_address_the_draft_showed(): void
+    {
+        $quote = $this->storeQuote();
+        $this->actAsOrg()->post("/quotes/{$quote->id}/status", ['status' => 'sent'])->assertSessionMissing('error');
+        $this->customer->update(['address' => 'Später umgezogen 9']);
+
+        $quote->refresh();
+        $this->assertSame($this->primary->id, $quote->contact_person_id);
+        $this->assertSame('Hauptstrasse 1', data_get($quote->customerDetailsForDocument(), 'address'));
+        $this->assertSame('Anna Haupt', data_get($quote->customerDetailsForDocument(), 'contact_person.name'));
+    }
 }

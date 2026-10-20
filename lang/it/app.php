@@ -3261,4 +3261,5 @@ return [
     'invoice_due_before_issue' => 'La scadenza non può precedere la data della fattura.',
     'quote_dates_updated' => 'Data dell\'offerta modificata.',
     'quote_valid_before_issue' => '«Valida fino al» non può precedere la data dell\'offerta.',
+    'contact_person_default' => 'Contatto principale (:name)',
 ];

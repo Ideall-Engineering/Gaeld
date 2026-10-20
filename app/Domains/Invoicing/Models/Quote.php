@@ -6,6 +6,7 @@ use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Enums\QuoteStatus;
+use App\Domains\Invoicing\Models\Concerns\AddressesCustomer;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Projects\Models\Project;
 use App\Support\Money;
@@ -57,7 +58,7 @@ use Illuminate\Support\Carbon;
  */
 class Quote extends Model
 {
-    use Auditable, BelongsToOrganization, HasUuids, SoftDeletes;
+    use AddressesCustomer, Auditable, BelongsToOrganization, HasUuids, SoftDeletes;
 
     /** @var list<string> */
     protected $with = ['customer'];
@@ -144,12 +145,9 @@ class Quote extends Model
         return $this->hasMany(QuoteLine::class)->orderBy('sort_order')->orderBy('id');
     }
 
-    /**
-     * @return array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null, contact_person?: array{name: string, department: string|null, position: string|null, email: string|null}}|null
-     */
-    public function customerDetailsForDocument(): ?array
+    public function isDraftDocument(): bool
     {
-        return $this->customer_snapshot ?? $this->customer?->toInvoiceSnapshot($this->contactPerson);
+        return $this->status === QuoteStatus::Draft;
     }
 
     /** A sent quote past its validity date; it can still be accepted. */

@@ -8,6 +8,7 @@ use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Enums\InvoiceType;
+use App\Domains\Invoicing\Models\Concerns\AddressesCustomer;
 use App\Domains\Organizations\Models\Organization;
 use App\Support\Money;
 use App\Support\Traits\Auditable;
@@ -66,7 +67,7 @@ use Laravel\Scout\Searchable;
 class Invoice extends Model
 {
     /** @use HasFactory<InvoiceFactory> */
-    use Auditable, BelongsToOrganization, HasFactory, HasUuids, Searchable, SoftDeletes;
+    use AddressesCustomer, Auditable, BelongsToOrganization, HasFactory, HasUuids, Searchable, SoftDeletes;
 
     /**
      * Always eager-load the customer + organization to avoid N+1 in lists
@@ -148,12 +149,9 @@ class Invoice extends Model
         return $this->belongsTo(ContactPerson::class);
     }
 
-    /**
-     * @return array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null, contact_person?: array{name: string, department: string|null, position: string|null, email: string|null}}|null
-     */
-    public function customerDetailsForDocument(): ?array
+    public function isDraftDocument(): bool
     {
-        return $this->customer_snapshot ?? $this->customer?->toInvoiceSnapshot($this->contactPerson);
+        return $this->status === InvoiceStatus::Draft;
     }
 
     /** @return BelongsTo<JournalEntry, $this> */

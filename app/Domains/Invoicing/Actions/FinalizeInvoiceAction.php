@@ -38,6 +38,9 @@ class FinalizeInvoiceAction
             throw new InvalidInvoiceStateException(__('app.invoice_total_must_not_be_zero'));
         }
 
+        // The sent invoice keeps the address the draft showed.
+        $invoice->freezeCustomerDetails();
+
         $this->qrService->ensureQrReference($invoice, $invoice->organization);
 
         $result = $this->accountingService->postToLedger($invoice);

@@ -3319,4 +3319,5 @@ return [
     'invoice_due_before_issue' => 'The due date cannot be before the invoice date.',
     'quote_dates_updated' => 'Quote date changed.',
     'quote_valid_before_issue' => '"Valid until" cannot be before the quote date.',
+    'contact_person_default' => 'Primary contact (:name)',
 ];

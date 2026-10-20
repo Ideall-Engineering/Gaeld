@@ -3265,4 +3265,5 @@ return [
     'invoice_due_before_issue' => 'L\'échéance ne peut pas précéder la date de facture.',
     'quote_dates_updated' => 'Date de l\'offre modifiée.',
     'quote_valid_before_issue' => '« Valable jusqu\'au » ne peut pas précéder la date de l\'offre.',
+    'contact_person_default' => 'Contact principal (:name)',
 ];

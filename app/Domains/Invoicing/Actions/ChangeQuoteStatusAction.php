@@ -38,14 +38,19 @@ class ChangeQuoteStatusAction
             throw new InvalidQuoteStateException(__('app.quote_customer_required'));
         }
 
+        $leavesDraft = $quote->status === QuoteStatus::Draft;
         $quote->status = $target;
         if ($target === QuoteStatus::Sent) {
             $quote->sent_at ??= now();
         }
         $quote->decided_at = in_array($target, [QuoteStatus::Accepted, QuoteStatus::Declined], true) ? now() : null;
 
-        DB::transaction(function () use ($quote): void {
+        DB::transaction(function () use ($quote, $leavesDraft): void {
             $quote->save();
+            // The sent quote keeps the address the draft showed.
+            if ($leavesDraft) {
+                $quote->freezeCustomerDetails();
+            }
             $this->jobStatus->follow($quote);
         });
 
