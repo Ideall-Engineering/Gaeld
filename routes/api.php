@@ -15,6 +15,7 @@ use App\Domains\Api\Controllers\JournalEntryApiController;
 use App\Domains\Api\Controllers\JournalEntryRevisionApiController;
 use App\Domains\Api\Controllers\OrgTokenController;
 use App\Domains\Api\Controllers\QuoteApiController;
+use App\Domains\Api\Controllers\VatRateApiController;
 use App\Domains\Api\Controllers\WebhookApiController;
 use App\Domains\Projects\Controllers\AcquisitionApiController;
 use App\Domains\Projects\Controllers\BudgetGroupApiController;
@@ -165,6 +166,9 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
         Route::post('/budget-groups', [BudgetGroupApiController::class, 'store'])->name('api.budget-groups.store');
         Route::put('/journal-entries/{journalEntry}/allocations', [JournalAllocationApiController::class, 'update'])->name('api.journal-entries.allocations');
     });
+
+    // VAT rates (read-only), named by invoice and quote lines
+    Route::get('/vat-rates', [VatRateApiController::class, 'index'])->name('api.vat-rates.index');
 
     // Accounts (read-only)
     Route::get('/accounts', [AccountApiController::class, 'index'])->name('api.accounts.index');

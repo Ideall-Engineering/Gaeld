@@ -2,15 +2,19 @@
 
 namespace App\Domains\Api\Requests;
 
+use App\Domains\Api\Requests\Concerns\NamesLineVatRates;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreInvoiceApiRequest extends FormRequest
 {
+    use NamesLineVatRates;
+
     /**
      * Defense-in-depth: enforce policy at the FormRequest layer in addition to the controller.
      */
@@ -69,6 +73,18 @@ class StoreInvoiceApiRequest extends FormRequest
                 'uuid',
                 Rule::exists('vat_rates', 'uuid')->where('organization_id', $orgId),
             ],
+            ...$this->lineVatRules(),
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->resolveLineVatCodes();
+    }
+
+    /** @return array<int, \Closure> */
+    public function after(): array
+    {
+        return [fn (Validator $validator) => $this->checkLineVatRates($validator)];
     }
 }

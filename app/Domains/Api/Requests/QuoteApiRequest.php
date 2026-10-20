@@ -2,12 +2,14 @@
 
 namespace App\Domains\Api\Requests;
 
+use App\Domains\Api\Requests\Concerns\NamesLineVatRates;
 use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Models\Quote;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * Create a quote (POST) or change a draft one (PATCH, fields optional).
@@ -16,6 +18,8 @@ use Illuminate\Validation\Rule;
  */
 class QuoteApiRequest extends FormRequest
 {
+    use NamesLineVatRates;
+
     public function authorize(): bool
     {
         $quote = $this->route('quote');
@@ -51,6 +55,25 @@ class QuoteApiRequest extends FormRequest
             'lines.*.quantity' => 'required_unless:lines.*.type,text|nullable|numeric|min:0',
             'lines.*.unit_price' => 'required_unless:lines.*.type,text|nullable|numeric',
             'lines.*.vat_rate_id' => ['nullable', 'uuid', Rule::exists('vat_rates', 'uuid')->where('organization_id', $orgId)],
+            ...$this->lineVatRules(),
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->resolveLineVatCodes();
+    }
+
+    /** @return array<int, \Closure> */
+    public function after(): array
+    {
+        return [fn (Validator $validator) => $this->checkLineVatRates($validator)];
+    }
+
+    protected function currentTaxTreatment(): ?string
+    {
+        $document = $this->route('quote');
+
+        return $document instanceof Quote ? $document->tax_treatment->value : null;
     }
 }

@@ -27,7 +27,15 @@ readonly class UpdateContactData
         public ?string $countryName = null,
         private bool $hasSalutation = false,
         private bool $hasCountryName = false,
+        /** @var array<int, string> the optional fields the form sent, so an emptied one is cleared */
+        private array $sent = [],
     ) {}
+
+    /** Optional columns an empty input clears; the others keep their value. */
+    private const CLEARABLE = [
+        'email', 'phone', 'vat_number', 'default_expense_category', 'iban', 'bic',
+        'payment_terms', 'internal_notes', 'notes', 'address', 'city', 'postal_code',
+    ];
 
     /** @param  array<string, mixed>  $data */
     public static function fromArray(array $data): self
@@ -50,6 +58,7 @@ readonly class UpdateContactData
             countryName: $data['country_name'] ?? null,
             hasSalutation: array_key_exists('salutation', $data),
             hasCountryName: array_key_exists('country_name', $data),
+            sent: array_values(array_intersect(self::CLEARABLE, array_keys($data))),
         );
     }
 
@@ -71,7 +80,10 @@ readonly class UpdateContactData
             'payment_terms' => $this->paymentTerms,
             'internal_notes' => $this->internalNotes,
             'notes' => $this->notes ? ['default' => $this->notes] : null,
-        ] + ($this->addressData?->toArray() ?? AddressData::empty()->toArray()), fn ($value) => $value !== null);
+        ] + ($this->addressData?->toArray() ?? AddressData::empty()->toArray()),
+            fn ($value, $key) => $value !== null || in_array($key, $this->sent, true),
+            ARRAY_FILTER_USE_BOTH,
+        );
 
         if ($this->hasSalutation) {
             $data['salutation'] = $this->salutation;
