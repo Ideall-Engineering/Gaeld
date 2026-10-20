@@ -52,7 +52,10 @@ function editBlock(block) {
 }
 const num = v => Number(v ?? 0)
 
-const openTotal = computed(() => (props.steering.open_payments ?? []).reduce((sum, p) => sum + num(p.expected), 0))
+// The open payments of the year and, in a second tab, of the next one.
+const openYear = ref(props.year)
+const openPayments = computed(() => (openYear.value === props.year ? props.steering.open_payments : props.steering.open_payments_next_year) ?? [])
+const openTotal = computed(() => openPayments.value.reduce((sum, p) => sum + num(p.expected), 0))
 const today = new Date().toISOString().slice(0, 10)
 
 // The day a payment is expected, changed right in the list.
@@ -279,10 +282,29 @@ function removeItem(item) {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>{{ t('steering_open_payments') }} {{ year }}</CardTitle></CardHeader>
+        <CardHeader>
+          <div class="flex flex-wrap items-center gap-4">
+            <CardTitle>{{ t('steering_open_payments') }}</CardTitle>
+            <div class="inline-flex rounded-md border border-[hsl(var(--border))] p-0.5" role="tablist">
+              <button
+                v-for="y in [year, year + 1]"
+                :key="y"
+                type="button"
+                role="tab"
+                :aria-selected="openYear === y"
+                class="rounded px-3 py-1 text-sm tabular-nums"
+                :class="openYear === y ? 'bg-[hsl(var(--muted))] font-semibold' : 'text-[hsl(var(--muted-foreground))]'"
+                @click="openYear = y"
+              >
+                {{ y }}
+                <span class="ml-1 text-xs text-[hsl(var(--muted-foreground))]">{{ (y === year ? steering.open_payments : steering.open_payments_next_year)?.length ?? 0 }}</span>
+              </button>
+            </div>
+          </div>
+        </CardHeader>
         <CardContent>
-          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_open_payments_desc') }}</p>
-          <p v-if="!steering.open_payments?.length" class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_open_payments_none') }}</p>
+          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ openYear === year ? t('steering_open_payments_desc') : t('steering_open_payments_next_desc') }}</p>
+          <p v-if="!openPayments.length" class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_open_payments_none') }}</p>
           <div v-else class="overflow-x-auto">
             <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
               <thead>
@@ -297,9 +319,9 @@ function removeItem(item) {
                 </tr>
               </thead>
               <tbody class="divide-y divide-[hsl(var(--border))]">
-                <tr v-for="p in steering.open_payments" :key="p.id">
+                <tr v-for="p in openPayments" :key="p.id">
                   <td class="py-1">
-                    <Link :href="`/projects/${p.id}/report?from=${year}-01-01&to=${year}-12-31`" class="hover:underline">{{ p.name }}</Link>
+                    <Link :href="`/projects/${p.id}/report?from=${openYear}-01-01&to=${openYear}-12-31`" class="hover:underline">{{ p.name }}</Link>
                     <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ p.code }}<template v-if="p.group"> · {{ p.group }}</template></div>
                   </td>
                   <td class="py-1">{{ t('project_status_' + p.status) }}</td>

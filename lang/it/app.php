@@ -3207,4 +3207,5 @@ return [
     'pdf_invoice_number' => 'N. fattura',
     'pdf_vat_uid_number' => 'N. IVA/IDI',
     'pdf_payable_within_days' => 'Pagabile entro :days giorni.',
+    'steering_open_payments_next_desc' => 'Mandati in corso o conclusi il cui pagamento è atteso l\'anno prossimo. Contano solo nel margine di quell\'anno.',
 ];

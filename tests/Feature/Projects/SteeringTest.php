@@ -181,6 +181,8 @@ class SteeringTest extends TestCase
         $this->assertSame('0.00', $anna['contribution_expected'], 'The payment date wins over the target date.');
         $this->assertSame('300.00', $anna['later']);
         $this->assertSame([], $data['open_payments']);
+        $this->assertSame(['C'], array_column($data['open_payments_next_year'], 'code'), 'It moves to the tab of the next year.');
+        $this->assertSame('2027-01-15', $data['open_payments_next_year'][0]['payment_expected_on']);
 
         $this->actAsOrg()->put("/projects/{$c->id}/payment-date", ['payment_expected_on' => '2026-11-30']);
         $open = app(SteeringService::class)->forYear($this->organization->id, 2026)['open_payments'];

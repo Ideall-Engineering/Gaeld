@@ -44,9 +44,12 @@ class SteeringService
     ) {}
 
     /**
+     * With `$withNextYear` the result also carries the open payments of the
+     * following year, shown in their own tab on the people page.
+     *
      * @return array<string, mixed>
      */
-    public function forYear(string $organizationId, int $year): array
+    public function forYear(string $organizationId, int $year, bool $withNextYear = true): array
     {
         $from = "{$year}-01-01";
         $to = "{$year}-12-31";
@@ -313,6 +316,9 @@ class SteeringService
                 collect($openPayments)->sortBy(fn (array $p) => $p['sort'] ?? '9999')->values()->all(),
                 array_column($rows, 'name', 'employee_id'),
             ),
+            'open_payments_next_year' => $withNextYear
+                ? $this->forYear($organizationId, $year + 1, false)['open_payments']
+                : [],
             'done_without_revenue' => $this->doneWithoutRevenue($organizationId, $projects, $byId),
             'totals' => $this->totals($rows),
         ];

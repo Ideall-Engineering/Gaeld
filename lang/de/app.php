@@ -3203,4 +3203,5 @@ return [
     'pdf_invoice_number' => 'Rechnungs-Nr.',
     'pdf_vat_uid_number' => 'MWST/UID-Nr.',
     'pdf_payable_within_days' => 'Zahlbar innert :days Tagen.',
+    'steering_open_payments_next_desc' => 'Aufträge in Arbeit oder erledigt, deren Zahlung im nächsten Jahr erwartet wird. Sie zählen erst im Spielraum jenes Jahres.',
 ];

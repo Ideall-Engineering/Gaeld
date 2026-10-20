@@ -3265,4 +3265,5 @@ return [
     'pdf_invoice_number' => 'Invoice no.',
     'pdf_vat_uid_number' => 'VAT/UID no.',
     'pdf_payable_within_days' => 'Payable within :days days.',
+    'steering_open_payments_next_desc' => 'Jobs in progress or done whose payment is expected next year. They count only in that year\'s scope.',
 ];
