@@ -21,7 +21,8 @@ use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 /**
  * Contribution, drawings and what is left per person (spec 009, stage 5).
- * Owners only: it shows what each owner draws.
+ * Seen by everyone who manages jobs (spec 012); keys, blocks and plan items
+ * are changed by owners only.
  */
 class SteeringController extends Controller
 {
@@ -29,26 +30,28 @@ class SteeringController extends Controller
 
     public function index(Request $request, SteeringService $steering, PlanActualService $plans, CurrentOrganization $currentOrg): Response
     {
-        $this->authorize('steer', Project::class);
+        $this->authorize('viewSteering', Project::class);
 
         $year = $this->year($request);
+        $canSteer = $request->user()?->can('steer', Project::class) ?? false;
 
         return Inertia::render('Projects/Steering', [
             'year' => $year,
+            'canSteer' => $canSteer,
             'steering' => $steering->forYear($currentOrg->id(), $year),
             'employees' => ProjectQuery::employeeOptions(),
-            // Spec 010: each cost block can be edited right here.
-            'groups' => $plans->forYear($currentOrg->id(), $year, withKeys: true)['groups'],
+            // Spec 010: each cost block can be edited right here, by owners.
+            'groups' => $plans->forYear($currentOrg->id(), $year, withKeys: $canSteer)['groups'],
             'blockOptions' => ProjectQuery::blockOptions(),
         ]);
     }
 
     /**
-     * The steering of a year over the API (owners only).
+     * The steering of a year over the API (accountants and up).
      */
     public function indexApi(Request $request, SteeringService $steering, CurrentOrganization $currentOrg): JsonResponse
     {
-        $this->authorize('steer', Project::class);
+        $this->authorize('viewSteering', Project::class);
 
         $year = (int) $request->validate(['year' => ['required', 'integer', 'between:2000,2100']])['year'];
 
@@ -90,7 +93,7 @@ class SteeringController extends Controller
 
     public function export(Request $request, string $format, SteeringService $steering, CurrentOrganization $currentOrg, ExportReportService $exporter): HttpResponse
     {
-        $this->authorize('steer', Project::class);
+        $this->authorize('viewSteering', Project::class);
 
         $year = $this->year($request);
         $data = $steering->forYear($currentOrg->id(), $year);

@@ -41,6 +41,7 @@ class SteeringService
         private ProjectReportService $reports,
         private AcquisitionService $acquisitions,
         private RecurringExpensePlan $recurring,
+        private ExpectedExpensesService $expected,
     ) {}
 
     /**
@@ -319,6 +320,10 @@ class SteeringService
             'open_payments_next_year' => $withNextYear
                 ? $this->forYear($organizationId, $year + 1, false)['open_payments']
                 : [],
+            // Spec 012: the expenses still expected, beside the payments; not
+            // worked out for the inner call that only fetches next year's.
+            'expected_expenses' => $withNextYear ? $this->expected->forYear($organizationId, $year) : null,
+            'expected_expenses_next_year' => $withNextYear ? $this->expected->forYear($organizationId, $year + 1) : null,
             'done_without_revenue' => $this->doneWithoutRevenue($organizationId, $projects, $byId),
             'totals' => $this->totals($rows),
         ];
@@ -554,15 +559,8 @@ class SteeringService
             ->get(['employee_id', 'gross_salary', 'deductions', 'adjustments']);
 
         foreach ($slips as $slip) {
-            $cost = (string) $slip->gross_salary;
-            foreach ((array) $slip->deductions as $code => $amount) {
-                // Each employer contribution once; total_employer sums them.
-                if (str_ends_with((string) $code, '_employer') && ! str_starts_with((string) $code, 'total_') && is_numeric($amount)) {
-                    $cost = Money::add($cost, (string) $amount);
-                }
-            }
-            $cost = Money::add($cost, (string) ($slip->adjustments['reimbursement_amount'] ?? '0'));
-            $totals[$slip->employee_id] = Money::add($totals[$slip->employee_id] ?? '0.00', $cost);
+            $cost = ExpectedExpensesService::slipCost((string) $slip->gross_salary, (array) $slip->deductions, (array) $slip->adjustments);
+            $totals[$slip->employee_id] = Money::add($totals[$slip->employee_id] ?? '0.00', Money::add($cost['salary'], $cost['employer']));
         }
 
         return $totals;

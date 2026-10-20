@@ -57,6 +57,18 @@ class ProjectPolicy extends BasePolicy
             && $user->hasPermissionTo(Permission::OrganizationDelete);
     }
 
+    /**
+     * See the steering page, its export and its API (spec 012): everyone
+     * who manages jobs, that is accountants and up. Changing keys, blocks
+     * and plan items stays with steer.
+     */
+    public function viewSteering(User $user): bool
+    {
+        return $this->hasCurrentOrganization($user)
+            && $user->hasPermissionTo(Permission::ProjectsView)
+            && $user->hasPermissionTo(Permission::ProjectsManage);
+    }
+
     public function allocate(User $user): bool
     {
         return $this->hasCurrentOrganization($user)

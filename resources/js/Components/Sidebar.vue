@@ -213,7 +213,8 @@ const navigation = computed(() => {
         { key: 'jobs', href: '/projects', exact: true },
         ...(can('projects.allocate') ? [{ key: 'unallocated_lines', href: '/projects/unallocated' }] : []),
         { key: 'project_journal', href: '/projects/journal' },
-        ...(can('organization.delete') ? [{ key: 'steering', href: '/projects/steering' }] : []),
+        // Spec 012: seen from accountants up, changed by owners.
+        ...(can('projects.manage') ? [{ key: 'steering', href: '/projects/steering' }] : []),
         { key: 'acquisitions', href: '/projects/acquisitions' },
       ]},
     ] : []),

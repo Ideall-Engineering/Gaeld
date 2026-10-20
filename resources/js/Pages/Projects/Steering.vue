@@ -17,9 +17,11 @@ import { computed, reactive, ref } from 'vue'
 import { AlertTriangle, ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-vue-next'
 
 // What each person earned and drew, and the room left for performance pay
-// (spec 009, stage 5; spec 010, US5).
+// (spec 009, stage 5; spec 010, US5). Seen from accountants up; only owners
+// (canSteer) change blocks and plan items (spec 012).
 const props = defineProps({
   year: Number,
+  canSteer: { type: Boolean, default: false },
   steering: Object,
   employees: Array,
   groups: { type: Array, default: () => [] },
@@ -27,7 +29,7 @@ const props = defineProps({
 })
 
 const { t } = useTranslations()
-const { formatCurrency } = useFormatters()
+const { formatCurrency, formatDate, intlMonthName } = useFormatters()
 
 const people = computed(() => props.steering.people)
 const yearOptions = computed(() => {
@@ -62,6 +64,33 @@ const today = new Date().toISOString().slice(0, 10)
 function setPaymentDate(payment, value) {
   router.put(`/projects/${payment.id}/payment-date`, { payment_expected_on: value || null }, { preserveScroll: true })
 }
+
+// Spec 012: the expenses still expected, in the same two tabs, grouped by
+// month; at the end what is still expected all in all.
+const expectedYear = ref(props.year)
+const expected = computed(() => (expectedYear.value === props.year ? props.steering.expected_expenses : props.steering.expected_expenses_next_year)
+  ?? { rows: [], by_source: {}, total: '0.00', hourly: [] })
+const expectedMonths = computed(() => {
+  const months = []
+  for (const row of expected.value.rows) {
+    const key = row.date.slice(0, 7)
+    let month = months[months.length - 1]
+    if (!month || month.key !== key) {
+      month = { key, label: `${intlMonthName(Number(key.slice(5, 7)) - 1)} ${key.slice(0, 4)}`, rows: [], total: 0 }
+      months.push(month)
+    }
+    month.rows.push(row)
+    month.total += num(row.amount)
+  }
+  return months
+})
+const expectedLabel = row => row.source === 'social' ? t('steering_expected_social_label') : row.label
+const expectedSources = ['salary', 'social', 'recurring', 'expense']
+const outlook = computed(() => [props.year, props.year + 1].map(y => {
+  const income = ((y === props.year ? props.steering.open_payments : props.steering.open_payments_next_year) ?? []).reduce((sum, p) => sum + num(p.expected), 0)
+  const expenses = num((y === props.year ? props.steering.expected_expenses : props.steering.expected_expenses_next_year)?.total)
+  return { year: y, income, expenses, result: income - expenses }
+}))
 
 // Drawn, one foldable row per person: plan items and acquisitions.
 const drawnRows = computed(() => people.value
@@ -361,6 +390,112 @@ function removeItem(item) {
       </Card>
 
       <Card>
+        <CardHeader>
+          <div class="flex flex-wrap items-center gap-4">
+            <CardTitle>{{ t('steering_expected_expenses') }}</CardTitle>
+            <div class="inline-flex rounded-md border border-[hsl(var(--border))] p-0.5" role="tablist">
+              <button
+                v-for="y in [year, year + 1]"
+                :key="y"
+                type="button"
+                role="tab"
+                :aria-selected="expectedYear === y"
+                class="rounded px-3 py-1 text-sm tabular-nums"
+                :class="expectedYear === y ? 'bg-[hsl(var(--muted))] font-semibold' : 'text-[hsl(var(--muted-foreground))]'"
+                @click="expectedYear = y"
+              >
+                {{ y }}
+                <span class="ml-1 text-xs text-[hsl(var(--muted-foreground))]">{{ (y === year ? steering.expected_expenses : steering.expected_expenses_next_year)?.rows?.length ?? 0 }}</span>
+              </button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ expectedYear === year ? t('steering_expected_expenses_desc') : t('steering_expected_expenses_next_desc') }}</p>
+          <p v-if="expected.hourly?.length" class="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            {{ t('steering_expected_hourly', { names: expected.hourly.join(', ') }) }}
+          </p>
+          <p v-if="!expected.rows.length" class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_expected_none') }}</p>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
+              <thead>
+                <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
+                  <th class="pb-2">{{ t('date') }}</th>
+                  <th class="pb-2">{{ t('description') }}</th>
+                  <th class="pb-2">{{ t('source') }}</th>
+                  <th class="pb-2">{{ t('account') }}</th>
+                  <th class="pb-2 text-right">{{ t('amount') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template v-for="month in expectedMonths" :key="month.key">
+                  <tr class="border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]/40 font-medium">
+                    <td class="py-1" colspan="4">{{ month.label }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(month.total) }}</td>
+                  </tr>
+                  <tr v-for="(row, i) in month.rows" :key="month.key + '-' + i" class="border-b border-[hsl(var(--border))]">
+                    <td class="py-1 tabular-nums" :class="row.overdue ? 'text-[hsl(var(--destructive))]' : ''">
+                      {{ formatDate(row.date) }}
+                      <span v-if="row.overdue" class="ml-1 text-xs">{{ t('steering_expected_overdue') }}</span>
+                    </td>
+                    <td class="py-1">
+                      <Link v-if="row.link" :href="row.link" class="hover:underline">{{ expectedLabel(row) }}</Link>
+                      <template v-else>{{ expectedLabel(row) }}</template>
+                    </td>
+                    <td class="py-1 text-[hsl(var(--muted-foreground))]">{{ t('steering_expected_source_' + row.source) }}</td>
+                    <td class="py-1 tabular-nums text-[hsl(var(--muted-foreground))]">{{ row.account ?? '' }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(row.amount) }}</td>
+                  </tr>
+                </template>
+                <tr v-for="source in expectedSources" :key="'sum-' + source" class="text-[hsl(var(--muted-foreground))]">
+                  <td class="pt-2" colspan="4">{{ t('steering_expected_source_' + source) }}</td>
+                  <td class="pt-2 text-right tabular-nums">{{ formatCurrency(expected.by_source[source] ?? 0) }}</td>
+                </tr>
+                <tr class="font-semibold">
+                  <td class="py-2" colspan="4">{{ t('total') }}</td>
+                  <td class="py-2 text-right tabular-nums">{{ formatCurrency(expected.total) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>{{ t('steering_outlook') }}</CardTitle></CardHeader>
+        <CardContent>
+          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_outlook_desc') }}</p>
+          <table class="w-full max-w-xl text-sm">
+            <thead>
+              <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
+                <th class="pb-2"></th>
+                <th v-for="o in outlook" :key="o.year" class="pb-2 text-right tabular-nums">{{ o.year }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="py-1">{{ t('steering_outlook_income') }}</td>
+                <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">{{ formatCurrency(o.income) }}</td>
+              </tr>
+              <tr class="border-b border-[hsl(var(--border))]">
+                <td class="py-1">{{ t('steering_outlook_expenses') }}</td>
+                <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">{{ formatCurrency(-o.expenses) }}</td>
+              </tr>
+              <tr class="font-semibold">
+                <td class="py-2">{{ t('steering_outlook_result') }}</td>
+                <td
+                  v-for="o in outlook"
+                  :key="o.year"
+                  class="py-2 text-right tabular-nums"
+                  :class="o.result < 0 ? 'text-[hsl(var(--destructive))]' : 'text-green-700 dark:text-green-400'"
+                >{{ formatCurrency(o.result) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader><CardTitle>{{ t('steering_blocks') }}</CardTitle></CardHeader>
         <CardContent>
           <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_blocks_desc') }}</p>
@@ -388,7 +523,7 @@ function removeItem(item) {
                       {{ formatCurrency(block.people[person.employee_id]?.effect ?? 0) }}
                     </td>
                     <td class="py-1 text-right" @click.stop>
-                      <Button variant="ghost" size="icon" :aria-label="t('edit')" @click="editBlock(block)"><Pencil class="h-4 w-4" /></Button>
+                      <Button v-if="canSteer" variant="ghost" size="icon" :aria-label="t('edit')" @click="editBlock(block)"><Pencil class="h-4 w-4" /></Button>
                     </td>
                   </tr>
                   <template v-if="open['block-' + block.id]">
@@ -457,7 +592,7 @@ function removeItem(item) {
                     <td class="py-1">{{ item.label }}</td>
                     <td class="py-1 text-right tabular-nums">{{ formatCurrency(item.amount) }}</td>
                     <td class="py-1 text-right">
-                      <Button variant="ghost" size="icon" :aria-label="t('delete')" @click="removeItem(item)"><Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" /></Button>
+                      <Button v-if="canSteer" variant="ghost" size="icon" :aria-label="t('delete')" @click="removeItem(item)"><Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" /></Button>
                     </td>
                   </tr>
                   <tr v-if="num(person.acquisitions) !== 0" class="text-[hsl(var(--muted-foreground))]">
@@ -470,7 +605,7 @@ function removeItem(item) {
               </template>
             </tbody>
           </table>
-          <form class="flex flex-wrap items-end gap-2" @submit.prevent="addItem">
+          <form v-if="canSteer" class="flex flex-wrap items-end gap-2" @submit.prevent="addItem">
             <FormSelect id="item_employee" v-model="itemForm.employee_id" :label="t('acquisition_person')" :options="employees.map(e => ({ value: e.id, label: e.name }))" />
             <FormInput id="item_label" v-model="itemForm.label" :label="t('steering_item_label')" :placeholder="t('steering_item_placeholder')" :error="itemForm.errors.label" class="min-w-[16rem] flex-1" />
             <FormInput id="item_amount" v-model="itemForm.amount" type="number" step="0.01" :label="t('amount')" :error="itemForm.errors.amount" class="w-36" />
@@ -481,6 +616,7 @@ function removeItem(item) {
     </div>
 
     <BudgetGroupFormModal
+      v-if="canSteer"
       :open="showBlockForm"
       :group="editingBlock"
       :year="year"

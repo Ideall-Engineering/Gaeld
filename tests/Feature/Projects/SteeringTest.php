@@ -236,7 +236,7 @@ class SteeringTest extends TestCase
         $this->assertSame('123.00', app(SteeringService::class)->forYear($this->organization->id, 2026)['unshared']);
     }
 
-    public function test_the_page_and_exports_are_for_owners_only(): void
+    public function test_the_page_and_exports_are_seen_by_admins_but_changed_by_owners(): void
     {
         $this->actAsOrg()->get('/projects/steering?year=2026')
             ->assertOk()
@@ -247,8 +247,13 @@ class SteeringTest extends TestCase
         $admin = User::factory()->create(['onboarding_completed_at' => now()]);
         $this->organization->users()->attach($admin->id, ['role' => 'admin']);
         $this->assignOrganizationRole($admin, $this->organization, 'admin');
+        // Spec 012: seen from accountants up, keys stay with owners.
         $this->actingAs($admin)->withSession(['current_organization_id' => $this->organization->id])
-            ->get('/projects/steering')
+            ->get('/projects/steering?year=2026')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('canSteer', false)->where('groups.0.people', []));
+        $this->actingAs($admin)->withSession(['current_organization_id' => $this->organization->id])
+            ->post('/projects/steering/items', ['year' => 2026, 'employee_id' => $this->ben->id, 'label' => 'x', 'amount' => '1.00'])
             ->assertForbidden();
     }
 
