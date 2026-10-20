@@ -152,6 +152,10 @@ class InvoiceController extends Controller
                 try {
                     $dto = CreateInvoiceData::fromArray($validated);
                     $invoice = $action->execute($dto);
+                    // The DTO knows no attachment; the stored file is linked here.
+                    if ($newJustificatifPath) {
+                        $invoice->update(['justificatif_path' => $newJustificatifPath]);
+                    }
                     // Before finalizing, so the booking already carries it.
                     InvoiceProjectInput::apply($invoice, $projectId, $request->user()?->id);
                     break;
@@ -275,6 +279,9 @@ class InvoiceController extends Controller
 
         try {
             $action->execute($invoice, $dto);
+            if ($newJustificatifPath) {
+                $invoice->update(['justificatif_path' => $newJustificatifPath]);
+            }
             InvoiceProjectInput::apply($invoice, $projectId, $request->user()?->id);
         } catch (InvalidInvoiceStateException $e) {
             if ($newJustificatifPath) {

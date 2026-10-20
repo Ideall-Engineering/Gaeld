@@ -5,6 +5,7 @@ namespace App\Domains\Api\Controllers;
 use App\Domains\Api\Requests\ContactApiRequest;
 use App\Domains\Api\Resources\ContactResource;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Queries\ContactQuery;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
@@ -120,5 +121,31 @@ class ContactApiController extends Controller
     private function ensureOrganization(Contact $contact, string $organizationId): void
     {
         abort_unless($contact->organization_id === $organizationId, 404);
+    }
+
+    /**
+     * List deleted contacts
+     *
+     * Contacts in the bin, newest deletion first.
+     */
+    public function trashed(Request $request): AnonymousResourceCollection
+    {
+        $this->authorize('viewAny', Contact::class);
+
+        return ContactResource::collection(ContactQuery::trashed($request, min(max((int) $request->input('per_page', 20), 1), 100)));
+    }
+
+    /**
+     * Restore contact
+     *
+     * @urlParam contact string required The contact UUID.
+     */
+    public function restore(string $contact): ContactResource
+    {
+        $model = Contact::onlyTrashed()->where('uuid', $contact)->firstOrFail();
+        $this->authorize('restore', $model);
+        $model->restore();
+
+        return new ContactResource($model->fresh('contactPersons'));
     }
 }

@@ -26,6 +26,7 @@ use App\Domains\Invoicing\Queries\InvoiceQuery;
 use App\Domains\Invoicing\Services\InvoiceMailerService;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Support\InvoiceProjectInput;
 use App\Http\Controllers\Controller;
 use App\Support\Contracts\OrganizationQuotaResolver;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -131,6 +132,7 @@ class InvoiceApiController extends Controller
         $validated['organization_id'] = $orgId;
 
         $shouldAutoGenerateNumber = empty($validated['number']);
+        $projectId = InvoiceProjectInput::fromRequest($request);
         $maxAttempts = $shouldAutoGenerateNumber ? 3 : 1;
 
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
@@ -155,6 +157,7 @@ class InvoiceApiController extends Controller
             try {
                 $dto = CreateInvoiceData::fromArray($payload);
                 $invoice = $action->execute($dto);
+                InvoiceProjectInput::apply($invoice, $projectId, $request->user()?->id);
 
                 return (new InvoiceResource($invoice->load(['customer', 'lines.vatRate'])))
                     ->response()
@@ -224,6 +227,7 @@ class InvoiceApiController extends Controller
 
         $dto = UpdateInvoiceData::fromArray($validated);
         $action->execute($invoice, $dto);
+        InvoiceProjectInput::apply($invoice, InvoiceProjectInput::fromRequest($request, $invoice), $request->user()?->id);
 
         return new InvoiceResource($invoice->fresh(['customer', 'lines.vatRate']));
     }
@@ -407,6 +411,9 @@ class InvoiceApiController extends Controller
     private function resolveLineVatRateUuids(array $lines, string $orgId): array
     {
         foreach ($lines as &$line) {
+            // A text line carries words only; the DTO still wants figures.
+            $line['quantity'] = (string) ($line['quantity'] ?? '0');
+            $line['unit_price'] = (string) ($line['unit_price'] ?? '0');
             if (isset($line['vat_rate_id'])) {
                 $line['vat_rate_id'] = VatRate::where('uuid', $line['vat_rate_id'])
                     ->where('organization_id', $orgId)

@@ -17,7 +17,9 @@ use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Services\AllocationCoverageService;
 use App\Domains\Projects\Services\AllocationSuggestionService;
 use App\Domains\Projects\Services\LineAllocationService;
+use App\Http\Controllers\Concerns\AnswersApiCalls;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +33,9 @@ use Inertia\Response;
  */
 class UnallocatedLinesController extends Controller
 {
-    public function index(Request $request, AllocationSuggestionService $suggestions, AllocationCoverageService $coverage, CurrentOrganization $currentOrg): Response
+    use AnswersApiCalls;
+
+    public function index(Request $request, AllocationSuggestionService $suggestions, AllocationCoverageService $coverage, CurrentOrganization $currentOrg): Response|JsonResponse
     {
         $this->authorize('allocate', Project::class);
 
@@ -43,6 +47,16 @@ class UnallocatedLinesController extends Controller
         // to: that is where a cost is moved to a job.
         $type = $request->input('tab') === 'expense' ? AccountType::Expense->value : AccountType::Revenue->value;
         $withGeneral = $request->has('general') ? $request->boolean('general') : $type === AccountType::Expense->value;
+
+        if ($this->wantsApiAnswer()) {
+            return response()->json(['data' => [
+                'year' => $year,
+                'tab' => $type,
+                'with_general' => $withGeneral,
+                'lines' => $suggestions->unallocated($currentOrg->id(), $year, $withGeneral, $type),
+                'coverage' => $coverage->forYear($currentOrg->id(), $year),
+            ]]);
+        }
 
         return Inertia::render('Projects/Unallocated', [
             'lines' => $suggestions->unallocated($currentOrg->id(), $year, $withGeneral, $type),
@@ -71,7 +85,7 @@ class UnallocatedLinesController extends Controller
     /**
      * Allocate the chosen lines, each wholly to its chosen project.
      */
-    public function apply(Request $request, LineAllocationService $allocations, CurrentOrganization $currentOrg): RedirectResponse
+    public function apply(Request $request, LineAllocationService $allocations, CurrentOrganization $currentOrg): RedirectResponse|JsonResponse
     {
         $this->authorize('allocate', Project::class);
 
@@ -107,7 +121,9 @@ class UnallocatedLinesController extends Controller
             }
         });
 
-        return back()->with('success', __('app.allocations_bulk_done', ['count' => array_sum(array_map('count', $byEntry))]));
+        $count = array_sum(array_map('count', $byEntry));
+
+        return $this->answer(__('app.allocations_bulk_done', ['count' => $count]), ['allocated' => $count]);
     }
 
     /**
@@ -116,7 +132,7 @@ class UnallocatedLinesController extends Controller
      * after the account, so every line of it counts as general; otherwise the
      * single line goes to the internal job "General".
      */
-    public function general(Request $request, LineAllocationService $allocations, AllocationCoverageService $coverage, CurrentOrganization $currentOrg): RedirectResponse
+    public function general(Request $request, LineAllocationService $allocations, AllocationCoverageService $coverage, CurrentOrganization $currentOrg): RedirectResponse|JsonResponse
     {
         $this->authorize('allocate', Project::class);
 
@@ -147,18 +163,20 @@ class UnallocatedLinesController extends Controller
                 ], AllocationSource::Bulk, $request->user()?->id);
             });
 
-            return back()->with('success', __('app.general_line_done'));
+            return $this->answer(__('app.general_line_done'), ['line_id' => (int) $line->id, 'scope' => 'line']);
         }
 
         $this->authorize('create', Project::class);
         $account = $line->account;
         if ($account === null || $account->type !== AccountType::Expense) {
-            return back()->withErrors(['scope' => __('app.general_account_expense_only')]);
+            return $this->wantsApiAnswer()
+                ? response()->json(['message' => __('app.general_account_expense_only'), 'errors' => ['scope' => [__('app.general_account_expense_only')]]], 422)
+                : back()->withErrors(['scope' => __('app.general_account_expense_only')]);
         }
 
         $year = (int) $validated['year'];
         if (isset($coverage->blockAccounts($orgId, $year)[(int) $account->id])) {
-            return back()->with('success', __('app.general_account_done', ['account' => $account->code]));
+            return $this->answer(__('app.general_account_done', ['account' => $account->code]), ['account' => $account->code, 'scope' => 'account']);
         }
 
         DB::transaction(function () use ($validated, $account, $orgId, $year): void {
@@ -171,6 +189,6 @@ class UnallocatedLinesController extends Controller
             $group->accounts()->syncWithoutDetaching([$account->id]);
         });
 
-        return back()->with('success', __('app.general_account_done', ['account' => $account->code]));
+        return $this->answer(__('app.general_account_done', ['account' => $account->code]), ['account' => $account->code, 'scope' => 'account']);
     }
 }

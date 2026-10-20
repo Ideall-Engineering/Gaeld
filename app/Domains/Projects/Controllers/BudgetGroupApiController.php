@@ -132,4 +132,59 @@ class BudgetGroupApiController extends Controller
 
         return $keys;
     }
+
+    /**
+     * Update cost block
+     *
+     * Fields left out keep their value; `account_codes`, when given, replace
+     * the accounts. An account already in another block of the year is
+     * refused.
+     */
+    public function update(Request $request, BudgetGroup $budgetGroup, CurrentOrganization $currentOrg): JsonResponse
+    {
+        abort_unless($budgetGroup->organization_id === $currentOrg->id(), 404);
+        $this->authorize('create', Project::class);
+
+        $orgId = $currentOrg->id();
+        $validated = $request->validate([
+            'name' => ['sometimes', 'string', 'max:120', Rule::unique('budget_groups', 'name')->where('organization_id', $orgId)->where('year', $budgetGroup->year)->ignore($budgetGroup->id)],
+            'kind' => ['sometimes', Rule::in(BudgetGroupKind::values())],
+            'plan_amount' => ['sometimes', 'nullable', 'string', 'regex:/^\d{1,11}(?:\.\d{1,2})?$/'],
+            'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'position' => ['sometimes', 'integer', 'min:0'],
+            'account_codes' => ['sometimes', 'array', 'max:100'],
+            'account_codes.*' => ['string', Rule::exists('accounts', 'code')->where('organization_id', $orgId)],
+        ]);
+
+        $accountIds = null;
+        if (array_key_exists('account_codes', $validated)) {
+            $accountIds = Account::query()->whereIn('code', $validated['account_codes'])->pluck('id')->all();
+            $taken = DB::table('budget_group_accounts')
+                ->join('budget_groups', 'budget_groups.id', '=', 'budget_group_accounts.budget_group_id')
+                ->where('budget_groups.organization_id', $orgId)
+                ->where('budget_groups.year', $budgetGroup->year)
+                ->where('budget_groups.id', '!=', $budgetGroup->id)
+                ->whereIn('budget_group_accounts.account_id', $accountIds)
+                ->exists();
+            if ($taken) {
+                return response()->json(['message' => 'An account is already part of another cost block of this year.', 'code' => 'account_taken'], 422);
+            }
+        }
+
+        DB::transaction(function () use ($budgetGroup, $validated, $accountIds): void {
+            $budgetGroup->update(collect($validated)->only(['name', 'kind', 'plan_amount', 'notes', 'position'])->all());
+            if ($accountIds !== null) {
+                $budgetGroup->accounts()->sync($accountIds);
+            }
+        });
+
+        return response()->json(['data' => [
+            'id' => $budgetGroup->id,
+            'year' => $budgetGroup->year,
+            'name' => $budgetGroup->name,
+            'kind' => $budgetGroup->kind->value,
+            'plan_amount' => $budgetGroup->plan_amount,
+            'account_codes' => $budgetGroup->accounts()->orderBy('code')->pluck('code')->all(),
+        ]]);
+    }
 }

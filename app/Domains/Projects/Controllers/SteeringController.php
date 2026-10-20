@@ -9,6 +9,7 @@ use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Services\PlanActualService;
 use App\Domains\Projects\Services\SteeringService;
 use App\Domains\Reporting\Services\ExportReportService;
+use App\Http\Controllers\Concerns\AnswersApiCalls;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -24,6 +25,8 @@ use Symfony\Component\HttpFoundation\Response as HttpResponse;
  */
 class SteeringController extends Controller
 {
+    use AnswersApiCalls;
+
     public function index(Request $request, SteeringService $steering, PlanActualService $plans, CurrentOrganization $currentOrg): Response
     {
         $this->authorize('steer', Project::class);
@@ -76,13 +79,13 @@ class SteeringController extends Controller
         return back()->with('success', __('app.saved'));
     }
 
-    public function destroyItem(SteeringItem $steeringItem): RedirectResponse
+    public function destroyItem(SteeringItem $steeringItem): RedirectResponse|JsonResponse
     {
         $this->authorize('steer', Project::class);
 
         $steeringItem->delete();
 
-        return back()->with('success', __('app.deleted'));
+        return $this->answer(__('app.deleted'));
     }
 
     public function export(Request $request, string $format, SteeringService $steering, CurrentOrganization $currentOrg, ExportReportService $exporter): HttpResponse

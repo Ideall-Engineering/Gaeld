@@ -21,6 +21,7 @@ use App\Domains\Projects\Services\AllocationCoverageService;
 use App\Domains\Projects\Services\LineAllocationService;
 use App\Domains\Projects\Services\PlanActualService;
 use App\Domains\Projects\Services\ProjectOverviewService;
+use App\Http\Controllers\Concerns\AnswersApiCalls;
 use App\Http\Controllers\Controller;
 use App\Support\CsvExportService;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +37,8 @@ use Symfony\Component\HttpFoundation\Response as HttpResponse;
  */
 class ProjectController extends Controller
 {
+    use AnswersApiCalls;
+
     public function index(Request $request, ProjectOverviewService $overview, AllocationCoverageService $coverage, PlanActualService $plans, CurrentOrganization $currentOrg): Response
     {
         $this->authorize('viewAny', Project::class);
@@ -184,22 +187,25 @@ class ProjectController extends Controller
         return back()->with('success', __('app.saved'));
     }
 
-    public function destroy(Request $request, Project $project): RedirectResponse
+    public function destroy(Request $request, Project $project): RedirectResponse|JsonResponse
     {
         $this->authorize('delete', $project);
 
         if ($project->children()->exists()) {
-            return back()->withErrors(['project' => __('app.cannot_delete_with_children')]);
+            return $this->refuse(__('app.cannot_delete_with_children'));
         }
 
         $used = LineAllocation::query()->where('cost_center_id', $project->id)->exists()
             || InvoiceProject::query()->where('cost_center_id', $project->id)->exists();
 
         if ($used) {
-            return back()->withErrors(['project' => __('app.project_delete_used')]);
+            return $this->refuse(__('app.project_delete_used'));
         }
 
         $project->delete();
+        if ($this->wantsApiAnswer()) {
+            return response()->json(null, 204);
+        }
 
         // From the job's own page there is nothing to go back to.
         return ($request->boolean('to_index') ? redirect()->route('projects.index') : back())->with('success', __('app.deleted'));
@@ -235,5 +241,13 @@ class ProjectController extends Controller
         $year = $request->integer('year', (int) now()->year);
 
         return $year >= 2000 && $year <= 2100 ? $year : (int) now()->year;
+    }
+
+    /** A refused delete: the reason on the page, or a 422 over the API. */
+    private function refuse(string $message): RedirectResponse|JsonResponse
+    {
+        return $this->wantsApiAnswer()
+            ? response()->json(['message' => $message, 'code' => 'project_in_use'], 422)
+            : back()->withErrors(['project' => $message]);
     }
 }

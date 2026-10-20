@@ -4,6 +4,7 @@ namespace App\Domains\Api\Requests;
 
 use App\Domains\Api\Requests\Concerns\NamesLineVatRates;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Support\DocumentFieldRules;
@@ -66,9 +67,13 @@ class StoreInvoiceApiRequest extends FormRequest
             'notes' => 'nullable|string',
             'payment_terms' => 'nullable|string',
             'lines' => 'required|array|min:1|max:500',
+            // Spec 011: discount and text lines as in the web form.
+            'lines.*.type' => ['nullable', Rule::enum(InvoiceLineType::class)],
+            'lines.*.discount_type' => ['nullable', 'in:flat,percentage'],
             'lines.*.description' => 'required|string',
-            'lines.*.quantity' => 'required|numeric|min:0.01',
-            'lines.*.unit_price' => 'required|numeric|min:0',
+            'lines.*.quantity' => 'required_unless:lines.*.type,text|nullable|numeric|min:0',
+            'lines.*.unit_price' => 'required_unless:lines.*.type,text|nullable|numeric',
+            'project_id' => ['nullable', 'integer', Rule::exists('cost_centers', 'id')->where('organization_id', $orgId)],
             'lines.*.vat_rate_id' => [
                 'nullable',
                 'uuid',

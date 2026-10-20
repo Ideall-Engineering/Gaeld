@@ -9,19 +9,29 @@ use App\Domains\Api\Controllers\ContactApiController;
 use App\Domains\Api\Controllers\ContactPersonApiController;
 use App\Domains\Api\Controllers\ExpenseApiController;
 use App\Domains\Api\Controllers\InvoiceApiController;
+use App\Domains\Api\Controllers\InvoiceCatalogItemApiController;
+use App\Domains\Api\Controllers\InvoiceDocumentApiController;
 use App\Domains\Api\Controllers\InvoicePdfApiController;
 use App\Domains\Api\Controllers\InvoicePdfPreviewApiController;
 use App\Domains\Api\Controllers\JournalEntryApiController;
 use App\Domains\Api\Controllers\JournalEntryRevisionApiController;
 use App\Domains\Api\Controllers\OrgTokenController;
 use App\Domains\Api\Controllers\QuoteApiController;
+use App\Domains\Api\Controllers\RecurringInvoiceApiController;
 use App\Domains\Api\Controllers\VatRateApiController;
 use App\Domains\Api\Controllers\WebhookApiController;
 use App\Domains\Projects\Controllers\AcquisitionApiController;
+use App\Domains\Projects\Controllers\AcquisitionController;
+use App\Domains\Projects\Controllers\AllocationReviewController;
 use App\Domains\Projects\Controllers\BudgetGroupApiController;
+use App\Domains\Projects\Controllers\BudgetGroupController;
 use App\Domains\Projects\Controllers\JournalAllocationApiController;
+use App\Domains\Projects\Controllers\JournalAllocationController;
 use App\Domains\Projects\Controllers\ProjectApiController;
+use App\Domains\Projects\Controllers\ProjectController;
+use App\Domains\Projects\Controllers\ProjectJournalController;
 use App\Domains\Projects\Controllers\SteeringController;
+use App\Domains\Projects\Controllers\UnallocatedLinesController;
 use App\Http\Middleware\Api\HandleApiIdempotency;
 use App\Http\Middleware\EnsureProjectsModule;
 use App\Http\Middleware\LogOrgTokenActivity;
@@ -95,6 +105,32 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
     Route::post('/invoices/{invoice}/credit-note', [InvoiceApiController::class, 'creditNote'])->name('api.invoices.credit-note');
     Route::get('/invoices/{invoice}/pdf', InvoicePdfApiController::class)->name('api.invoices.pdf');
     Route::get('/invoices/{invoice}/pdf/preview', InvoicePdfPreviewApiController::class)->name('api.invoices.pdf.preview');
+    // Spec 011: the remaining invoice actions of the web interface
+    Route::post('/invoices/{invoice}/revert-to-draft', [InvoiceDocumentApiController::class, 'revertToDraft'])->name('api.invoices.revert-to-draft');
+    Route::post('/invoices/{invoice}/duplicate', [InvoiceDocumentApiController::class, 'duplicate'])->name('api.invoices.duplicate');
+    Route::patch('/invoices/{invoice}/payments/{payment}', [InvoiceDocumentApiController::class, 'updatePaymentDate'])->name('api.invoices.payments.update');
+    Route::post('/invoices/{invoice}/refresh-customer', [InvoiceDocumentApiController::class, 'refreshCustomerSnapshot'])->name('api.invoices.refresh-customer');
+    Route::put('/invoices/{invoice}/project', [InvoiceDocumentApiController::class, 'project'])->middleware(EnsureProjectsModule::class)->name('api.invoices.project');
+    Route::post('/invoices/{invoice}/justificatif', [InvoiceDocumentApiController::class, 'storeJustificatif'])->name('api.invoices.justificatif.store');
+    Route::get('/invoices/{invoice}/justificatif', [InvoiceDocumentApiController::class, 'showJustificatif'])->name('api.invoices.justificatif.show');
+    Route::delete('/invoices/{invoice}/justificatif', [InvoiceDocumentApiController::class, 'destroyJustificatif'])->name('api.invoices.justificatif.destroy');
+    Route::delete('/invoices/{invoice}/purge', [InvoiceDocumentApiController::class, 'purge'])->name('api.invoices.purge');
+
+    // Recurring invoices and the line catalog
+    Route::apiResource('recurring-invoices', RecurringInvoiceApiController::class)
+        ->parameters(['recurring-invoices' => 'recurringInvoice'])
+        ->names([
+            'index' => 'api.recurring-invoices.index',
+            'show' => 'api.recurring-invoices.show',
+            'store' => 'api.recurring-invoices.store',
+            'update' => 'api.recurring-invoices.update',
+            'destroy' => 'api.recurring-invoices.destroy',
+        ]);
+    Route::post('/recurring-invoices/{recurringInvoice}/pause', [RecurringInvoiceApiController::class, 'pause'])->name('api.recurring-invoices.pause');
+    Route::post('/recurring-invoices/{recurringInvoice}/resume', [RecurringInvoiceApiController::class, 'resume'])->name('api.recurring-invoices.resume');
+    Route::get('/invoice-catalog-items', [InvoiceCatalogItemApiController::class, 'index'])->name('api.invoice-catalog-items.index');
+    Route::post('/invoice-catalog-items', [InvoiceCatalogItemApiController::class, 'store'])->name('api.invoice-catalog-items.store');
+    Route::delete('/invoice-catalog-items/{catalogItem}', [InvoiceCatalogItemApiController::class, 'destroy'])->name('api.invoice-catalog-items.destroy');
 
     // Expenses
     Route::apiResource('expenses', ExpenseApiController::class)->names([
@@ -111,6 +147,8 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
     Route::post('/expenses/{expense}/cancel', [ExpenseApiController::class, 'cancel'])->name('api.expenses.cancel');
 
     // Contacts
+    Route::get('/contacts/trashed', [ContactApiController::class, 'trashed'])->name('api.contacts.trashed');
+    Route::post('/contacts/{contact}/restore', [ContactApiController::class, 'restore'])->name('api.contacts.restore');
     Route::apiResource('contacts', ContactApiController::class)->names([
         'index' => 'api.contacts.index',
         'show' => 'api.contacts.show',
@@ -165,6 +203,22 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
         Route::get('/budget-groups', [BudgetGroupApiController::class, 'index'])->name('api.budget-groups.index');
         Route::post('/budget-groups', [BudgetGroupApiController::class, 'store'])->name('api.budget-groups.store');
         Route::put('/journal-entries/{journalEntry}/allocations', [JournalAllocationApiController::class, 'update'])->name('api.journal-entries.allocations');
+        // Spec 011: the rest of the projects module, answered by the web actions
+        Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('api.projects.destroy');
+        Route::patch('/budget-groups/{budgetGroup}', [BudgetGroupApiController::class, 'update'])->name('api.budget-groups.update');
+        Route::delete('/budget-groups/{budgetGroup}', [BudgetGroupController::class, 'destroy'])->name('api.budget-groups.destroy');
+        Route::get('/budget-groups/{budgetGroup}/lines', [BudgetGroupController::class, 'lines'])->name('api.budget-groups.lines');
+        Route::post('/budget-groups/copy-previous', [BudgetGroupController::class, 'copyPrevious'])->name('api.budget-groups.copy-previous');
+        Route::put('/acquisitions/{acquisition}', [AcquisitionController::class, 'update'])->name('api.acquisitions.update');
+        Route::delete('/acquisitions/{acquisition}', [AcquisitionController::class, 'destroy'])->name('api.acquisitions.destroy');
+        Route::delete('/steering-items/{steeringItem}', [SteeringController::class, 'destroyItem'])->name('api.steering-items.destroy');
+        Route::get('/project-journal', [ProjectJournalController::class, 'index'])->name('api.project-journal.index');
+        Route::get('/unallocated-lines', [UnallocatedLinesController::class, 'index'])->name('api.unallocated-lines.index');
+        Route::post('/unallocated-lines', [UnallocatedLinesController::class, 'apply'])->name('api.unallocated-lines.apply');
+        Route::post('/unallocated-lines/general', [UnallocatedLinesController::class, 'general'])->name('api.unallocated-lines.general');
+        Route::get('/allocation-reviews', [AllocationReviewController::class, 'index'])->name('api.allocation-reviews.index');
+        Route::post('/allocation-reviews/{allocationReview}/dismiss', [AllocationReviewController::class, 'dismiss'])->name('api.allocation-reviews.dismiss');
+        Route::post('/journal-entry-allocations/bulk', [JournalAllocationController::class, 'bulk'])->name('api.journal-entry-allocations.bulk');
     });
 
     // VAT rates (read-only), named by invoice and quote lines

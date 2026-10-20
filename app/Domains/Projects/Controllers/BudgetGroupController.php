@@ -9,6 +9,7 @@ use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Requests\BudgetGroupRequest;
 use App\Domains\Projects\Services\PlanActualService;
 use App\Domains\Projects\Services\ProjectJournalService;
+use App\Http\Controllers\Concerns\AnswersApiCalls;
 use App\Http\Controllers\Controller;
 use App\Support\CsvExportService;
 use App\Support\Money;
@@ -23,6 +24,8 @@ use Symfony\Component\HttpFoundation\Response as HttpResponse;
  */
 class BudgetGroupController extends Controller
 {
+    use AnswersApiCalls;
+
     /**
      * Spec 010: the cost blocks live on the jobs page now; the old address
      * keeps working.
@@ -57,7 +60,7 @@ class BudgetGroupController extends Controller
         return back()->with('success', __('app.saved'));
     }
 
-    public function update(BudgetGroupRequest $request, BudgetGroup $budgetGroup): RedirectResponse
+    public function update(BudgetGroupRequest $request, BudgetGroup $budgetGroup): RedirectResponse|JsonResponse
     {
         $this->authorize('create', Project::class);
 
@@ -75,7 +78,7 @@ class BudgetGroupController extends Controller
             $this->syncPeople($budgetGroup, $validated);
         });
 
-        return back()->with('success', __('app.saved'));
+        return $this->answer(__('app.saved'), ['id' => $budgetGroup->id]);
     }
 
     /**
@@ -128,22 +131,22 @@ class BudgetGroupController extends Controller
         return response()->json(['rows' => $rows]);
     }
 
-    public function destroy(BudgetGroup $budgetGroup): RedirectResponse
+    public function destroy(BudgetGroup $budgetGroup): RedirectResponse|JsonResponse
     {
         $this->authorize('create', Project::class);
 
         $budgetGroup->delete();
 
-        return back()->with('success', __('app.deleted'));
+        return $this->answer(__('app.deleted'));
     }
 
-    public function copyPrevious(Request $request, PlanActualService $plans, CurrentOrganization $currentOrg): RedirectResponse
+    public function copyPrevious(Request $request, PlanActualService $plans, CurrentOrganization $currentOrg): RedirectResponse|JsonResponse
     {
         $this->authorize('create', Project::class);
 
         $count = $plans->copyFromPreviousYear($currentOrg->id(), $this->year($request));
 
-        return back()->with('success', __('app.budget_groups_copied', ['count' => $count]));
+        return $this->answer(__('app.budget_groups_copied', ['count' => $count]), ['copied' => $count]);
     }
 
     public function export(Request $request, PlanActualService $plans, CurrentOrganization $currentOrg, CsvExportService $csv): HttpResponse

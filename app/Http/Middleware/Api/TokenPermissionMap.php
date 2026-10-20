@@ -11,7 +11,9 @@ use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Expenses\Models\Expense;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Models\InvoiceCatalogItem;
 use App\Domains\Invoicing\Models\Quote;
+use App\Domains\Invoicing\Models\RecurringInvoice;
 use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Projects\Models\Project;
@@ -138,6 +140,7 @@ final class TokenPermissionMap
                 'create' => Permission::ContactsCreate,
                 'update' => Permission::ContactsEdit,
                 'delete' => Permission::ContactsDelete,
+                'restore' => Permission::ContactsDelete,
             ],
             Invoice::class => [
                 'viewAny' => Permission::InvoicingView,
@@ -151,6 +154,22 @@ final class TokenPermissionMap
                 'sendReminder' => Permission::InvoicingSendReminder,
                 'cancel' => Permission::InvoicingEdit,
                 'creditNote' => Permission::InvoicingCreate,
+                'revertToDraft' => Permission::InvoicingEdit,
+                'duplicate' => Permission::InvoicingCreate,
+                'updatePayment' => Permission::InvoicingRecordPayment,
+                'refreshCustomerSnapshot' => Permission::InvoicingEdit,
+                'forceDelete' => Permission::InvoicingDelete,
+            ],
+            RecurringInvoice::class => [
+                'viewAny' => Permission::InvoicingView,
+                'view' => Permission::InvoicingView,
+                'create' => Permission::InvoicingCreate,
+                'update' => Permission::InvoicingEdit,
+                'delete' => Permission::InvoicingDelete,
+            ],
+            InvoiceCatalogItem::class => [
+                'viewAny' => Permission::InvoicingView,
+                'view' => Permission::InvoicingView,
             ],
             Quote::class => [
                 'viewAny' => Permission::InvoicingView,

@@ -13,7 +13,9 @@ use App\Domains\Projects\Models\LineAllocation;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Services\LineAllocationService;
 use App\Domains\Projects\Support\AllocationRules;
+use App\Http\Controllers\Concerns\AnswersApiCalls;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +27,8 @@ use Illuminate\Validation\Rule;
  */
 class JournalAllocationController extends Controller
 {
+    use AnswersApiCalls;
+
     public function update(
         Request $request,
         JournalEntry $journalEntry,
@@ -70,7 +74,7 @@ class JournalAllocationController extends Controller
         Request $request,
         LineAllocationService $allocations,
         CurrentOrganization $currentOrg,
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $this->authorize('allocate', Project::class);
 
         $orgId = $currentOrg->id();
@@ -128,6 +132,10 @@ class JournalAllocationController extends Controller
                 }
             }
         });
+
+        if ($this->wantsApiAnswer()) {
+            return response()->json(['data' => ['assigned' => $assigned, 'skipped' => $skipped]]);
+        }
 
         $response = back()->with('success', __('app.allocations_bulk_done', ['count' => $assigned]));
 

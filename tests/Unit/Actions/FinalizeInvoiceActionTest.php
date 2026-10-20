@@ -109,6 +109,7 @@ class FinalizeInvoiceActionTest extends TestCase
         $invoice->shouldReceive('getAttribute')->with('organization')->andReturn($org);
 
         $linesRelation = Mockery::mock(HasMany::class);
+        $linesRelation->shouldReceive('reorder')->andReturnSelf();
         $linesRelation->shouldReceive('count')->andReturn($lineCount);
         $invoice->shouldReceive('lines')->andReturn($linesRelation);
 

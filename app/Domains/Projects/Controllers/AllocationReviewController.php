@@ -5,7 +5,9 @@ namespace App\Domains\Projects\Controllers;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Projects\Models\AllocationReview;
 use App\Domains\Projects\Models\Project;
+use App\Http\Controllers\Concerns\AnswersApiCalls;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -17,7 +19,9 @@ use Inertia\Response;
  */
 class AllocationReviewController extends Controller
 {
-    public function index(): Response
+    use AnswersApiCalls;
+
+    public function index(): Response|JsonResponse
     {
         $this->authorize('allocate', Project::class);
 
@@ -31,36 +35,38 @@ class AllocationReviewController extends Controller
         $accounts = Account::query()->whereIn('id', $accountIds)->get(['id', 'code', 'name'])->keyBy('id');
         $projects = Project::query()->get(['id', 'code', 'name'])->keyBy('id');
 
-        return Inertia::render('Projects/AllocationReviews', [
-            'reviews' => $reviews->map(fn (AllocationReview $review) => [
-                'id' => $review->id,
-                'created_at' => $review->created_at->toIso8601String(),
-                'entry' => [
-                    'id' => $review->journalEntry->id,
-                    'date' => $review->journalEntry->date->toDateString(),
-                    'reference' => $review->journalEntry->reference,
-                    'description' => $review->journalEntry->description,
-                ],
-                'previous' => array_map(fn (array $line) => [
-                    'account' => isset($accounts[(int) $line['account_id']])
-                        ? $accounts[(int) $line['account_id']]->code.' '.$accounts[(int) $line['account_id']]->display_name
-                        : $line['account_id'],
-                    'debit' => $line['debit'],
-                    'credit' => $line['credit'],
-                    'allocations' => array_map(fn (array $a) => [
-                        'project' => $a['project_id'] !== null && isset($projects[$a['project_id']])
-                            ? $projects[$a['project_id']]->code.' '.$projects[$a['project_id']]->name
-                            : null,
-                        'employee_id' => $a['employee_id'],
-                        'share' => $a['share'],
-                    ], $line['allocations']),
-                ], $review->previous),
-            ]),
+        $rows = $reviews->map(fn (AllocationReview $review) => [
+            'id' => $review->id,
+            'created_at' => $review->created_at->toIso8601String(),
+            'entry' => [
+                'id' => $review->journalEntry->id,
+                'date' => $review->journalEntry->date->toDateString(),
+                'reference' => $review->journalEntry->reference,
+                'description' => $review->journalEntry->description,
+            ],
+            'previous' => array_map(fn (array $line) => [
+                'account' => isset($accounts[(int) $line['account_id']])
+                    ? $accounts[(int) $line['account_id']]->code.' '.$accounts[(int) $line['account_id']]->display_name
+                    : $line['account_id'],
+                'debit' => $line['debit'],
+                'credit' => $line['credit'],
+                'allocations' => array_map(fn (array $a) => [
+                    'project' => $a['project_id'] !== null && isset($projects[$a['project_id']])
+                        ? $projects[$a['project_id']]->code.' '.$projects[$a['project_id']]->name
+                        : null,
+                    'employee_id' => $a['employee_id'],
+                    'share' => $a['share'],
+                ], $line['allocations']),
+            ], $review->previous),
         ]);
+
+        return $this->wantsApiAnswer()
+            ? response()->json(['data' => $rows->values()])
+            : Inertia::render('Projects/AllocationReviews', ['reviews' => $rows]);
     }
 
     /** The person decided the old allocations no longer apply. */
-    public function dismiss(Request $request, AllocationReview $allocationReview): RedirectResponse
+    public function dismiss(Request $request, AllocationReview $allocationReview): RedirectResponse|JsonResponse
     {
         $this->authorize('update', $allocationReview);
 
@@ -68,6 +74,6 @@ class AllocationReviewController extends Controller
             $allocationReview->update(['resolved_at' => now(), 'resolved_by' => $request->user()?->id]);
         }
 
-        return back()->with('success', __('app.allocation_review_dismissed'));
+        return $this->answer(__('app.allocation_review_dismissed'), ['id' => $allocationReview->id, 'resolved_at' => $allocationReview->resolved_at?->toIso8601String()]);
     }
 }

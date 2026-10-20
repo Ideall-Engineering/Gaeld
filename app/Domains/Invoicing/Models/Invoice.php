@@ -165,7 +165,8 @@ class Invoice extends Model
     /** @return HasMany<InvoiceLine, $this> */
     public function lines(): HasMany
     {
-        return $this->hasMany(InvoiceLine::class);
+        // In the order they were entered, as quote lines (spec 011).
+        return $this->hasMany(InvoiceLine::class)->orderBy('sort_order')->orderBy('created_at');
     }
 
     /** @return HasMany<InvoicePayment, $this> */
@@ -279,7 +280,7 @@ class Invoice extends Model
 
     public function recalculate(): void
     {
-        $totals = $this->lines()
+        $totals = $this->lines()->reorder()
             ->selectRaw("SUM(CASE WHEN type = 'discount' THEN -amount ELSE amount END) as total_amount")
             ->selectRaw("SUM(CASE WHEN type = 'discount' THEN -vat_amount ELSE vat_amount END) as total_vat")
             ->first();

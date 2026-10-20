@@ -9,7 +9,9 @@ use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Services\AllocationCoverageService;
 use App\Domains\Projects\Services\ProjectJournalService;
+use App\Http\Controllers\Concerns\AnswersApiCalls;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -21,7 +23,9 @@ use Inertia\Response;
  */
 class ProjectJournalController extends Controller
 {
-    public function index(Request $request, ProjectJournalService $journal, CurrentOrganization $currentOrg): Response
+    use AnswersApiCalls;
+
+    public function index(Request $request, ProjectJournalService $journal, CurrentOrganization $currentOrg): Response|JsonResponse
     {
         $this->authorize('viewAny', Project::class);
 
@@ -29,6 +33,10 @@ class ProjectJournalController extends Controller
         $year = $request->integer('year', (int) now()->year);
         $year = $year >= 2000 && $year <= 2100 ? $year : (int) now()->year;
         $steer = $user?->can('steer', Project::class) ?? false;
+
+        if ($this->wantsApiAnswer()) {
+            return response()->json(['data' => ['year' => $year, 'rows' => $journal->forYear($currentOrg->id(), $year)]]);
+        }
 
         return Inertia::render('Projects/Journal', [
             'year' => $year,

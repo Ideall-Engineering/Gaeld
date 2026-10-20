@@ -114,20 +114,10 @@ class HandleApiIdempotency
             }
         }
 
-        // Several persons are added to the same contact, so the contact
-        // alone cannot identify one request.
-        if ($request->route()?->getName() === 'api.contacts.persons.store') {
-            $contact = $request->route('contact');
-
-            return 'contact:'.(is_object($contact) ? $contact->id : $contact).':payload:'.hash('sha256', $request->getContent());
-        }
-
-        foreach ($request->route()?->parameters() ?? [] as $parameter) {
-            if (is_object($parameter) && isset($parameter->id)) {
-                return (string) $parameter->id;
-            }
-        }
-
+        // The object alone would make a second, different change to it (a new
+        // payment date, another receipt) look like a retry; the content
+        // tells them apart, an exact retry still replays.
+        $content = 'payload:'.hash('sha256', $request->getContent());
         foreach ($request->allFiles() as $file) {
             if (is_array($file)) {
                 continue;
@@ -135,11 +125,19 @@ class HandleApiIdempotency
 
             $contents = file_get_contents($file->getRealPath());
             if ($contents !== false) {
-                return 'file:'.hash('sha256', $contents);
+                $content = 'file:'.hash('sha256', $contents);
+
+                break;
             }
         }
 
-        return 'payload:'.hash('sha256', $request->getContent());
+        foreach ($request->route()?->parameters() ?? [] as $parameter) {
+            if (is_object($parameter) && isset($parameter->id)) {
+                return $parameter->id.':'.$content;
+            }
+        }
+
+        return $content;
     }
 
     private function logOutcome(Request $request, int $status, bool $replayed, float $startedAt): void

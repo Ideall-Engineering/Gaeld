@@ -47,7 +47,9 @@ class DuplicateInvoiceAction
                     description: $line->description,
                     quantity: $line->quantity,
                     unitPrice: $line->unit_price,
-                    vatRateId: $line->vat_rate_id,
+                    type: $line->type,
+                    discountType: $line->discount_type,
+                    vatRateId: $line->vat_rate_id === null ? null : (string) $line->vat_rate_id,
                     sortOrder: $line->sort_order,
                     unit: $line->unit,
                 )

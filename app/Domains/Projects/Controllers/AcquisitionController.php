@@ -9,8 +9,10 @@ use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Requests\AcquisitionRequest;
 use App\Domains\Projects\Services\AcquisitionService;
+use App\Http\Controllers\Concerns\AnswersApiCalls;
 use App\Http\Controllers\Controller;
 use App\Support\CsvExportService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -22,6 +24,8 @@ use Symfony\Component\HttpFoundation\Response as HttpResponse;
  */
 class AcquisitionController extends Controller
 {
+    use AnswersApiCalls;
+
     public function index(Request $request, AcquisitionService $acquisitions, CurrentOrganization $currentOrg): Response
     {
         $this->authorize('viewAny', Project::class);
@@ -53,23 +57,23 @@ class AcquisitionController extends Controller
         return back()->with('success', __('app.saved'));
     }
 
-    public function update(AcquisitionRequest $request, Acquisition $acquisition, AcquisitionService $acquisitions): RedirectResponse
+    public function update(AcquisitionRequest $request, Acquisition $acquisition, AcquisitionService $acquisitions): RedirectResponse|JsonResponse
     {
         $this->authorize('create', Project::class);
 
         $validated = $request->validated();
         $acquisitions->save($acquisition, $acquisition->organization_id, $validated, $validated['people']);
 
-        return back()->with('success', __('app.saved'));
+        return $this->answer(__('app.saved'), ['id' => $acquisition->id]);
     }
 
-    public function destroy(Acquisition $acquisition): RedirectResponse
+    public function destroy(Acquisition $acquisition): RedirectResponse|JsonResponse
     {
         $this->authorize('create', Project::class);
 
         $acquisition->delete();
 
-        return back()->with('success', __('app.deleted'));
+        return $this->answer(__('app.deleted'));
     }
 
     public function export(Request $request, AcquisitionService $acquisitions, CurrentOrganization $currentOrg, CsvExportService $csv): HttpResponse

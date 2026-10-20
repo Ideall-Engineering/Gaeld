@@ -30,7 +30,7 @@ class FinalizeInvoiceAction
             throw new InvalidInvoiceStateException('Cannot finalize an invoice without a due date.');
         }
 
-        if ($invoice->lines()->count() === 0) {
+        if ($invoice->lines()->reorder()->count() === 0) {
             throw new InvalidInvoiceStateException('Cannot finalize an invoice with no line items.');
         }
 
