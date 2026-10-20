@@ -105,6 +105,15 @@ class SteeringController extends Controller
                 $rows = array_map(fn (array $p) => [$p['name'], ...array_map(fn ($f) => $p[$f], $fields)], $data['people']);
                 $rows[] = [__('app.total'), ...array_map(fn ($f) => $data['totals'][$f], $fields)];
 
+                // Spec 012: the expenses still expected, below the people.
+                $rows[] = [];
+                $rows[] = [__('app.steering_expected_expenses').' '.$year];
+                $rows[] = [__('app.date'), __('app.description'), __('app.source'), __('app.account'), __('app.amount'), __('app.steering_expected_gross')];
+                foreach ($data['expected_expenses']['rows'] ?? [] as $row) {
+                    $rows[] = [$row['date'] ?? '', self::expectedLabel($row), __('app.steering_expected_source_'.$row['source']), $row['account'] ?? '', $row['amount'], $row['gross']];
+                }
+                $rows[] = [__('app.total'), '', '', '', $data['expected_expenses']['total'] ?? '0.00', $data['expected_expenses']['cash_total'] ?? '0.00'];
+
                 return $exporter->csv()->export(
                     [__('app.acquisition_person'), ...array_map(fn ($f) => __('app.steering_'.$f), $fields)],
                     $rows,
@@ -117,6 +126,21 @@ class SteeringController extends Controller
                 'fields' => $fields,
             ], "steering-{$year}.pdf"),
         );
+    }
+
+    /**
+     * The label of an expected expense as the page shows it.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    public static function expectedLabel(array $row): string
+    {
+        return match ($row['source']) {
+            'social' => __('app.steering_expected_social_label'),
+            'block' => __('app.steering_expected_block_label', ['name' => $row['label']]),
+            'vat' => __('app.steering_expected_vat_'.$row['label'], ['quarter' => $row['quarter'] ?? '']),
+            default => (string) $row['label'],
+        };
     }
 
     /** @return array<string, mixed> */

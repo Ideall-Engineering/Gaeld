@@ -304,6 +304,22 @@ class SteeringService
             ];
         }
 
+        $open = $this->withInvoices(
+            $organizationId,
+            collect($openPayments)->sortBy(fn (array $p) => $p['sort'] ?? '9999')->values()->all(),
+            array_column($rows, 'name', 'employee_id'),
+        );
+        $openNext = $withNextYear ? $this->forYear($organizationId, $year + 1, false)['open_payments'] : [];
+
+        // Spec 012: the expenses still expected, beside the payments, and for
+        // the running year the outlook month by month; not worked out for
+        // the inner call that only fetches next year's payments.
+        $expected = $withNextYear ? $this->expected->forYear($organizationId, $year) : null;
+        $expectedNext = $withNextYear ? $this->expected->forYear($organizationId, $year + 1) : null;
+        $outlook = $expected !== null && $expectedNext !== null && $year === (int) now()->year
+            ? $this->expected->outlook($organizationId, [$year => $open, $year + 1 => $openNext], [$year => $expected, $year + 1 => $expectedNext])
+            : null;
+
         return [
             'year' => $year,
             'people' => $rows,
@@ -312,18 +328,11 @@ class SteeringService
                 'id' => $i->id, 'employee_id' => $i->employee_id, 'label' => $i->label, 'amount' => (string) $i->amount,
             ])->values()->all(),
             'unshared' => $unshared,
-            'open_payments' => $this->withInvoices(
-                $organizationId,
-                collect($openPayments)->sortBy(fn (array $p) => $p['sort'] ?? '9999')->values()->all(),
-                array_column($rows, 'name', 'employee_id'),
-            ),
-            'open_payments_next_year' => $withNextYear
-                ? $this->forYear($organizationId, $year + 1, false)['open_payments']
-                : [],
-            // Spec 012: the expenses still expected, beside the payments; not
-            // worked out for the inner call that only fetches next year's.
-            'expected_expenses' => $withNextYear ? $this->expected->forYear($organizationId, $year) : null,
-            'expected_expenses_next_year' => $withNextYear ? $this->expected->forYear($organizationId, $year + 1) : null,
+            'open_payments' => $open,
+            'open_payments_next_year' => $openNext,
+            'expected_expenses' => $expected,
+            'expected_expenses_next_year' => $expectedNext,
+            'outlook' => $outlook,
             'done_without_revenue' => $this->doneWithoutRevenue($organizationId, $projects, $byId),
             'totals' => $this->totals($rows),
         ];

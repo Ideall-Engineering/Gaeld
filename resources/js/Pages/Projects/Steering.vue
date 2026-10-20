@@ -14,7 +14,13 @@ import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { Link, router, useForm } from '@inertiajs/vue3'
 import { computed, reactive, ref } from 'vue'
-import { AlertTriangle, ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-vue-next'
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-vue-next'
+import { Bar, Line } from 'vue-chartjs'
+import { BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, LineElement, PointElement, Tooltip } from 'chart.js'
+import { useTheme } from '@/lib/useTheme'
+import { intlLocale } from '@/lib/utils'
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend)
 
 // What each person earned and drew, and the room left for performance pay
 // (spec 009, stage 5; spec 010, US5). Seen from accountants up; only owners
@@ -29,7 +35,8 @@ const props = defineProps({
 })
 
 const { t } = useTranslations()
-const { formatCurrency, formatDate, intlMonthName } = useFormatters()
+const { formatCurrency, formatDate, intlMonthName, locale } = useFormatters()
+const { isDark } = useTheme()
 
 const people = computed(() => props.steering.people)
 const yearOptions = computed(() => {
@@ -66,31 +73,87 @@ function setPaymentDate(payment, value) {
 }
 
 // Spec 012: the expenses still expected, in the same two tabs, grouped by
-// month; at the end what is still expected all in all.
+// month with the undated ones last. VAT is a payment, not a cost: listed,
+// but kept out of the net total.
 const expectedYear = ref(props.year)
 const expected = computed(() => (expectedYear.value === props.year ? props.steering.expected_expenses : props.steering.expected_expenses_next_year)
-  ?? { rows: [], by_source: {}, total: '0.00', hourly: [] })
+  ?? { rows: [], by_source: {}, total: '0.00', cash_total: '0.00', hourly: [] })
+const monthLabel = key => `${intlMonthName(Number(key.slice(5, 7)) - 1)} ${key.slice(0, 4)}`
 const expectedMonths = computed(() => {
   const months = []
   for (const row of expected.value.rows) {
-    const key = row.date.slice(0, 7)
+    const key = row.date ? row.date.slice(0, 7) : 'undated'
     let month = months[months.length - 1]
     if (!month || month.key !== key) {
-      month = { key, label: `${intlMonthName(Number(key.slice(5, 7)) - 1)} ${key.slice(0, 4)}`, rows: [], total: 0 }
+      month = { key, label: key === 'undated' ? t('steering_expected_undated') : monthLabel(key), rows: [], total: 0 }
       months.push(month)
     }
     month.rows.push(row)
-    month.total += num(row.amount)
+    if (row.in_result) month.total += num(row.amount)
   }
   return months
 })
-const expectedLabel = row => row.source === 'social' ? t('steering_expected_social_label') : row.label
-const expectedSources = ['salary', 'social', 'recurring', 'expense']
+function expectedLabel(row) {
+  if (row.source === 'social') return t('steering_expected_social_label')
+  if (row.source === 'block') return t('steering_expected_block_label', { name: row.label })
+  if (row.source === 'vat') return t('steering_expected_vat_' + row.label, { quarter: row.quarter ?? '' })
+  return row.label
+}
+const expectedSources = ['salary', 'social', 'recurring', 'expense', 'acquisition', 'planned', 'block']
+
+// Single expected expenses: entered, marked done or removed right here.
+const plannedForm = useForm({ date: '', label: '', amount: '', vat_amount: '', account_code: '' })
+const accountOptions = computed(() => [{ value: '', label: '' }, ...(props.blockOptions.accounts ?? []).map(a => ({ value: a.code, label: `${a.code} ${a.name}` }))])
+function addPlanned() {
+  plannedForm.post('/projects/steering/planned-expenses', { preserveScroll: true, onSuccess: () => plannedForm.reset() })
+}
+function donePlanned(row) {
+  router.put(`/projects/steering/planned-expenses/${row.id}`, { done: true }, { preserveScroll: true })
+}
+function removePlanned(row) {
+  router.delete(`/projects/steering/planned-expenses/${row.id}`, { preserveScroll: true })
+}
+
+// What is still expected all in all, per year, and month by month with the
+// bank balance (running year only).
+const outlookMonths = computed(() => props.steering.outlook?.months ?? [])
 const outlook = computed(() => [props.year, props.year + 1].map(y => {
   const income = ((y === props.year ? props.steering.open_payments : props.steering.open_payments_next_year) ?? []).reduce((sum, p) => sum + num(p.expected), 0)
   const expenses = num((y === props.year ? props.steering.expected_expenses : props.steering.expected_expenses_next_year)?.total)
-  return { year: y, income, expenses, result: income - expenses }
+  const december = outlookMonths.value.find(m => m.key === `${y}-12`)
+  return { year: y, income, expenses, result: income - expenses, bank: december ? num(december.bank) : null }
 }))
+const seriesColors = computed(() => isDark.value ? ['#3987e5', '#d95926'] : ['#2a78d6', '#eb6834'])
+const compact = value => 'CHF ' + new Intl.NumberFormat(intlLocale(locale.value), { notation: 'compact', maximumFractionDigits: 1 }).format(Math.abs(value) < 0.5 ? 0 : value)
+const axisOptions = computed(() => {
+  const tick = isDark.value ? '#c3c2b7' : '#52514e'
+  const grid = isDark.value ? 'rgba(195, 194, 183, 0.15)' : 'rgba(82, 81, 78, 0.12)'
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'bottom', labels: { color: tick, boxWidth: 12 } },
+      tooltip: { callbacks: { label: item => ` ${item.dataset.label}: ${formatCurrency(item.raw)}` } },
+    },
+    scales: {
+      x: { ticks: { color: tick }, grid: { display: false } },
+      y: { ticks: { color: tick, callback: compact }, grid: { color: grid } },
+    },
+  }
+})
+const flowChart = computed(() => ({
+  labels: outlookMonths.value.map(m => monthLabel(m.key)),
+  datasets: [
+    { label: t('steering_outlook_income'), data: outlookMonths.value.map(m => num(m.income)), backgroundColor: seriesColors.value[0], borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 18 },
+    { label: t('steering_outlook_expenses'), data: outlookMonths.value.map(m => num(m.expenses)), backgroundColor: seriesColors.value[1], borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 18 },
+  ],
+}))
+const bankChart = computed(() => ({
+  labels: outlookMonths.value.map(m => monthLabel(m.key)),
+  datasets: [{ label: t('steering_outlook_bank'), data: outlookMonths.value.map(m => num(m.bank)), borderColor: seriesColors.value[0], backgroundColor: seriesColors.value[0], borderWidth: 2, pointRadius: 4, tension: 0.2 }],
+}))
+const bankOptions = computed(() => ({ ...axisOptions.value, plugins: { ...axisOptions.value.plugins, legend: { display: false } } }))
 
 // Drawn, one foldable row per person: plan items and acquisitions.
 const drawnRows = computed(() => people.value
@@ -425,6 +488,7 @@ function removeItem(item) {
                   <th class="pb-2">{{ t('source') }}</th>
                   <th class="pb-2">{{ t('account') }}</th>
                   <th class="pb-2 text-right">{{ t('amount') }}</th>
+                  <th class="w-20 pb-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -432,10 +496,11 @@ function removeItem(item) {
                   <tr class="border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]/40 font-medium">
                     <td class="py-1" colspan="4">{{ month.label }}</td>
                     <td class="py-1 text-right tabular-nums">{{ formatCurrency(month.total) }}</td>
+                    <td></td>
                   </tr>
                   <tr v-for="(row, i) in month.rows" :key="month.key + '-' + i" class="border-b border-[hsl(var(--border))]">
                     <td class="py-1 tabular-nums" :class="row.overdue ? 'text-[hsl(var(--destructive))]' : ''">
-                      {{ formatDate(row.date) }}
+                      {{ row.date ? formatDate(row.date) : '' }}
                       <span v-if="row.overdue" class="ml-1 text-xs">{{ t('steering_expected_overdue') }}</span>
                     </td>
                     <td class="py-1">
@@ -444,20 +509,49 @@ function removeItem(item) {
                     </td>
                     <td class="py-1 text-[hsl(var(--muted-foreground))]">{{ t('steering_expected_source_' + row.source) }}</td>
                     <td class="py-1 tabular-nums text-[hsl(var(--muted-foreground))]">{{ row.account ?? '' }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(row.amount) }}</td>
+                    <td class="py-1 text-right tabular-nums" :class="row.in_result ? '' : 'text-[hsl(var(--muted-foreground))]'">
+                      {{ formatCurrency(row.amount) }}
+                      <div v-if="!row.in_result" class="text-xs">{{ t('steering_expected_not_in_result') }}</div>
+                    </td>
+                    <td class="py-1 text-right">
+                      <template v-if="row.source === 'planned'">
+                        <Button variant="ghost" size="icon" :aria-label="t('steering_planned_done')" :title="t('steering_planned_done')" @click="donePlanned(row)"><Check class="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" :aria-label="t('delete')" @click="removePlanned(row)"><Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" /></Button>
+                      </template>
+                    </td>
                   </tr>
                 </template>
-                <tr v-for="source in expectedSources" :key="'sum-' + source" class="text-[hsl(var(--muted-foreground))]">
-                  <td class="pt-2" colspan="4">{{ t('steering_expected_source_' + source) }}</td>
-                  <td class="pt-2 text-right tabular-nums">{{ formatCurrency(expected.by_source[source] ?? 0) }}</td>
-                </tr>
+                <template v-for="source in expectedSources" :key="'sum-' + source">
+                  <tr v-if="num(expected.by_source[source]) !== 0" class="text-[hsl(var(--muted-foreground))]">
+                    <td class="pt-2" colspan="4">{{ t('steering_expected_source_' + source) }}</td>
+                    <td class="pt-2 text-right tabular-nums">{{ formatCurrency(expected.by_source[source]) }}</td>
+                    <td></td>
+                  </tr>
+                </template>
                 <tr class="font-semibold">
-                  <td class="py-2" colspan="4">{{ t('total') }}</td>
+                  <td class="py-2" colspan="4">{{ t('steering_expected_total_net') }}</td>
                   <td class="py-2 text-right tabular-nums">{{ formatCurrency(expected.total) }}</td>
+                  <td></td>
+                </tr>
+                <tr v-if="num(expected.by_source.vat) !== 0" class="text-[hsl(var(--muted-foreground))]">
+                  <td class="pb-2" colspan="4">{{ t('steering_expected_vat_total') }}</td>
+                  <td class="pb-2 text-right tabular-nums">{{ formatCurrency(expected.by_source.vat) }}</td>
+                  <td></td>
                 </tr>
               </tbody>
             </table>
           </div>
+
+          <h3 class="mb-2 mt-6 text-sm font-semibold">{{ t('steering_planned_title') }}</h3>
+          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_planned_desc') }}</p>
+          <form class="flex flex-wrap items-end gap-2" @submit.prevent="addPlanned">
+            <FormInput id="planned_date" v-model="plannedForm.date" type="date" :label="t('date')" :error="plannedForm.errors.date" class="w-40" />
+            <FormInput id="planned_label" v-model="plannedForm.label" :label="t('description')" :placeholder="t('steering_planned_placeholder')" :error="plannedForm.errors.label" class="min-w-[14rem] flex-1" />
+            <FormSelect id="planned_account" v-model="plannedForm.account_code" :label="t('account')" :options="accountOptions" :error="plannedForm.errors.account_code" class="w-56" />
+            <FormInput id="planned_amount" v-model="plannedForm.amount" type="number" step="0.01" :label="t('steering_planned_amount_net')" :error="plannedForm.errors.amount" class="w-32" />
+            <FormInput id="planned_vat" v-model="plannedForm.vat_amount" type="number" step="0.01" min="0" :label="t('steering_planned_vat')" :error="plannedForm.errors.vat_amount" class="w-28" />
+            <Button type="submit" size="sm" :disabled="plannedForm.processing"><Plus class="mr-1 h-4 w-4" /> {{ t('add') }}</Button>
+          </form>
         </CardContent>
       </Card>
 
@@ -465,33 +559,83 @@ function removeItem(item) {
         <CardHeader><CardTitle>{{ t('steering_outlook') }}</CardTitle></CardHeader>
         <CardContent>
           <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_outlook_desc') }}</p>
-          <table class="w-full max-w-xl text-sm">
-            <thead>
-              <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
-                <th class="pb-2"></th>
-                <th v-for="o in outlook" :key="o.year" class="pb-2 text-right tabular-nums">{{ o.year }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="py-1">{{ t('steering_outlook_income') }}</td>
-                <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">{{ formatCurrency(o.income) }}</td>
-              </tr>
-              <tr class="border-b border-[hsl(var(--border))]">
-                <td class="py-1">{{ t('steering_outlook_expenses') }}</td>
-                <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">{{ formatCurrency(-o.expenses) }}</td>
-              </tr>
-              <tr class="font-semibold">
-                <td class="py-2">{{ t('steering_outlook_result') }}</td>
-                <td
-                  v-for="o in outlook"
-                  :key="o.year"
-                  class="py-2 text-right tabular-nums"
-                  :class="o.result < 0 ? 'text-[hsl(var(--destructive))]' : 'text-green-700 dark:text-green-400'"
-                >{{ formatCurrency(o.result) }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="overflow-x-auto">
+            <table class="w-full max-w-xl text-sm">
+              <thead>
+                <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
+                  <th class="pb-2"></th>
+                  <th v-for="o in outlook" :key="o.year" class="pb-2 text-right tabular-nums">{{ o.year }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="py-1">{{ t('steering_outlook_income') }}</td>
+                  <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">{{ formatCurrency(o.income) }}</td>
+                </tr>
+                <tr class="border-b border-[hsl(var(--border))]">
+                  <td class="py-1">{{ t('steering_outlook_expenses') }}</td>
+                  <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">{{ formatCurrency(-o.expenses) }}</td>
+                </tr>
+                <tr class="font-semibold">
+                  <td class="py-2">{{ t('steering_outlook_result') }}</td>
+                  <td
+                    v-for="o in outlook"
+                    :key="o.year"
+                    class="py-2 text-right tabular-nums"
+                    :class="o.result < 0 ? 'text-[hsl(var(--destructive))]' : 'text-green-700 dark:text-green-400'"
+                  >{{ formatCurrency(o.result) }}</td>
+                </tr>
+                <template v-if="steering.outlook">
+                  <tr class="text-[hsl(var(--muted-foreground))]">
+                    <td class="pt-3">{{ t('steering_outlook_bank_today') }}</td>
+                    <td class="pt-3 text-right tabular-nums">{{ formatCurrency(steering.outlook.bank_today) }}</td>
+                    <td></td>
+                  </tr>
+                  <tr class="font-semibold">
+                    <td class="py-1">{{ t('steering_outlook_bank_end') }}</td>
+                    <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums" :class="o.bank !== null && o.bank < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ o.bank !== null ? formatCurrency(o.bank) : '' }}</td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <template v-if="outlookMonths.length">
+            <h3 class="mb-1 mt-6 text-sm font-semibold">{{ t('steering_outlook_months') }}</h3>
+            <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_outlook_months_desc') }}</p>
+            <div class="grid gap-6 lg:grid-cols-2">
+              <div>
+                <div class="mb-1 text-sm font-medium">{{ t('steering_outlook_flow') }}</div>
+                <div class="h-64"><Bar :data="flowChart" :options="axisOptions" /></div>
+              </div>
+              <div>
+                <div class="mb-1 text-sm font-medium">{{ t('steering_outlook_bank') }}</div>
+                <div class="h-64"><Line :data="bankChart" :options="bankOptions" /></div>
+              </div>
+            </div>
+            <div class="mt-4 overflow-x-auto">
+              <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
+                <thead>
+                  <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
+                    <th class="pb-2">{{ t('month') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_income') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_expenses') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_result_cumulative') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_bank') }}</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[hsl(var(--border))]">
+                  <tr v-for="m in outlookMonths" :key="m.key">
+                    <td class="py-1">{{ monthLabel(m.key) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(m.income) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(-m.expenses) }}</td>
+                    <td class="py-1 text-right tabular-nums" :class="num(m.result) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ formatCurrency(m.result) }}</td>
+                    <td class="py-1 text-right tabular-nums" :class="num(m.bank) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ formatCurrency(m.bank) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
         </CardContent>
       </Card>
 

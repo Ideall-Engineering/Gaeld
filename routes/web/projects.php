@@ -5,6 +5,7 @@ use App\Domains\Projects\Controllers\AllocationReviewController;
 use App\Domains\Projects\Controllers\BudgetGroupController;
 use App\Domains\Projects\Controllers\InvoiceProjectController;
 use App\Domains\Projects\Controllers\JournalAllocationController;
+use App\Domains\Projects\Controllers\PlannedExpenseController;
 use App\Domains\Projects\Controllers\ProjectController;
 use App\Domains\Projects\Controllers\ProjectJournalController;
 use App\Domains\Projects\Controllers\ProjectReportController;
@@ -33,6 +34,10 @@ Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::delete('/projects/acquisitions/{acquisition}', [AcquisitionController::class, 'destroy'])->name('projects.acquisitions.destroy');
     Route::get('/projects/steering', [SteeringController::class, 'index'])->name('projects.steering');
     Route::get('/projects/steering/export/{format}', [SteeringController::class, 'export'])->name('projects.steering.export');
+    // Spec 012: single expected expenses entered by hand.
+    Route::post('/projects/steering/planned-expenses', [PlannedExpenseController::class, 'store'])->name('projects.planned-expenses.store');
+    Route::put('/projects/steering/planned-expenses/{plannedExpense}', [PlannedExpenseController::class, 'update'])->name('projects.planned-expenses.update');
+    Route::delete('/projects/steering/planned-expenses/{plannedExpense}', [PlannedExpenseController::class, 'destroy'])->name('projects.planned-expenses.destroy');
     Route::post('/projects/steering/items', [SteeringController::class, 'storeItem'])->name('projects.steering.items.store');
     Route::delete('/projects/steering/items/{steeringItem}', [SteeringController::class, 'destroyItem'])->name('projects.steering.items.destroy');
     Route::get('/projects/journal', [ProjectJournalController::class, 'index'])->name('projects.journal');

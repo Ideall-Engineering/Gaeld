@@ -16,6 +16,7 @@ use App\Domains\Invoicing\Models\Quote;
 use App\Domains\Invoicing\Models\RecurringInvoice;
 use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Organizations\Models\Organization;
+use App\Domains\Projects\Models\PlannedExpense;
 use App\Domains\Projects\Models\Project;
 
 /**
@@ -221,6 +222,13 @@ final class TokenPermissionMap
                 // this permission. Seeing it is for whoever manages jobs.
                 'steer' => Permission::OrganizationDelete,
                 'viewSteering' => Permission::ProjectsManage,
+            ],
+            PlannedExpense::class => [
+                'viewAny' => Permission::ProjectsManage,
+                'view' => Permission::ProjectsManage,
+                'create' => Permission::ProjectsManage,
+                'update' => Permission::ProjectsManage,
+                'delete' => Permission::ProjectsManage,
             ],
             BankAccount::class => [
                 'viewAny' => Permission::BankingView,

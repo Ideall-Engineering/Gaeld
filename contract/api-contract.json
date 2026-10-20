@@ -2609,7 +2609,7 @@
       "auth_required": true,
       "abilities_required": [
         "projects.view",
-        "organization.delete"
+        "projects.manage"
       ],
       "request": {
         "query": {
@@ -2619,7 +2619,65 @@
       "response_200": {
         "data": "{year, people: [{employee_id, name, by_status, jobs: [{id, code, name, group, status, booked, share, value, part}], contribution, credit, burden, effect, value, planned_items, acquisitions, drawn, booked_salary, play, play_without_possible}], blocks, items, unshared, totals}"
       },
-      "notes": "Spec 009, stage 5. Owners only; projects module on. Spec 010 adds jobs: what each job brought the person."
+      "notes": "Spec 009, stage 5. Projects module on. Spec 010 adds jobs: what each job brought the person. Spec 012: seen from accountants up (projects.manage), and adds expected_expenses and expected_expenses_next_year ({rows: [{date, source, label, month, quarter, account, amount, gross, in_result, overdue, link}], by_source, total, cash_total, hourly}) and, for the running year, outlook ({bank_today, months: [{key, income, expenses, cash_out, result, bank}]})."
+    },
+    {
+      "name": "api.planned-expenses.store",
+      "method": "POST",
+      "path": "/api/v1/planned-expenses",
+      "controller": "PlannedExpenseController@store",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view",
+        "projects.manage"
+      ],
+      "request": {
+        "date": "required",
+        "label": "required, max 120",
+        "amount": "required, net",
+        "vat_amount": "optional",
+        "account_code": "optional, an account of the organization"
+      },
+      "response_201": {
+        "data": "{id, date, label, amount, vat_amount, account_code, done_at}"
+      },
+      "notes": "Spec 012, stage 3. A single expected expense entered by hand; listed among the expected expenses until marked done."
+    },
+    {
+      "name": "api.planned-expenses.update",
+      "method": "PATCH",
+      "path": "/api/v1/planned-expenses/{plannedExpense}",
+      "controller": "PlannedExpenseController@update",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view",
+        "projects.manage"
+      ],
+      "request": {
+        "date": "optional",
+        "label": "optional",
+        "amount": "optional",
+        "vat_amount": "optional",
+        "account_code": "optional",
+        "done": "optional boolean: true marks it done, false opens it again"
+      },
+      "response_200": {
+        "data": "{id, date, label, amount, vat_amount, account_code, done_at}"
+      },
+      "notes": "Spec 012, stage 3."
+    },
+    {
+      "name": "api.planned-expenses.destroy",
+      "method": "DELETE",
+      "path": "/api/v1/planned-expenses/{plannedExpense}",
+      "controller": "PlannedExpenseController@destroy",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view",
+        "projects.manage"
+      ],
+      "response_204": null,
+      "notes": "Spec 012, stage 3."
     }
   ],
   "audit_findings": {
