@@ -82,6 +82,9 @@ class ReportController extends Controller
                 : Carbon::parse($asOfDate)->startOfYear()->toDateString(),
             'to' => $asOfDate,
         ];
+        // A balance account's statement from here to the date carries
+        // everything before as its opening balance and closes on the figure.
+        $report['statement_from'] = $reportingService->resolveFiscalYearStart($orgId, $asOfDate);
 
         return Inertia::render('Reports/BalanceSheet', [
             'report' => $report,

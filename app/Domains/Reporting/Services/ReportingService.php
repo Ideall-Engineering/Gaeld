@@ -37,6 +37,12 @@ class ReportingService
      */
     public const PROFIT_AND_LOSS_BASIS = StatementBasis::Operational;
 
+    /**
+     * The balance sheet counts every posted line, closings included, so the
+     * result of a closed year sits in equity exactly once.
+     */
+    public const BALANCE_SHEET_BASIS = StatementBasis::Ledger;
+
     public function __construct(
         private LedgerQueryService $ledgerService,
     ) {}
@@ -139,7 +145,7 @@ class ReportingService
         $sections = [];
 
         foreach ($types as $type) {
-            $accounts = $this->accountsWithBalances($organizationId, $type, null, $asOfDate, StatementBasis::Ledger);
+            $accounts = $this->accountsWithBalances($organizationId, $type, null, $asOfDate, self::BALANCE_SHEET_BASIS);
 
             $sections[$type->value] = [
                 'accounts' => $accounts->values()->toArray(),
@@ -185,7 +191,7 @@ class ReportingService
      * like Swiss long fiscal years up to 23 months). Falls back to parsing the
      * organization's legacy `fiscal_year_start` (MM-DD) field.
      */
-    private function resolveFiscalYearStart(string $organizationId, string $asOfDate): string
+    public function resolveFiscalYearStart(string $organizationId, string $asOfDate): string
     {
         $fiscalYear = FiscalYear::query()
             ->withoutGlobalScopes()

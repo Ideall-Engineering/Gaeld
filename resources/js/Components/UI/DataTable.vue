@@ -304,10 +304,10 @@ function exportCsv() {
       <div v-if="isMobile" class="divide-y divide-[hsl(var(--border))]">
         <template v-for="(row, i) in rows" :key="row.id ?? i">
           <component
-            :is="rowLink ? Link : 'div'"
-            v-bind="rowLink ? { href: rowLink(row) } : {}"
+            :is="rowLink?.(row) ? Link : 'div'"
+            v-bind="rowLink?.(row) ? { href: rowLink(row) } : {}"
             class="block px-4 py-3 space-y-1"
-            :class="rowLink ? 'hover:bg-[hsl(var(--muted))]/50' : ''"
+            :class="rowLink?.(row) ? 'hover:bg-[hsl(var(--muted))]/50' : ''"
           >
             <div v-if="expandable" class="pb-1">
               <button type="button" class="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" :aria-label="expandedRows.has(row.id) ? t('collapse') : t('expand')" @click.prevent="toggleExpand(row.id)">
@@ -387,7 +387,7 @@ function exportCsv() {
                 :style="col.minWidth ? { minWidth: cssLength(col.minWidth) } : undefined"
               >
                 <slot :name="`cell-${col.key}`" :row="row" :value="row[col.key]">
-                  <Link v-if="rowLink" :href="rowLink(row)" class="hover:underline">
+                  <Link v-if="rowLink?.(row)" :href="rowLink(row)" class="hover:underline">
                     {{ col.format ? col.format(row[col.key], row) : row[col.key] }}
                   </Link>
                   <template v-else>

@@ -200,6 +200,63 @@ class ProfitAndLossDrilldownTest extends TestCase
     /**
      * The promise, asserted over every row the report shows.
      */
+    public function test_every_balance_sheet_account_closes_on_the_figure_that_was_clicked(): void
+    {
+        // A year carried in and a closed one before it: the statement starts at
+        // this fiscal year and has to bring both in as its opening balance.
+        $this->postSale('2025-05-02', '3000.00');
+        $this->closeTheYear('2025-12-31', ['3000' => '3000.00']);
+        $this->postSale('2026-02-11', '4000.00');
+        $this->postCost('2026-03-05', '1200.00', '5000');
+        app(LedgerService::class)->flushCache($this->org->id);
+
+        $reporting = app(ReportingService::class);
+        $sheet = $reporting->balanceSheet($this->org->id, '2026-06-30');
+        $from = Carbon::parse($reporting->resolveFiscalYearStart($this->org->id, '2026-06-30'));
+        $ledger = app(LedgerQueryService::class);
+
+        $rows = collect([...$sheet['assets']['accounts'], ...$sheet['liabilities']['accounts'], ...$sheet['equity']['accounts']])
+            ->filter(fn (array $row): bool => isset($row['uuid']));
+        $this->assertCount(2, $rows, 'Bank and the retained result, the year\'s result row has no account.');
+
+        foreach ($rows as $row) {
+            $statement = $ledger->accountStatementForPeriod(
+                Account::where('organization_id', $this->org->id)->where('uuid', $row['uuid'])->firstOrFail(),
+                $from,
+                Carbon::parse('2026-06-30'),
+                ReportingService::BALANCE_SHEET_BASIS,
+            );
+
+            $this->assertSame(
+                bcadd((string) $row['balance'], '0', 2),
+                $statement['closingBalance'],
+                "Account {$row['code']} closes on something other than the balance sheet shows.",
+            );
+        }
+    }
+
+    public function test_the_balance_sheet_links_its_accounts_to_their_statement_and_back(): void
+    {
+        $this->postSale('2026-02-11', '4000.00');
+
+        $this->actAsOrg()
+            ->get('/reports/balance-sheet?as_of_date=2026-06-30')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('report.statement_from', self::FROM)
+                ->where('report.assets.accounts.0.uuid', $this->account('1020')->uuid)
+                ->etc());
+
+        $this->actAsOrg()
+            ->get("/accounting/accounts/{$this->account('1020')->uuid}/statement?from=".self::FROM.'&to=2026-06-30&source=bs')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('basis', ReportingService::BALANCE_SHEET_BASIS->value)
+                ->where('backUrl', '/reports/balance-sheet?as_of_date=2026-06-30')
+                ->where('statement.closingBalance', '4000.00')
+                ->etc());
+    }
+
     private function assertReportReconcilesWithStatements(): void
     {
         $report = app(ReportingService::class)->profitAndLoss($this->org->id, self::FROM, self::TO);

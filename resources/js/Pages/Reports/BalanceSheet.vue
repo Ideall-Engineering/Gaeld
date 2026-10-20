@@ -41,6 +41,20 @@ function applyFilter() {
 const { t } = useTranslations()
 const { formatCurrency } = useFormatters()
 
+/**
+ * Following a balance to the postings behind it: the statement runs from the
+ * start of the fiscal year to the as-of date on the balance sheet's basis, so
+ * it closes on the figure that was clicked. The synthetic result row has no
+ * uuid and stays unlinked.
+ */
+function accountLink(row) {
+  if (!row.uuid || !props.report.statement_from) return null
+
+  const params = new URLSearchParams({ from: props.report.statement_from, to: props.report.as_of_date, source: 'bs' })
+
+  return `/accounting/accounts/${row.uuid}/statement?${params}`
+}
+
 const accountColumns = computed(() => {
   const cols = [
     { key: 'code', label: t('code') },
@@ -125,6 +139,7 @@ function mergeComparison(section) {
             v-if="report[section.key]?.accounts?.length"
             :columns="accountColumns"
             :rows="mergeComparison(section.key)"
+            :row-link="accountLink"
           />
           <p v-else class="text-sm text-muted-foreground">{{ t('no_section_entries', { section: section.title.toLowerCase() }) }}</p>
           <div class="mt-4 flex flex-col gap-1 border-t pt-3 text-sm font-semibold sm:flex-row sm:justify-between">

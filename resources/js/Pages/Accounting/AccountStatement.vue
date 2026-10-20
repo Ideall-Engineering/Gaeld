@@ -22,6 +22,7 @@ const props = defineProps({
   nextMonth: { type: String, default: null },
   period: { type: Object, default: null },
   basis: { type: String, default: 'operational' },
+  source: { type: String, default: null },
   backUrl: { type: String, required: true },
   backLabel: { type: String, required: true },
   statement: { type: Object, required: true },
@@ -31,6 +32,15 @@ const { t } = useTranslations()
 const { formatCurrency, formatDate, intlMonthName } = useFormatters()
 
 const isMonthMode = computed(() => props.mode === 'month')
+
+// A period has a start and an end rather than a month around it.
+const labels = computed(() => isMonthMode.value
+  ? { desc: t('statement_desc'), opening: t('statement_opening_balance'), closing: t('statement_closing_balance') }
+  : {
+      desc: props.source === 'bs' ? t('statement_balance_sheet_desc') : t('statement_period_desc'),
+      opening: t('statement_period_opening_balance'),
+      closing: t('statement_period_closing_balance'),
+    })
 
 const periodLabel = computed(() => {
   if (isMonthMode.value) {
@@ -104,12 +114,12 @@ const columns = computed(() => [
     <Card>
       <CardHeader>
         <CardTitle>{{ t('statement_title') }}</CardTitle>
-        <CardDescription>{{ isMonthMode ? t('statement_desc') : t('statement_period_desc') }}</CardDescription>
+        <CardDescription>{{ labels.desc }}</CardDescription>
       </CardHeader>
       <CardContent>
         <div class="mb-4 flex flex-wrap gap-6 border-b border-gray-200 pb-4 text-sm dark:border-gray-700">
           <div v-if="carriesBalance">
-            <p class="text-gray-500 dark:text-gray-400">{{ t('statement_opening_balance') }}</p>
+            <p class="text-gray-500 dark:text-gray-400">{{ labels.opening }}</p>
             <p class="mt-0.5 font-medium tabular-nums">{{ formatCurrency(statement.openingBalance) }}</p>
           </div>
           <div>
@@ -117,7 +127,7 @@ const columns = computed(() => [
             <p class="mt-0.5 font-medium tabular-nums">{{ formatCurrency(statement.total) }}</p>
           </div>
           <div v-if="carriesBalance">
-            <p class="text-gray-500 dark:text-gray-400">{{ t('statement_closing_balance') }}</p>
+            <p class="text-gray-500 dark:text-gray-400">{{ labels.closing }}</p>
             <p class="mt-0.5 text-base font-bold tabular-nums">{{ formatCurrency(statement.closingBalance) }}</p>
           </div>
         </div>

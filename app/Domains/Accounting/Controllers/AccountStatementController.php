@@ -17,7 +17,8 @@ use Inertia\Response;
  * figure like "Salaries 18'790.97" is made of.
  *
  * Two ways in, and the difference matters. The dashboard's month view asks for a
- * month; the profit and loss statement asks for its own period. Each names the
+ * month; the profit and loss statement asks for its own period, the balance
+ * sheet for its fiscal year up to the as-of date. Each names the
  * basis its own figures are built from — the report's, read from the report
  * rather than restated here — so the total shown is the figure that was clicked
  * rather than a near miss.
@@ -35,6 +36,7 @@ class AccountStatementController extends Controller
     private const SOURCES = [
         'dashboard' => StatementBasis::Operational,
         'pnl' => ReportingService::PROFIT_AND_LOSS_BASIS,
+        'bs' => ReportingService::BALANCE_SHEET_BASIS,
     ];
 
     public function __invoke(Request $request, Account $account, LedgerQueryService $ledger): Response
@@ -98,6 +100,7 @@ class AccountStatementController extends Controller
             'previousMonth' => null,
             'nextMonth' => null,
             'period' => ['from' => $start->toDateString(), 'to' => $end->toDateString()],
+            'source' => $source,
             'basis' => $basis->value,
             'backUrl' => $this->backUrl($source, $start->toDateString(), $end->toDateString()),
             'backLabel' => $this->backLabel($source),
@@ -109,6 +112,7 @@ class AccountStatementController extends Controller
     {
         return match ($source) {
             'pnl' => "/reports/profit-and-loss?from={$from}&to={$to}",
+            'bs' => "/reports/balance-sheet?as_of_date={$to}",
             default => '/dashboard?month='.Carbon::parse($from)->format('Y-m').'#monthly-accounts',
         };
     }
@@ -117,6 +121,7 @@ class AccountStatementController extends Controller
     {
         return match ($source) {
             'pnl' => __('app.back_to_profit_and_loss'),
+            'bs' => __('app.balance_sheet'),
             default => __('app.back_to_month_view'),
         };
     }
