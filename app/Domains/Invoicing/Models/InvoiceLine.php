@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property InvoiceLineType $type
  * @property string|null $description
  * @property string $quantity
+ * @property string|null $unit
  * @property string $unit_price
  * @property string $amount
  * @property string|null $discount_type
@@ -38,6 +39,7 @@ class InvoiceLine extends Model
         'discount_type',
         'description',
         'quantity',
+        'unit',
         'unit_price',
         'amount',
         'vat_rate_id',

@@ -56,9 +56,11 @@ class ContactPersonController extends Controller
                 ->update(['is_primary' => false]);
         }
 
-        $contactPerson->update(
-            UpdateContactPersonData::fromArray($validated)->toArray()
-        );
+        // Optional fields the form sent empty are cleared, not kept.
+        $contactPerson->update([
+            ...UpdateContactPersonData::fromArray($validated)->toArray(),
+            ...array_intersect_key($validated, array_flip(['email', 'phone', 'position', 'department', 'notes'])),
+        ]);
 
         return response()->json(['contact_person' => $contactPerson->fresh()]);
     }

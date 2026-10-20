@@ -28,6 +28,7 @@ export function useContactPersons(entityType, entityId, initialContacts = []) {
     email: '',
     phone: '',
     position: '',
+    department: '',
     is_primary: false,
     notes: '',
   })
@@ -39,6 +40,7 @@ export function useContactPersons(entityType, entityId, initialContacts = []) {
       email: '',
       phone: '',
       position: '',
+      department: '',
       is_primary: false,
       notes: '',
     })
@@ -59,6 +61,7 @@ export function useContactPersons(entityType, entityId, initialContacts = []) {
       email: contact.email ?? '',
       phone: contact.phone ?? '',
       position: contact.position ?? '',
+      department: contact.department ?? '',
       is_primary: contact.is_primary ?? false,
       notes: contact.notes ?? '',
     })

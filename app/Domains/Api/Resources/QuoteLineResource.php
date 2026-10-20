@@ -20,6 +20,7 @@ class QuoteLineResource extends JsonResource
             'discount_type' => $this->discount_type,
             'description' => $this->description,
             'quantity' => $this->quantity,
+            'unit' => $this->unit,
             'unit_price' => $this->unit_price,
             'amount' => $this->amount,
             'vat_rate_id' => $this->vatRate?->uuid,

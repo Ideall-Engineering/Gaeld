@@ -23,6 +23,7 @@ use App\Domains\Projects\Services\PlanActualService;
 use App\Domains\Projects\Services\ProjectOverviewService;
 use App\Http\Controllers\Controller;
 use App\Support\CsvExportService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -93,7 +94,7 @@ class ProjectController extends Controller
         return $csv->export($headers, $rows, "projects-{$year}.csv");
     }
 
-    public function store(ProjectRequest $request, CurrentOrganization $currentOrg, LineAllocationService $allocations): RedirectResponse
+    public function store(ProjectRequest $request, CurrentOrganization $currentOrg, LineAllocationService $allocations): RedirectResponse|JsonResponse
     {
         $this->authorize('create', Project::class);
 
@@ -128,6 +129,27 @@ class ProjectController extends Controller
 
             return $project;
         });
+
+        // Spec 011: a job started from a quote or invoice form comes back as
+        // an option of its project field.
+        if ($request->wantsJson()) {
+            $depth = 0;
+            for ($parent = $project->parent; $parent !== null; $parent = $parent->parent) {
+                $depth++;
+            }
+
+            return response()->json(['project' => [
+                'id' => $project->id,
+                'code' => $project->code,
+                'name' => $project->name,
+                'depth' => $depth,
+                'is_active' => $project->is_active,
+                'contact_id' => $project->contact_id,
+                'kind' => $project->kind->value,
+                'parent_id' => $project->parent_id,
+                'is_open' => true,
+            ]], 201);
+        }
 
         return back()->with('success', $lineId !== null
             ? __('app.job_created_with_receipt', ['code' => $project->code])

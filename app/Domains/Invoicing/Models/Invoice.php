@@ -4,6 +4,7 @@ namespace App\Domains\Invoicing\Models;
 
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Enums\InvoiceType;
@@ -35,7 +36,7 @@ use Laravel\Scout\Searchable;
  * @property InvoiceStatus $status
  * @property InvoiceTaxTreatment $tax_treatment
  * @property InvoiceType $type
- * @property array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null}|null $customer_snapshot
+ * @property array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null, contact_person?: array{name: string, department: string|null, position: string|null, email: string|null}}|null $customer_snapshot
  * @property Carbon $issue_date
  * @property Carbon|null $due_date
  * @property string $subtotal
@@ -44,6 +45,10 @@ use Laravel\Scout\Searchable;
  * @property string $currency
  * @property string|null $notes
  * @property string|null $payment_terms
+ * @property string|null $contact_person_id
+ * @property string|null $delivery_note
+ * @property string|null $intro_text
+ * @property-read ContactPerson|null $contactPerson
  * @property string|null $qr_reference
  * @property string|null $qr_type
  * @property string|null $qr_iban
@@ -79,6 +84,7 @@ class Invoice extends Model
         'organization_id',
         'customer_id',
         'customer_snapshot',
+        'contact_person_id',
         'journal_entry_id',
         'number',
         'status',
@@ -93,6 +99,8 @@ class Invoice extends Model
         'currency',
         'notes',
         'payment_terms',
+        'delivery_note',
+        'intro_text',
         'qr_reference',
         'qr_type',
         'qr_iban',
@@ -134,12 +142,18 @@ class Invoice extends Model
         return $this->belongsTo(Contact::class);
     }
 
+    /** @return BelongsTo<ContactPerson, $this> */
+    public function contactPerson(): BelongsTo
+    {
+        return $this->belongsTo(ContactPerson::class);
+    }
+
     /**
-     * @return array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null}|null
+     * @return array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null, contact_person?: array{name: string, department: string|null, position: string|null, email: string|null}}|null
      */
     public function customerDetailsForDocument(): ?array
     {
-        return $this->customer_snapshot ?? $this->customer?->toInvoiceSnapshot();
+        return $this->customer_snapshot ?? $this->customer?->toInvoiceSnapshot($this->contactPerson);
     }
 
     /** @return BelongsTo<JournalEntry, $this> */

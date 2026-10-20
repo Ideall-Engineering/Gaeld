@@ -21,6 +21,7 @@ readonly class CreateContactPersonData
         public ?string $email = null,
         public ?string $phone = null,
         public ?string $position = null,
+        public ?string $department = null,
         public bool $isPrimary = false,
         public ?string $notes = null,
     ) {}
@@ -38,6 +39,7 @@ readonly class CreateContactPersonData
             email: $data['email'] ?? null,
             phone: $data['phone'] ?? null,
             position: $data['position'] ?? null,
+            department: $data['department'] ?? null,
             isPrimary: $data['is_primary'] ?? false,
             notes: $data['notes'] ?? null,
         );

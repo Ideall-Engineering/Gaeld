@@ -28,7 +28,7 @@ class RefreshInvoiceCustomerSnapshotAction
 
             ($storedInvoice->tax_treatment ?? InvoiceTaxTreatment::Standard)->validateCustomer($customer);
 
-            $storedInvoice->update(['customer_snapshot' => $customer->toInvoiceSnapshot()]);
+            $storedInvoice->update(['customer_snapshot' => $customer->toInvoiceSnapshot($storedInvoice->contactPerson)]);
 
             return $storedInvoice;
         });

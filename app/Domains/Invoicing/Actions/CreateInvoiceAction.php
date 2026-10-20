@@ -8,6 +8,7 @@ use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
+use App\Domains\Invoicing\Support\DocumentContactPerson;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
@@ -60,12 +61,16 @@ class CreateInvoiceAction
                     ->where('organization_id', $data->organizationId)
                     ->findOrFail($data->customerId);
             $data->taxTreatment->validateCustomer($customer);
-            $customerSnapshot = $customer?->toInvoiceSnapshot();
+            $person = DocumentContactPerson::of($customer, $data->contactPersonId);
+            $customerSnapshot = $customer?->toInvoiceSnapshot($person);
 
             $invoice = Invoice::create([
                 'organization_id' => $data->organizationId,
                 'customer_id' => $data->customerId,
                 'customer_snapshot' => $customerSnapshot,
+                'contact_person_id' => $person?->id,
+                'delivery_note' => $data->deliveryNote,
+                'intro_text' => $data->introText,
                 'number' => $number,
                 'status' => InvoiceStatus::Draft,
                 'tax_treatment' => $data->taxTreatment,

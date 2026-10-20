@@ -18,6 +18,7 @@ use App\Domains\Invoicing\Queries\InvoiceQuery;
 use App\Domains\Invoicing\Requests\StoreInvoiceRequest;
 use App\Domains\Invoicing\Requests\UpdateInvoiceRequest;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
+use App\Domains\Invoicing\Support\DocumentContactPerson;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Organizations\Services\OrganizationDocumentStorageService;
 use App\Domains\Projects\Models\Project;
@@ -88,6 +89,8 @@ class InvoiceController extends Controller
             'defaultVatRateId' => optional(VatRateQuery::active()->firstWhere('is_default', true))->id,
             'taxTreatments' => InvoiceTaxTreatment::options(),
             'projectOptions' => InvoiceProjectInput::options($request),
+            'contactPersons' => DocumentContactPerson::options(),
+            'canCreateProject' => InvoiceProjectInput::options($request) !== null && $request->user()->can('create', Project::class),
         ]);
     }
 
@@ -238,6 +241,8 @@ class InvoiceController extends Controller
                 : null,
             'defaultVatRateId' => optional(VatRateQuery::active()->firstWhere('is_default', true))->id,
             'taxTreatments' => InvoiceTaxTreatment::options(),
+            'contactPersons' => DocumentContactPerson::options(),
+            'canCreateProject' => InvoiceProjectInput::options($request) !== null && $request->user()->can('create', Project::class),
         ]);
     }
 

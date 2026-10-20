@@ -27,6 +27,7 @@ class SyncInvoiceLinesAction
                 'discount_type' => $lineData->discountType,
                 'description' => $lineData->description,
                 'quantity' => $lineData->quantity,
+                'unit' => $lineData->unit,
                 'unit_price' => $lineData->unitPrice,
                 'vat_rate_id' => $applyVat ? $lineData->vatRateId : null,
                 'sort_order' => $lineData->sortOrder ?? $index,

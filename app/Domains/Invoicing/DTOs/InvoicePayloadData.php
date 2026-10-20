@@ -28,6 +28,9 @@ abstract readonly class InvoicePayloadData
         public ?string $paymentTerms,
         public array $lines,
         public InvoiceTaxTreatment $taxTreatment = InvoiceTaxTreatment::Standard,
+        public ?string $contactPersonId = null,
+        public ?string $deliveryNote = null,
+        public ?string $introText = null,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -47,6 +50,9 @@ abstract readonly class InvoicePayloadData
             lines: array_map(fn (array $line) => InvoiceLineData::fromArray($line), $data['lines']),
             taxTreatment: InvoiceTaxTreatment::tryFrom($data['tax_treatment'] ?? InvoiceTaxTreatment::Standard->value)
                 ?? InvoiceTaxTreatment::Standard,
+            contactPersonId: blank($data['contact_person_id'] ?? null) ? null : (string) $data['contact_person_id'],
+            deliveryNote: blank($data['delivery_note'] ?? null) ? null : $data['delivery_note'],
+            introText: blank($data['intro_text'] ?? null) ? null : $data['intro_text'],
         );
     }
 
@@ -64,6 +70,9 @@ abstract readonly class InvoicePayloadData
             'payment_terms' => $this->paymentTerms,
             'lines' => array_map(fn (InvoiceLineData $line) => $line->toArray(), $this->lines),
             'tax_treatment' => $this->taxTreatment->value,
+            'contact_person_id' => $this->contactPersonId,
+            'delivery_note' => $this->deliveryNote,
+            'intro_text' => $this->introText,
         ];
     }
 }

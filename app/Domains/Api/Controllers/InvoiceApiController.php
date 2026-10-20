@@ -444,6 +444,9 @@ class InvoiceApiController extends Controller
                 ? $validated['payment_terms']
                 : $invoice->payment_terms,
             'tax_treatment' => $validated['tax_treatment'] ?? $invoice->tax_treatment->value,
+            ...collect(['contact_person_id', 'delivery_note', 'intro_text'])
+                ->mapWithKeys(fn (string $field) => [$field => array_key_exists($field, $validated) ? $validated[$field] : $invoice->{$field}])
+                ->all(),
             'lines' => $validated['lines'] ?? $this->serializeExistingLines($invoice),
         ];
     }
@@ -457,6 +460,7 @@ class InvoiceApiController extends Controller
             ->map(fn (InvoiceLine $line): array => [
                 'description' => $line->description,
                 'quantity' => $line->quantity,
+                'unit' => $line->unit,
                 'unit_price' => $line->unit_price,
                 'type' => $line->type->value,
                 'discount_type' => $line->discount_type,

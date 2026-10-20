@@ -113,6 +113,7 @@ class GenerateRecurringInvoicesJob implements ShouldQueue
             'unit_price' => (string) $line['unit_price'],
             'vat_rate_id' => $line['vat_rate_id'] ?? null,
             'sort_order' => $line['sort_order'] ?? 0,
+            'unit' => $line['unit'] ?? null,
         ], $template['lines'] ?? []);
 
         $invoiceData = CreateInvoiceData::fromArray([
@@ -125,6 +126,7 @@ class GenerateRecurringInvoicesJob implements ShouldQueue
             'notes' => $template['notes'] ?? null,
             'payment_terms' => $template['payment_terms'] ?? null,
             'lines' => $lines,
+            'contact_person_id' => $template['contact_person_id'] ?? null,
         ]);
 
         $createInvoice->execute($invoiceData);

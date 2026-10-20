@@ -7,6 +7,7 @@ use App\Domains\Invoicing\DTOs\UpdateInvoiceData;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Support\DocumentContactPerson;
 
 /**
  * Updates a draft invoice and re-syncs its line items.
@@ -31,6 +32,8 @@ class UpdateInvoiceAction
             'currency' => $data->currency,
             'notes' => $data->notes,
             'payment_terms' => $data->paymentTerms,
+            'delivery_note' => $data->deliveryNote,
+            'intro_text' => $data->introText,
         ];
 
         $organizationId = $invoice->getAttribute('organization_id');
@@ -47,7 +50,9 @@ class UpdateInvoiceAction
                     ->where('organization_id', $organizationId)
                     ->findOrFail($data->customerId);
             $data->taxTreatment->validateCustomer($customer);
-            $invoiceData['customer_snapshot'] = $customer?->toInvoiceSnapshot();
+            $person = DocumentContactPerson::of($customer, $data->contactPersonId);
+            $invoiceData['customer_snapshot'] = $customer?->toInvoiceSnapshot($person);
+            $invoiceData['contact_person_id'] = $person?->id;
         }
 
         $invoice->update($invoiceData);

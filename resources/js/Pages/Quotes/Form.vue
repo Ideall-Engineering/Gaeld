@@ -15,6 +15,7 @@ import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import QuickCreateContactModal from '@/Components/QuickCreateContactModal.vue'
 import InvoiceLineItems from '@/Components/Invoices/InvoiceLineItems.vue'
 import InvoiceProjectField from '@/Components/Projects/InvoiceProjectField.vue'
+import ContactPersonField from '@/Components/Invoices/ContactPersonField.vue'
 import { useUnsavedChanges } from '@/lib/useUnsavedChanges'
 import UnsavedChangesDialog from '@/Components/UI/UnsavedChangesDialog.vue'
 import { currencyOptions } from '@/lib/contactOptions'
@@ -30,6 +31,8 @@ const props = defineProps({
   defaultVatRateId: { type: [String, Number], default: null },
   taxTreatments: { type: Array, default: () => [] },
   projectOptions: { type: Array, default: null },
+  contactPersons: { type: Array, default: () => [] },
+  canCreateProject: { type: Boolean, default: false },
   suggestedNumber: { type: String, default: '' },
   defaultNotes: { type: String, default: '' },
   defaultValidDays: { type: Number, default: 30 },
@@ -44,11 +47,14 @@ function plusDays(date, days) {
   d.setDate(d.getDate() + Number(days))
   return d.toISOString().slice(0, 10)
 }
-const emptyLine = () => ({ type: 'item', discount_type: 'flat', description: '', quantity: 1, unit_price: 0, vat_rate_id: props.defaultVatRateId ? String(props.defaultVatRateId) : '' })
+const emptyLine = () => ({ type: 'item', discount_type: 'flat', description: '', quantity: 1, unit: '', unit_price: 0, vat_rate_id: props.defaultVatRateId ? String(props.defaultVatRateId) : '' })
 
 const q = props.quote
 const form = useForm({
   customer_id: q?.customer_id != null ? String(q.customer_id) : '',
+  contact_person_id: q?.contact_person_id ?? '',
+  delivery_note: q?.delivery_note ?? '',
+  intro_text: q?.intro_text ?? '',
   title: q?.title ?? '',
   issue_date: q?.issue_date?.slice(0, 10) ?? today,
   valid_until: q ? (q.valid_until?.slice(0, 10) ?? '') : plusDays(today, props.defaultValidDays),
@@ -58,7 +64,7 @@ const form = useForm({
   payment_terms: q?.payment_terms ?? '',
   project_id: q?.cost_center_id ? String(q.cost_center_id) : '',
   lines: q?.lines?.length
-    ? q.lines.map(l => ({ type: l.type ?? 'item', discount_type: l.discount_type ?? 'flat', description: l.description, quantity: l.quantity, unit_price: l.unit_price, vat_rate_id: l.vat_rate_id ? String(l.vat_rate_id) : '' }))
+    ? q.lines.map(l => ({ type: l.type ?? 'item', discount_type: l.discount_type ?? 'flat', description: l.description, quantity: l.quantity, unit: l.unit ?? '', unit_price: l.unit_price, vat_rate_id: l.vat_rate_id ? String(l.vat_rate_id) : '' }))
     : [emptyLine()],
 })
 
@@ -124,8 +130,24 @@ const title = computed(() => (props.quote ? t('quote_edit') : t('quote_new')))
                 </div>
               </div>
               <div v-if="projectOptions" class="lg:col-span-2">
-                <InvoiceProjectField v-model="form.project_id" :options="projectOptions" :customer-id="form.customer_id" :follow-customer="!quote" :error="form.errors.project_id" />
+                <InvoiceProjectField
+                  v-model="form.project_id"
+                  :options="projectOptions"
+                  :customer-id="form.customer_id"
+                  :follow-customer="!quote"
+                  :error="form.errors.project_id"
+                  :can-create="canCreateProject"
+                  create-status="pipeline"
+                  :suggested-name="form.title"
+                />
               </div>
+              <ContactPersonField
+                v-model="form.contact_person_id"
+                :options="contactPersons"
+                :customer-id="form.customer_id"
+                :error="form.errors.contact_person_id"
+                class="lg:col-span-2"
+              />
               <div class="lg:col-span-2">
                 <label class="text-sm font-medium leading-none">{{ t('quote_number') }}</label>
                 <div class="mt-2 flex h-11 w-full items-center rounded-md border border-[hsl(var(--input))] bg-[hsl(var(--muted))] px-3 py-1 text-base text-[hsl(var(--muted-foreground))] select-none sm:h-9 sm:text-sm">
@@ -137,6 +159,8 @@ const title = computed(() => (props.quote ? t('quote_edit') : t('quote_new')))
               <FormInput id="valid_until" v-model="form.valid_until" type="date" :label="t('quote_valid_until')" :error="form.errors.valid_until" @change="validTouched = true" />
               <FormSelect id="currency" v-model="form.currency" :label="t('currency')" :options="currencyOptions(t)" :error="form.errors.currency" />
               <FormSelect id="tax_treatment" v-model="form.tax_treatment" :label="t('invoice_tax_treatment')" :options="taxTreatments" :error="form.errors.tax_treatment" />
+              <FormInput id="delivery_note" v-model="form.delivery_note" :label="t('document_delivery_note')" :placeholder="t('document_delivery_note_placeholder')" :error="form.errors.delivery_note" maxlength="255" class="lg:col-span-2" />
+              <FormTextarea id="intro_text" v-model="form.intro_text" :label="t('document_intro_text')" :placeholder="t('quote_intro_text_placeholder')" :error="form.errors.intro_text" :rows="3" class="sm:col-span-2 lg:col-span-4" />
             </div>
           </section>
 

@@ -17,6 +17,8 @@ const props = defineProps({
   placeholder: String,
   autocomplete: String,
   maxlength: [String, Number],
+  // Id of a <datalist> with suggestions.
+  list: String,
   class: String,
   labelClass: String,
 })
@@ -58,6 +60,7 @@ function togglePasswordVisibility() {
         :required="required"
         :aria-required="required ? 'true' : undefined"
         :readonly="readonly"
+        :list="list"
         :placeholder="placeholder"
         :autocomplete="autocomplete"
         :maxlength="maxlength"

@@ -16,7 +16,9 @@ use App\Domains\Invoicing\Models\Quote;
 use App\Domains\Invoicing\Queries\QuoteQuery;
 use App\Domains\Invoicing\Requests\QuoteRequest;
 use App\Domains\Invoicing\Services\QuoteNumberGenerator;
+use App\Domains\Invoicing\Support\DocumentContactPerson;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Support\InvoiceProjectInput;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
@@ -185,6 +187,8 @@ class QuoteController extends Controller
             'defaultVatRateId' => optional(VatRateQuery::active()->firstWhere('is_default', true))->id,
             'taxTreatments' => InvoiceTaxTreatment::options(),
             'projectOptions' => InvoiceProjectInput::options($request),
+            'contactPersons' => DocumentContactPerson::options(),
+            'canCreateProject' => InvoiceProjectInput::options($request) !== null && $request->user()->can('create', Project::class),
         ];
     }
 

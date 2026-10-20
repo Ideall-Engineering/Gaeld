@@ -15,6 +15,7 @@ class StoreContactPersonRequest extends FormRequest
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'position' => ['nullable', 'string', 'max:255'],
+            'department' => ['nullable', 'string', 'max:255'],
             'is_primary' => ['boolean'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];

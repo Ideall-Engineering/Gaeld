@@ -84,6 +84,8 @@ final class InvoiceProjectInput
             'depth' => $row['depth'],
             'is_active' => $row['is_active'],
             'contact_id' => $row['contact_id'],
+            'kind' => $row['kind'],
+            'parent_id' => $row['parent_id'] ?? null,
             'is_open' => $row['is_active']
                 && $row['kind'] !== ProjectKind::Area->value
                 && ! in_array($row['status'], [ProjectStatus::Done->value, ProjectStatus::Lost->value], true),

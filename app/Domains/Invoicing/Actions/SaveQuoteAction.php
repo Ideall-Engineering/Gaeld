@@ -11,6 +11,7 @@ use App\Domains\Invoicing\Exceptions\InvalidQuoteStateException;
 use App\Domains\Invoicing\Models\Quote;
 use App\Domains\Invoicing\Models\QuoteLine;
 use App\Domains\Invoicing\Services\QuoteNumberGenerator;
+use App\Domains\Invoicing\Support\DocumentContactPerson;
 use App\Support\Money;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
@@ -82,10 +83,14 @@ class SaveQuoteAction
                 ->where('organization_id', $data->organizationId)
                 ->findOrFail($data->customerId);
         $data->taxTreatment->validateCustomer($customer);
+        $person = DocumentContactPerson::of($customer, $data->contactPersonId);
 
         $quote->fill([
             'customer_id' => $data->customerId,
-            'customer_snapshot' => $customer?->toInvoiceSnapshot(),
+            'customer_snapshot' => $customer?->toInvoiceSnapshot($person),
+            'contact_person_id' => $person?->id,
+            'delivery_note' => $data->deliveryNote,
+            'intro_text' => $data->introText,
             'tax_treatment' => $data->taxTreatment,
             'issue_date' => $data->issueDate,
             'valid_until' => $data->validUntil,
@@ -115,6 +120,7 @@ class SaveQuoteAction
                 'discount_type' => $lineData->discountType,
                 'description' => $lineData->description,
                 'quantity' => $lineData->quantity,
+                'unit' => $lineData->unit,
                 'unit_price' => $lineData->unitPrice,
                 'vat_rate_id' => $applyVat ? $lineData->vatRateId : null,
                 'sort_order' => $lineData->sortOrder ?? $index,

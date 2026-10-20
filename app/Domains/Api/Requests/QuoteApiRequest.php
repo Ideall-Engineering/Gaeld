@@ -3,9 +3,11 @@
 namespace App\Domains\Api\Requests;
 
 use App\Domains\Api\Requests\Concerns\NamesLineVatRates;
+use App\Domains\Contacts\Models\Contact;
 use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Models\Quote;
+use App\Domains\Invoicing\Support\DocumentFieldRules;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -56,6 +58,9 @@ class QuoteApiRequest extends FormRequest
             'lines.*.unit_price' => 'required_unless:lines.*.type,text|nullable|numeric',
             'lines.*.vat_rate_id' => ['nullable', 'uuid', Rule::exists('vat_rates', 'uuid')->where('organization_id', $orgId)],
             ...$this->lineVatRules(),
+            ...DocumentFieldRules::for(fn () => $this->filled('customer_id')
+                ? Contact::query()->where('uuid', $this->input('customer_id'))->first()
+                : ($this->route('quote') instanceof Quote ? $this->route('quote')->customer : null)),
         ];
     }
 

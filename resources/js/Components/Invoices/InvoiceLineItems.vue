@@ -37,6 +37,7 @@ function emptyLine(type = 'item') {
     discount_type: 'flat',
     description: '',
     quantity: 1,
+    unit: '',
     unit_price: 0,
     vat_rate_id: type === 'item' && props.defaultVatRateId ? String(props.defaultVatRateId) : '',
   }
@@ -56,6 +57,9 @@ function duplicateLine(index) {
   lines.value.splice(index + 1, 0, { ...lines.value[index] })
 }
 
+// Spec 011: units offered for a line; any other text is fine too.
+const unitSuggestions = computed(() => ['unit_hour', 'unit_flat', 'unit_piece', 'unit_day', 'unit_lesson'].map(key => t(key)))
+
 const selectedCatalogItemId = ref('')
 
 const catalogOptions = computed(() =>
@@ -70,6 +74,7 @@ function addLineFromCatalog(catalogItemId) {
     discount_type: 'flat',
     description: item.name + (item.description ? ` \u2013 ${item.description}` : ''),
     quantity: 1,
+    unit: '',
     unit_price: item.default_unit_price ?? 0,
     vat_rate_id: item.default_vat_rate_id ? String(item.default_vat_rate_id) : (props.defaultVatRateId ? String(props.defaultVatRateId) : ''),
   })
@@ -246,7 +251,7 @@ defineExpose({ subtotal, vatTotal, total })
         </div>
 
         <template v-if="line.type !== 'text'">
-          <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(7rem,.65fr)_minmax(11rem,1fr)_minmax(13rem,1.25fr)_minmax(10rem,.9fr)]">
+          <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(6rem,.55fr)_minmax(8rem,.75fr)_minmax(11rem,1fr)_minmax(12rem,1.1fr)_minmax(9rem,.85fr)]">
             <FormInput
               :id="`line-qty-${i}`"
               v-model="line.quantity"
@@ -256,6 +261,17 @@ defineExpose({ subtotal, vatTotal, total })
               :readonly="line.type === 'discount' && line.discount_type === 'percentage'"
               required
             />
+            <FormInput
+              v-if="line.type === 'item'"
+              :id="`line-unit-${i}`"
+              v-model="line.unit"
+              :label="t('line_unit')"
+              :placeholder="t('line_unit_placeholder')"
+              :error="errors[`lines.${i}.unit`]"
+              list="line-unit-suggestions"
+              maxlength="20"
+            />
+            <div v-else class="hidden xl:block" />
             <FormInput
               :id="`line-price-${i}`"
               v-model="line.unit_price"
@@ -286,6 +302,10 @@ defineExpose({ subtotal, vatTotal, total })
         </div>
       </div>
     </div>
+
+    <datalist id="line-unit-suggestions">
+      <option v-for="unit in unitSuggestions" :key="unit" :value="unit" />
+    </datalist>
 
     <div class="mt-4 flex flex-wrap items-center gap-2">
       <Button type="button" variant="outline" size="sm" @click="addLine('item')">

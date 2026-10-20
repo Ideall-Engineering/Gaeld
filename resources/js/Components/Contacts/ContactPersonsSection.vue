@@ -60,6 +60,9 @@ const emit = defineEmits([
               <span v-if="contact.position" class="text-sm text-[hsl(var(--muted-foreground))]">
                 — {{ contact.position }}
               </span>
+              <span v-if="contact.department" class="text-sm text-[hsl(var(--muted-foreground))]">
+                · {{ contact.department }}
+              </span>
             </div>
             <div class="mt-1 flex gap-4 text-sm text-[hsl(var(--muted-foreground))]">
               <a v-if="contact.email" :href="`mailto:${contact.email}`" class="underline">{{ contact.email }}</a>
@@ -117,6 +120,13 @@ const emit = defineEmits([
         v-model="contactForm.position"
         :label="t('position')"
         :error="contactErrors.position?.[0]"
+      />
+      <FormInput
+        id="cp-department"
+        v-model="contactForm.department"
+        :label="t('department')"
+        :hint="t('department_hint')"
+        :error="contactErrors.department?.[0]"
       />
       <FormInput
         id="cp-notes"

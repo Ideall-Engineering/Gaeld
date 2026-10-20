@@ -22,6 +22,7 @@ use Laravel\Scout\Searchable;
  * @property string|null $email
  * @property string|null $phone
  * @property string|null $position
+ * @property string|null $department
  * @property bool $is_primary
  * @property string|null $notes
  * @property Carbon|null $created_at
@@ -54,6 +55,7 @@ class ContactPerson extends Model
         'email',
         'phone',
         'position',
+        'department',
         'is_primary',
         'notes',
     ];

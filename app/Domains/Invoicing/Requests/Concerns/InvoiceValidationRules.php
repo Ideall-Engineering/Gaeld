@@ -5,6 +5,7 @@ namespace App\Domains\Invoicing\Requests\Concerns;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
+use App\Domains\Invoicing\Support\DocumentFieldRules;
 use App\Support\Money;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Validation\Rule;
@@ -66,6 +67,8 @@ trait InvoiceValidationRules
                 'nullable',
                 Rule::exists('vat_rates', 'id')->where('organization_id', $orgId),
             ],
+            ...DocumentFieldRules::for(fn () => Contact::withoutGlobalScope('organization')
+                ->where('organization_id', $orgId)->whereKey($this->input('customer_id'))->first()),
             'justificatif' => 'nullable|file|mimes:'.config('uploads.allowed_mimes.document').'|max:'.config('uploads.max_size.document'),
         ];
     }

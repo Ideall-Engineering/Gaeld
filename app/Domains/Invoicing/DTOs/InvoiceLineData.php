@@ -22,6 +22,7 @@ readonly class InvoiceLineData
         public ?string $discountType = null,
         public ?string $vatRateId = null,
         public ?int $sortOrder = null,
+        public ?string $unit = null,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -37,6 +38,7 @@ readonly class InvoiceLineData
             discountType: $data['discount_type'] ?? null,
             vatRateId: blank($data['vat_rate_id'] ?? null) ? null : (string) $data['vat_rate_id'],
             sortOrder: $data['sort_order'] ?? null,
+            unit: blank($data['unit'] ?? null) ? null : trim((string) $data['unit']),
         );
     }
 }

@@ -22,6 +22,7 @@ class ContactPersonResource extends JsonResource
             'email' => $this->email,
             'phone' => $this->phone,
             'position' => $this->position,
+            'department' => $this->department,
             'is_primary' => $this->is_primary,
             'notes' => $this->notes,
             'created_at' => $this->created_at?->toIso8601String(),

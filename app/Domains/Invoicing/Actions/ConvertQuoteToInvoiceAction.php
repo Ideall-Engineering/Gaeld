@@ -65,8 +65,12 @@ class ConvertQuoteToInvoiceAction
                     discountType: $line->discount_type,
                     vatRateId: $line->vat_rate_id === null ? null : (string) $line->vat_rate_id,
                     sortOrder: $line->sort_order,
+                    unit: $line->unit,
                 ))->all(),
                 taxTreatment: $quote->tax_treatment,
+                contactPersonId: $quote->contact_person_id,
+                deliveryNote: $quote->delivery_note,
+                introText: $quote->intro_text,
             ));
 
             if ($quote->cost_center_id !== null) {

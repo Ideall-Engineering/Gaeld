@@ -2,9 +2,11 @@
 
 namespace App\Domains\Invoicing\Requests;
 
+use App\Domains\Contacts\Models\Contact;
 use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Models\Quote;
+use App\Domains\Invoicing\Support\DocumentFieldRules;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -47,6 +49,7 @@ class QuoteRequest extends FormRequest
             'lines.*.quantity' => 'required_unless:lines.*.type,text|nullable|numeric|min:0',
             'lines.*.unit_price' => 'required_unless:lines.*.type,text|nullable|numeric',
             'lines.*.vat_rate_id' => ['nullable', Rule::exists('vat_rates', 'id')->where('organization_id', $orgId)],
+            ...DocumentFieldRules::for(fn () => Contact::query()->whereKey($this->input('customer_id'))->first()),
         ];
     }
 

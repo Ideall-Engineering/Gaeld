@@ -121,11 +121,14 @@ class Contact extends Model
     }
 
     /**
-     * @return array{name: string, salutation: string|null, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name: string|null, vat_number: string|null}
+     * The customer as a document shows it; with a contact person of this
+     * contact also that person (spec 011).
+     *
+     * @return array{name: string, salutation: string|null, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name: string|null, vat_number: string|null, contact_person?: array{name: string, department: string|null, position: string|null, email: string|null}}
      */
-    public function toInvoiceSnapshot(): array
+    public function toInvoiceSnapshot(?ContactPerson $person = null): array
     {
-        return [
+        $snapshot = [
             'name' => $this->name,
             'salutation' => $this->salutation,
             'email' => $this->email,
@@ -136,6 +139,17 @@ class Contact extends Model
             'country_name' => $this->country_name,
             'vat_number' => $this->vat_number,
         ];
+
+        if ($person !== null && $person->contactable_type === $this->getMorphClass() && (string) $person->contactable_id === (string) $this->id) {
+            $snapshot['contact_person'] = [
+                'name' => $person->full_name,
+                'department' => $person->department,
+                'position' => $person->position,
+                'email' => $person->email,
+            ];
+        }
+
+        return $snapshot;
     }
 
     // ──────────────────────────────────────────────────────────────

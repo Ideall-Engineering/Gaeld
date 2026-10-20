@@ -26,6 +26,9 @@ class DuplicateInvoiceAction
                 'organization_id' => $invoice->organization_id,
                 'customer_id' => $invoice->customer_id,
                 'customer_snapshot' => $invoice->customer_snapshot,
+                'contact_person_id' => $invoice->contact_person_id,
+                'delivery_note' => $invoice->delivery_note,
+                'intro_text' => $invoice->intro_text,
                 'number' => $this->numberGenerator->next($invoice->organization_id),
                 'status' => InvoiceStatus::Draft,
                 'tax_treatment' => $invoice->tax_treatment ?? InvoiceTaxTreatment::Standard,
@@ -46,6 +49,7 @@ class DuplicateInvoiceAction
                     unitPrice: $line->unit_price,
                     vatRateId: $line->vat_rate_id,
                     sortOrder: $line->sort_order,
+                    unit: $line->unit,
                 )
             )->all(), ($invoice->tax_treatment ?? InvoiceTaxTreatment::Standard)->appliesSwissVat());
 

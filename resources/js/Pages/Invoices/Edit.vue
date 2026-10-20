@@ -24,6 +24,7 @@ import { useFormValidation, z } from '@/lib/useFormValidation'
 import FileUpload from '@/Components/UI/FileUpload.vue'
 import InvoiceLineItems from '@/Components/Invoices/InvoiceLineItems.vue'
 import InvoiceProjectField from '@/Components/Projects/InvoiceProjectField.vue'
+import ContactPersonField from '@/Components/Invoices/ContactPersonField.vue'
 import { Plus } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -36,6 +37,8 @@ const props = defineProps({
   taxTreatments: { type: Array, default: () => [] },
   projectOptions: { type: Array, default: null },
   invoiceProjectId: { type: Number, default: null },
+  contactPersons: { type: Array, default: () => [] },
+  canCreateProject: { type: Boolean, default: false },
 })
 
 const { t } = useTranslations()
@@ -45,6 +48,9 @@ const { isClosed: isIssueDateClosed, closedYear } = useClosedFiscalYear(() => fo
 
 const form = useForm({
   customer_id: props.invoice.customer_id != null ? String(props.invoice.customer_id) : '',
+  contact_person_id: props.invoice.contact_person_id ?? '',
+  delivery_note: props.invoice.delivery_note ?? '',
+  intro_text: props.invoice.intro_text ?? '',
   number: props.invoice.number ?? '',
   issue_date: props.invoice.issue_date?.slice(0, 10) ?? '',
   due_date: props.invoice.due_date?.slice(0, 10) ?? '',
@@ -57,6 +63,7 @@ const form = useForm({
     discount_type: l.discount_type ?? 'flat',
     description: l.description,
     quantity: l.quantity,
+    unit: l.unit ?? '',
     unit_price: l.unit_price,
     vat_rate_id: l.vat_rate_id ?? '',
   })),
@@ -65,7 +72,7 @@ const form = useForm({
 })
 
 if (form.lines.length === 0) {
-  form.lines.push({ type: 'item', discount_type: 'flat', description: '', quantity: 1, unit_price: 0, vat_rate_id: props.defaultVatRateId ? String(props.defaultVatRateId) : '' })
+  form.lines.push({ type: 'item', discount_type: 'flat', description: '', quantity: 1, unit: '', unit_price: 0, vat_rate_id: props.defaultVatRateId ? String(props.defaultVatRateId) : '' })
 }
 
 function saveDraft() {
@@ -161,6 +168,13 @@ function onCustomerCreated(customer) {
               :customer-id="form.customer_id"
               :follow-customer="!invoiceProjectId"
               :error="form.errors.project_id"
+              :can-create="canCreateProject"
+            />
+            <ContactPersonField
+              v-model="form.contact_person_id"
+              :options="contactPersons"
+              :customer-id="form.customer_id"
+              :error="form.errors.contact_person_id"
             />
             <FormInput
               id="number"
@@ -205,6 +219,8 @@ function onCustomerCreated(customer) {
                 {{ t('invoice_reverse_charge_hint') }}
               </p>
             </div>
+            <FormInput id="delivery_note" v-model="form.delivery_note" :label="t('document_delivery_note')" :placeholder="t('document_delivery_note_placeholder')" :error="form.errors.delivery_note" maxlength="255" />
+            <FormTextarea id="intro_text" v-model="form.intro_text" :label="t('document_intro_text')" :placeholder="t('invoice_intro_text_placeholder')" :error="form.errors.intro_text" :rows="2" class="sm:col-span-2 lg:col-span-4" />
           </div>
 
           <!-- Line items -->

@@ -3,6 +3,7 @@
 namespace App\Domains\Invoicing\Models;
 
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Enums\QuoteStatus;
 use App\Domains\Organizations\Models\Organization;
@@ -25,7 +26,7 @@ use Illuminate\Support\Carbon;
  * @property string $id
  * @property string $organization_id
  * @property int|null $customer_id
- * @property array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null}|null $customer_snapshot
+ * @property array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null, contact_person?: array{name: string, department: string|null, position: string|null, email: string|null}}|null $customer_snapshot
  * @property string $number
  * @property QuoteStatus $status
  * @property InvoiceTaxTreatment $tax_treatment
@@ -38,6 +39,10 @@ use Illuminate\Support\Carbon;
  * @property string $currency
  * @property string|null $notes
  * @property string|null $payment_terms
+ * @property string|null $contact_person_id
+ * @property string|null $delivery_note
+ * @property string|null $intro_text
+ * @property-read ContactPerson|null $contactPerson
  * @property int|null $cost_center_id
  * @property string|null $invoice_id
  * @property Carbon|null $sent_at
@@ -66,6 +71,7 @@ class Quote extends Model
         'organization_id',
         'customer_id',
         'customer_snapshot',
+        'contact_person_id',
         'number',
         'status',
         'tax_treatment',
@@ -78,6 +84,8 @@ class Quote extends Model
         'currency',
         'notes',
         'payment_terms',
+        'delivery_note',
+        'intro_text',
         'cost_center_id',
         'invoice_id',
         'sent_at',
@@ -112,6 +120,12 @@ class Quote extends Model
         return $this->belongsTo(Contact::class);
     }
 
+    /** @return BelongsTo<ContactPerson, $this> */
+    public function contactPerson(): BelongsTo
+    {
+        return $this->belongsTo(ContactPerson::class);
+    }
+
     /** @return BelongsTo<Invoice, $this> */
     public function invoice(): BelongsTo
     {
@@ -131,11 +145,11 @@ class Quote extends Model
     }
 
     /**
-     * @return array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null}|null
+     * @return array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null, contact_person?: array{name: string, department: string|null, position: string|null, email: string|null}}|null
      */
     public function customerDetailsForDocument(): ?array
     {
-        return $this->customer_snapshot ?? $this->customer?->toInvoiceSnapshot();
+        return $this->customer_snapshot ?? $this->customer?->toInvoiceSnapshot($this->contactPerson);
     }
 
     /** A sent quote past its validity date; it can still be accepted. */
