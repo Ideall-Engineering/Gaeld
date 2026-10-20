@@ -70,6 +70,8 @@ class UpdateInvoiceActionTest extends TestCase
             'currency' => 'EUR',
             'notes' => 'Updated notes',
             'payment_terms' => '30 days',
+            'delivery_note' => null,
+            'intro_text' => null,
         ]);
         $invoice->shouldReceive('recalculate')->once();
         $invoice->shouldReceive('load')->once()->with('lines')->andReturnSelf();

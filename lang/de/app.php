@@ -3194,4 +3194,13 @@ return [
     'invoice_intro_text_placeholder' => 'z.B. Danke, dass Sie sich für unsere Dienstleistungen entschieden haben!',
     'department' => 'Abteilung',
     'department_hint' => 'Steht im Adressfeld von Offerten und Rechnungen unter dem Firmennamen.',
+    'pdf_total_net' => 'Total exkl. MWST',
+    'pdf_price_per_unit' => 'Preis / Einheit',
+    'pdf_line_total' => 'Total',
+    'pdf_due_on' => 'Fällig am',
+    'pdf_delivery_note' => 'Leistung/Lieferung',
+    'pdf_quote_number' => 'Offerten-Nr.',
+    'pdf_invoice_number' => 'Rechnungs-Nr.',
+    'pdf_vat_uid_number' => 'MWST/UID-Nr.',
+    'pdf_payable_within_days' => 'Zahlbar innert :days Tagen.',
 ];

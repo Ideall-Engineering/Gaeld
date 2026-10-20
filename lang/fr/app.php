@@ -3202,4 +3202,13 @@ return [
     'invoice_intro_text_placeholder' => 'p. ex. Merci d\'avoir choisi nos services !',
     'department' => 'Service',
     'department_hint' => 'Figure dans l\'adresse des offres et factures sous le nom de l\'entreprise.',
+    'pdf_total_net' => 'Total hors TVA',
+    'pdf_price_per_unit' => 'Prix / unité',
+    'pdf_line_total' => 'Total',
+    'pdf_due_on' => 'Échéance',
+    'pdf_delivery_note' => 'Prestation/livraison',
+    'pdf_quote_number' => 'N° d\'offre',
+    'pdf_invoice_number' => 'N° de facture',
+    'pdf_vat_uid_number' => 'N° TVA/IDE',
+    'pdf_payable_within_days' => 'Payable dans les :days jours.',
 ];

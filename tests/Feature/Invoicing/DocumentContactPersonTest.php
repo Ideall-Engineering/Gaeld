@@ -5,6 +5,7 @@ namespace Tests\Feature\Invoicing;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Models\ContactPerson;
+use App\Domains\Invoicing\Actions\GenerateQuotePdfAction;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Models\Quote;
 use App\Domains\Projects\Enums\ProjectKind;
@@ -77,6 +78,16 @@ class DocumentContactPersonTest extends TestCase
         $this->assertSame('Pauschal', $invoice->lines->first()->unit);
         $this->assertSame('Termine nach Vereinbarung', $invoice->delivery_note);
         $this->assertSame('Gerne unterbreiten wir Ihnen unsere Offerte.', $invoice->intro_text);
+    }
+
+    public function test_a_short_quote_prints_on_a_single_page(): void
+    {
+        $quote = $this->storeQuote();
+
+        $pdf = app(GenerateQuotePdfAction::class)->execute($quote->fresh(), $this->org, 'de');
+
+        $this->assertStringStartsWith('%PDF-', $pdf);
+        $this->assertSame(1, preg_match_all('#/Type\s*/Page[^s]#', $pdf));
     }
 
     public function test_a_person_of_another_customer_is_refused(): void

@@ -51,3 +51,12 @@ Zwei freie Texte auf Offerte und Rechnung, übernommen bei der Umwandlung.
 ## Etappe 5: PDF
 
 Gemeinsames Layout für Offerte und Rechnung: Absender oben rechts, Empfänger links mit Ansprechperson, rechts Nummer, Datum, „Gültig bis“ bzw. „Fällig am“, „Leistung/Lieferung“; Titel und Einleitung; Tabelle Beschreibung, MWST, Menge, Preis / Einheit, Total, erste Beschreibungszeile fett; Totals „Total exkl. MWST“, „MWST 8.1%“, „Total CHF“; auf Rechnungen die Bankverbindung links daneben. Schweizer Zahlenformat (1'234.50), keine leere Folgeseite, Zahlungszeile nur auf Rechnungen.
+
+Weitere Entscheide zum PDF:
+
+- Ist in den Einstellungen ein Kopftext hinterlegt, ist er der Absenderblock oben rechts (er enthält meist Name, Adresse, E-Mail, Web und MWST-Nummer). Ohne Kopftext setzt Gäld den Block aus Firmenname, Adresse, E-Mail und MWST-Nummer zusammen.
+- Der Fusstext erscheint nur auf Rechnungen, weil er meist von der Zahlung spricht.
+- Das Land steht nur im Adressfeld, wenn beim Kontakt ein Landesname erfasst ist (Inlandbriefe ohne „Schweiz“).
+- Die Empfängeradresse sitzt links (Fenster links), Absender und Dokumentdaten rechts.
+- Die Seite mit dem QR-Zahlteil wiederholt Absender, Empfänger und Dokumentdaten.
+- Lange Dokumente brechen sauber um; der Tabellenkopf wiederholt sich auf der Folgeseite.

@@ -16,7 +16,7 @@ use Tests\TestCase;
 
 class InvoicePdfRendererTest extends TestCase
 {
-    public function test_renders_sender_left_and_recipient_in_the_right_address_window(): void
+    public function test_renders_the_sender_top_right_and_the_recipient_in_the_left_address_window(): void
     {
         $organization = new Organization([
             'name' => 'Sender GmbH',
@@ -59,11 +59,11 @@ class InvoicePdfRendererTest extends TestCase
 
         app(InvoicePdfRenderer::class)->renderInvoiceHeader($tcpdf, $invoice, $organization);
 
-        $this->assertEquals(['x' => 15.0, 'y' => 15.0], $tcpdf->positions[0]);
-        $this->assertEquals(['x' => 120.0, 'y' => 50.0], $tcpdf->positions[1]);
+        $this->assertEquals(['x' => 125.0, 'y' => 15.0], $tcpdf->positions[0]);
+        $this->assertEquals(['x' => 22.0, 'y' => 55.0], $tcpdf->positions[1]);
     }
 
-    public function test_constrains_a_portrait_logo_before_rendering_the_sender_address(): void
+    public function test_constrains_a_portrait_logo_left_of_the_sender_address(): void
     {
         Storage::fake('local');
         $logo = UploadedFile::fake()->image('portrait-logo.jpg', 100, 400);
@@ -111,7 +111,7 @@ class InvoicePdfRendererTest extends TestCase
 
         $this->assertCount(1, $tcpdf->capturedImages);
         $this->assertLessThanOrEqual(InvoicePdfStyle::LOGO_MAX_HEIGHT, $tcpdf->capturedImages[0]['h']);
-        $this->assertGreaterThan(InvoicePdfStyle::MARGIN_TOP, $tcpdf->GetY());
+        $this->assertLessThan(InvoicePdfStyle::SENDER_X - InvoicePdfStyle::LOGO_X, $tcpdf->capturedImages[0]['w']);
     }
 
     public function test_renders_the_saved_invoice_address_instead_of_the_current_contact(): void
@@ -210,7 +210,7 @@ class InvoicePdfRendererTest extends TestCase
         ], $this->renderCustomerAddress($invoice, $organization));
     }
 
-    public function test_renders_a_light_gald_copyright_footer(): void
+    public function test_puts_the_page_number_on_every_page(): void
     {
         $tcpdf = new class extends TCPDF
         {
@@ -227,10 +227,36 @@ class InvoicePdfRendererTest extends TestCase
         $tcpdf->setPrintHeader(false);
         $tcpdf->setPrintFooter(false);
         $tcpdf->AddPage();
+        $tcpdf->AddPage();
 
-        app(InvoicePdfRenderer::class)->renderFooter($tcpdf);
+        app(InvoicePdfRenderer::class)->setLocale('de')->renderFooter($tcpdf);
 
-        $this->assertContains('© '.now()->year.' Gäld', $tcpdf->cells);
+        $this->assertSame(2, $tcpdf->getNumPages());
+        $this->assertContains('Seite 1/'.$tcpdf->getAliasNbPages(), $tcpdf->cells);
+        $this->assertContains('Seite 2/'.$tcpdf->getAliasNbPages(), $tcpdf->cells);
+    }
+
+    public function test_names_department_and_contact_person_below_the_company(): void
+    {
+        $invoice = new Invoice([
+            'issue_date' => '2026-01-15',
+            'customer_snapshot' => [
+                'name' => 'Beispiel Stiftung',
+                'email' => null,
+                'address' => 'Birkenweg 12',
+                'postal_code' => '6003',
+                'city' => 'Luzern',
+                'country' => 'CH',
+                'vat_number' => null,
+                'contact_person' => ['name' => 'Silvia Beispiel', 'department' => 'Bildung', 'position' => null, 'email' => null],
+            ],
+        ]);
+        $invoice->setRelation('customer', null);
+
+        $this->assertSame(
+            ['Beispiel Stiftung', 'Bildung', 'Silvia Beispiel', 'Birkenweg 12', '6003 Luzern'],
+            $this->renderCustomerAddress($invoice, new Organization(['name' => 'Sender GmbH'])),
+        );
     }
 
     /** @return list<string> */

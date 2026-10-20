@@ -3,7 +3,9 @@
 namespace App\Domains\Invoicing\Support;
 
 /**
- * Layout and style constants for the Swiss QR invoice PDF renderer.
+ * Layout and style constants for the invoice and quote PDF (spec 011): the
+ * sender top right, the recipient in a left address window, the document
+ * data beside it on the right.
  */
 final class InvoicePdfStyle
 {
@@ -14,31 +16,44 @@ final class InvoicePdfStyle
 
     public const MARGIN_RIGHT = 15;
 
+    // Below this line the content moves to the next page (A4 is 297 mm).
+    public const CONTENT_BOTTOM = 272;
+
     // Column widths (in mm)
-    public const COL_DESCRIPTION = 80;
+    public const COL_DESCRIPTION = 88;
 
-    public const COL_QUANTITY = 20;
+    public const COL_VAT = 17;
 
-    public const COL_UNIT_PRICE = 30;
+    public const COL_QUANTITY = 15;
 
-    public const COL_VAT = 25;
+    public const COL_UNIT_PRICE = 37;
 
-    public const COL_AMOUNT = 25;
+    public const COL_AMOUNT = 23;
 
-    public const COL_TOTAL_WIDTH = self::COL_DESCRIPTION + self::COL_QUANTITY + self::COL_UNIT_PRICE + self::COL_VAT + self::COL_AMOUNT; // 180
+    public const COL_TOTAL_WIDTH = self::COL_DESCRIPTION + self::COL_VAT + self::COL_QUANTITY + self::COL_UNIT_PRICE + self::COL_AMOUNT; // 180
 
-    // X and Y positions
-    public const ORGANIZATION_X = 15;
+    // Sender, top right
+    public const SENDER_X = 125;
 
-    public const ORGANIZATION_WIDTH = 85;
+    public const SENDER_WIDTH = 70;
 
-    public const CUSTOMER_X = 120;
+    // Recipient in the left window of a C5/C6 envelope (SN 010130).
+    public const CUSTOMER_X = 22;
 
-    public const CUSTOMER_INFO_Y = 50;
+    public const CUSTOMER_INFO_Y = 55;
 
-    public const CUSTOMER_WIDTH = 75;
+    public const CUSTOMER_WIDTH = 85;
 
-    public const INVOICE_TITLE_Y = 100;
+    // Document data beside the recipient
+    public const META_X = 125;
+
+    public const META_Y = 72;
+
+    public const META_LABEL_WIDTH = 32;
+
+    public const META_VALUE_WIDTH = 38;
+
+    public const INVOICE_TITLE_Y = 105;
 
     public const FOLD_MARK_X = 5;
 
@@ -50,63 +65,40 @@ final class InvoicePdfStyle
 
     public const FOLD_MARK_BOTTOM_Y = 210;
 
-    public const TOTALS_LABEL_WIDTH = 155;
+    // Totals: labels from here, amounts right-aligned to the margin.
+    public const TOTALS_X = 120;
 
-    // Legacy aliases kept for callers using the original style names.
-    public const ORG_INFO_X = self::CUSTOMER_X;
+    public const TOTALS_LABEL_WIDTH = 45;
 
-    public const ORG_INFO_WIDTH = self::CUSTOMER_WIDTH;
+    public const TOTALS_AMOUNT_WIDTH = 30;
+
+    // Bank details left of the totals on an invoice
+    public const BANK_WIDTH = 95;
 
     // Font sizes
-    public const FONT_ORG_NAME = 10;
+    public const FONT_BODY = 9;
 
-    public const FONT_ORG_DETAIL = 8;
+    public const FONT_INVOICE_TITLE = 14;
 
-    public const FONT_CUSTOMER_NAME = 10;
-
-    public const FONT_CUSTOMER_DETAIL = 9;
-
-    public const FONT_INVOICE_TITLE = 16;
-
-    public const FONT_INVOICE_META = 9;
-
-    public const FONT_TABLE_HEADER = 8;
-
-    public const FONT_TABLE_ROW = 8;
-
-    public const FONT_TOTALS = 9;
-
-    public const FONT_TOTALS_GRAND = 11;
-
-    public const FONT_NOTES = 8;
-
-    public const FONT_HEADER_FOOTER_TEXT = 8;
+    public const FONT_SMALL = 7;
 
     // Colors (RGB)
     public const COLOR_GRAY = [100, 100, 100];
 
-    public const COLOR_DARK_GRAY = [80, 80, 80];
-
     public const COLOR_BLACK = [0, 0, 0];
 
-    public const COLOR_FILL = [245, 245, 245];
+    public const COLOR_RULE = [190, 190, 190];
 
-    public const COLOR_RULE = [211, 220, 214];
-
-    public const COLOR_ACCENT = [31, 76, 53];
-
-    public const COLOR_LIGHT = [150, 160, 153];
+    public const COLOR_LIGHT = [150, 150, 150];
 
     // Logo
     public const LOGO_X = 15;
 
     public const LOGO_Y = 15;
 
-    public const LOGO_WIDTH = 28;
+    public const LOGO_WIDTH = 40;
 
-    public const LOGO_MAX_HEIGHT = 15;
-
-    public const LOGO_GAP = 3;
+    public const LOGO_MAX_HEIGHT = 18;
 
     // Language mapping for QR bill
     public const QR_LANGUAGE_MAP = ['en' => 'en', 'de' => 'de', 'fr' => 'fr', 'it' => 'it'];

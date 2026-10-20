@@ -3256,4 +3256,13 @@ return [
     'invoice_intro_text_placeholder' => 'e.g. Thank you for choosing our services!',
     'department' => 'Department',
     'department_hint' => 'Shown in the address of quotes and invoices below the company name.',
+    'pdf_total_net' => 'Total excl. VAT',
+    'pdf_price_per_unit' => 'Price / unit',
+    'pdf_line_total' => 'Total',
+    'pdf_due_on' => 'Due on',
+    'pdf_delivery_note' => 'Service/delivery',
+    'pdf_quote_number' => 'Quote no.',
+    'pdf_invoice_number' => 'Invoice no.',
+    'pdf_vat_uid_number' => 'VAT/UID no.',
+    'pdf_payable_within_days' => 'Payable within :days days.',
 ];

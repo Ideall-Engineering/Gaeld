@@ -78,6 +78,8 @@ class GenerateQrInvoicePdfAction
         $tcpdf->AddPage();
         $tcpdf->SetFillColor(255, 255, 255);
         $tcpdf->Rect(0, 0, $tcpdf->getPageWidth(), $tcpdf->getPageHeight(), 'F');
+        // The payment page repeats sender, recipient and invoice data above the slip.
+        $this->pdfRenderer->renderLetterhead($tcpdf, $invoice, $organization);
 
         $output = new TcPdfOutput($qrBill, $qrLang, $tcpdf);
         $displayOptions = (new DisplayOptions)->setPrintable(false);

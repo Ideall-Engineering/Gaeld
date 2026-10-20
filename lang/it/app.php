@@ -3198,4 +3198,13 @@ return [
     'invoice_intro_text_placeholder' => 'p. es. Grazie per aver scelto i nostri servizi!',
     'department' => 'Reparto',
     'department_hint' => 'Appare nell\'indirizzo di offerte e fatture sotto il nome dell\'azienda.',
+    'pdf_total_net' => 'Totale IVA esclusa',
+    'pdf_price_per_unit' => 'Prezzo / unità',
+    'pdf_line_total' => 'Totale',
+    'pdf_due_on' => 'Scadenza',
+    'pdf_delivery_note' => 'Prestazione/consegna',
+    'pdf_quote_number' => 'N. offerta',
+    'pdf_invoice_number' => 'N. fattura',
+    'pdf_vat_uid_number' => 'N. IVA/IDI',
+    'pdf_payable_within_days' => 'Pagabile entro :days giorni.',
 ];
