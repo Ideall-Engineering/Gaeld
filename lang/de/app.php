@@ -3035,7 +3035,7 @@ return [
     'steering_projects_pipeline' => 'Aufträge in Aussicht',
     'steering_projects_possible' => 'Aufträge möglich',
     'steering_blocks' => 'Allgemeine Kosten: wer trägt was',
-    'steering_blocks_desc' => 'Je Kostenblock der Anteil, den jede Person trägt, und eine Gutschrift für die Person, welche die Arbeit selbst übernommen hat. Basis ist der Plan.',
+    'steering_blocks_desc' => 'Je Kostenblock der Anteil, den jede Person trägt, und eine Gutschrift für die Person, welche die Arbeit selbst übernommen hat. Getragen wird das Ist, die Gutschrift richtet sich nach dem Plan.',
     'steering_items' => 'Bezogen',
     'steering_items_desc' => 'Lohn, 13. Monatslohn, Arbeitgeberbeiträge, Pauschalen und Boni des Jahres je Person. Die Anschaffungen kommen automatisch dazu.',
     'steering_block_plan_fixed' => 'Plan als fester Betrag im Kostenblock erfasst.',

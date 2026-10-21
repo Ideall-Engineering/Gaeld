@@ -3039,7 +3039,7 @@ return [
     'steering_projects_pipeline' => 'Incarichi in vista',
     'steering_projects_possible' => 'Incarichi possibili',
     'steering_blocks' => 'Costi generali: chi sostiene cosa',
-    'steering_blocks_desc' => 'Per blocco di costi la parte che ogni persona sostiene e un accredito per chi ha svolto il lavoro. In base al piano.',
+    'steering_blocks_desc' => 'Per blocco di costi la parte che ogni persona sostiene e un accredito per chi ha svolto il lavoro. Si sostiene il consuntivo, l\'accredito segue il piano.',
     'steering_items' => 'Percepito',
     'steering_items_desc' => 'Salario, 13a, contributi del datore, forfait e bonus dell’anno per persona. Gli acquisti si aggiungono automaticamente.',
     'steering_block_plan_fixed' => 'Piano inserito come importo fisso nel blocco di costi.',

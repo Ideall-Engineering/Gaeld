@@ -3097,7 +3097,7 @@ return [
     'steering_projects_pipeline' => 'Jobs in pipeline',
     'steering_projects_possible' => 'Jobs possible',
     'steering_blocks' => 'General costs: who bears what',
-    'steering_blocks_desc' => 'Per cost block the part each person bears, and a credit for the person who did the work. Based on the plan.',
+    'steering_blocks_desc' => 'Per cost block the part each person bears, and a credit for the person who did the work. The actual is borne; the credit follows the plan.',
     'steering_items' => 'Drawn',
     'steering_items_desc' => 'Salary, 13th month, employer contributions, allowances and bonuses of the year per person. Acquisitions are added automatically.',
     'steering_block_plan_fixed' => 'Plan entered as a fixed amount on the cost block.',

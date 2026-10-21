@@ -4,6 +4,8 @@ namespace Tests\Feature\Projects;
 
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
+use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\Budget;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Payroll\Models\Employee;
@@ -72,8 +74,11 @@ class SteeringTest extends TestCase
         // Lost projects count for nobody
         $this->makeProject('L', $area)->update(['status' => ProjectStatus::Lost, 'expected_amount' => '9999.00']);
 
-        // Cost block of 1000: Anna did the work, bears 30 %, Ben 70 %
+        // Cost block of 1000, all booked: Anna did the work, bears 30 %, Ben 70 %
         $block = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Rent', 'kind' => 'running', 'plan_amount' => '1000.00']);
+        $rent = $this->makeAccount('6009', 'Rent', AccountType::Expense);
+        $block->accounts()->sync([$rent->id]);
+        $this->cost($rent, '1000.00', '2026-02-01');
         $block->people()->sync([
             $this->anna->id => ['carry_share' => '30', 'credit_share' => '100'],
             $this->ben->id => ['carry_share' => '70', 'credit_share' => '0'],
@@ -116,7 +121,10 @@ class SteeringTest extends TestCase
 
     public function test_a_block_without_a_key_is_borne_equally_and_credits_nobody(): void
     {
-        BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Software', 'kind' => 'running', 'plan_amount' => '200.00']);
+        $software = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Software', 'kind' => 'running', 'plan_amount' => '200.00']);
+        $account = $this->makeAccount('6039', 'Software', AccountType::Expense);
+        $software->accounts()->sync([$account->id]);
+        $this->cost($account, '200.00', '2026-04-01');
 
         $people = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['people'])->keyBy('name');
 
@@ -379,5 +387,27 @@ class SteeringTest extends TestCase
                 'share' => $share,
             ]);
         }
+    }
+
+    public function test_the_actual_is_borne_and_the_credit_follows_the_plan(): void
+    {
+        // Half the rent is still to come: only what is booked is borne.
+        $block = BudgetGroup::query()->where('name', 'Rent')->sole();
+        $block->update(['plan_amount' => '2000.00']);
+
+        $rent = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['blocks'])->keyBy('name')['Rent'];
+
+        $this->assertSame('1000.00', $rent['actual']);
+        $this->assertSame('-300.00', $rent['people'][$this->anna->id]['burden']);
+        $this->assertSame('-700.00', $rent['people'][$this->ben->id]['burden']);
+        $this->assertSame('2000.00', $rent['people'][$this->anna->id]['credit']);
+    }
+
+    private function cost(Account $account, string $amount, string $date): void
+    {
+        app(LedgerService::class)->postEntry($this->organization->id, new JournalEntryData($date, null, 'Cost', [
+            new JournalLineData(accountId: (string) $account->id, debit: $amount, credit: '0'),
+            new JournalLineData(accountId: (string) $this->bank->id, debit: '0', credit: $amount),
+        ]));
     }
 }

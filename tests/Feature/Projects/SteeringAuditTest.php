@@ -96,7 +96,11 @@ class SteeringAuditTest extends TestCase
         $area = $this->makeProject('AREA', kind: ProjectKind::Area);
         $this->share($area, [$this->anna->id => '50', $this->ben->id => '50']);
         Employee::factory()->for($this->organization)->create(['first_name' => 'Carla', 'last_name' => 'C', 'gross_salary' => '0.00']);
-        BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Software', 'kind' => 'running', 'plan_amount' => '900.00']);
+        $block = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Software', 'kind' => 'running', 'plan_amount' => '900.00']);
+        // The people bear what is booked.
+        $software = $this->makeAccount('6039', 'Software', AccountType::Expense);
+        $block->accounts()->sync([$software->id]);
+        $this->postSimpleEntry('2026-03-01', 'SW', '900.00', $software, $this->bank);
 
         $people = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['people'])->keyBy('name');
 

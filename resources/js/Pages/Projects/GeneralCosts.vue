@@ -39,9 +39,9 @@ const num = v => Number(v ?? 0)
 const open = reactive({})
 const toggle = key => { open[key] = !open[key] }
 const totalOf = id => props.steering.blocks.reduce((sum, b) => sum + num(b.people[id]?.effect), 0)
-// What is booked so far, after the part moved to customer jobs.
-const actualOf = id => props.groups.find(g => g.id === id)?.actual ?? 0
-const actualTotal = computed(() => props.steering.blocks.reduce((sum, b) => sum + num(actualOf(b.id)), 0))
+// What is booked so far, after the part moved to customer jobs; this is
+// what the people bear.
+const actualTotal = computed(() => props.steering.blocks.reduce((sum, b) => sum + num(b.actual), 0))
 
 // An open block lists the bookings behind its actual, loaded on first open
 // and again after every change of the page data (an allocation moves the
@@ -162,7 +162,7 @@ function editBlock(block) {
                       </span>
                     </td>
                     <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.plan) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(actualOf(block.id)) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.actual) }}</td>
                     <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">
                       {{ formatCurrency(block.people[person.employee_id]?.effect ?? 0) }}
                     </td>

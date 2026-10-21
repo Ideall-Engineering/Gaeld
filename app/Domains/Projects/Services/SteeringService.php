@@ -31,7 +31,8 @@ use Illuminate\Support\Facades\DB;
  * but never planned with. The value is the booked net once revenue
  * is booked, before that the expected amount less booked costs.
  * Effect of cost blocks: who did the work is credited the planned amount,
- * everyone bears their part by the carry key. Drawn: the planned drawings
+ * everyone bears their part of the actual by the carry key (2026-10-21:
+ * the booked costs are shared, not the plan). Drawn: the planned drawings
  * plus acquisitions; booked salary is shown beside it for comparison.
  */
 class SteeringService
@@ -44,6 +45,7 @@ class SteeringService
         private AcquisitionService $acquisitions,
         private RecurringExpensePlan $recurring,
         private ExpectedExpensesService $expected,
+        private PlanActualService $plans,
     ) {}
 
     /**
@@ -253,6 +255,9 @@ class SteeringService
             ->pluck('monthly_amount', 'account_id');
         $recurring = $this->recurring->forYear($organizationId, $year);
 
+        // What is booked on each block so far, less the part at customer jobs.
+        $actuals = array_column($this->plans->forYear($organizationId, $year)['groups'], 'actual', 'id');
+
         $credit = $zero();
         $burden = $zero();
         $blocks = [];
@@ -285,16 +290,18 @@ class SteeringService
             }
             $credited = $group->people->mapWithKeys(fn (Employee $e) => [$e->id => (string) data_get($e, 'pivot.credit_share')])->filter(fn ($s) => Money::isPositive($s))->all();
 
+            $actual = (string) ($actuals[$group->id] ?? '0.00');
             $row = [
                 'id' => $group->id,
                 'name' => $group->name,
                 'plan' => $plan,
                 'plan_fixed' => $group->plan_amount !== null,
+                'actual' => $actual,
                 'accounts' => $sources,
                 'carry_equal' => $carryEqual,
                 'people' => [],
             ];
-            $carryParts = $this->split($plan, $carry);
+            $carryParts = $this->split($actual, $carry);
             $creditParts = $credited === [] ? [] : $this->split($plan, $credited);
             foreach ($ids as $id) {
                 $c = $creditParts[$id] ?? '0.00';

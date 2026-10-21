@@ -3043,7 +3043,7 @@ return [
     'steering_projects_pipeline' => 'Mandats en vue',
     'steering_projects_possible' => 'Mandats possibles',
     'steering_blocks' => 'Frais généraux : qui supporte quoi',
-    'steering_blocks_desc' => 'Par bloc de coûts, la part que chaque personne supporte et un crédit pour la personne qui a fait le travail. Sur la base du plan.',
+    'steering_blocks_desc' => 'Par bloc de coûts, la part que chaque personne supporte et un crédit pour la personne qui a fait le travail. La part supportée se base sur le réel, le crédit sur le plan.',
     'steering_items' => 'Perçu',
     'steering_items_desc' => 'Salaire, 13e, cotisations patronales, forfaits et bonus de l’année par personne. Les acquisitions s’ajoutent automatiquement.',
     'steering_block_plan_fixed' => 'Plan saisi comme montant fixe dans le bloc de coûts.',
