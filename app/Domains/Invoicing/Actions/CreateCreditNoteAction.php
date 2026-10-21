@@ -3,6 +3,7 @@
 namespace App\Domains\Invoicing\Actions;
 
 use App\Domains\Invoicing\DTOs\InvoiceLineData;
+use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
@@ -51,9 +52,16 @@ class CreateCreditNoteAction
                 fn ($line) => new InvoiceLineData(
                     description: __('app.credit_note_line_prefix', ['description' => $line->description]),
                     quantity: $line->quantity,
-                    unitPrice: Money::negate((string) $line->unit_price),
+                    // A percentage discount keeps its rate; it applies to the
+                    // credited (negative) items and so lowers the credit.
+                    unitPrice: $line->type === InvoiceLineType::Discount && $line->discount_type === 'percentage'
+                        ? (string) $line->unit_price
+                        : Money::negate((string) $line->unit_price),
+                    type: $line->type,
+                    discountType: $line->discount_type,
                     vatRateId: $line->vat_rate_id,
                     sortOrder: $line->sort_order,
+                    unit: $line->unit,
                 )
             )->all();
 

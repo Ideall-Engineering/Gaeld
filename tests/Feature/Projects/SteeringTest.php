@@ -42,8 +42,10 @@ class SteeringTest extends TestCase
         $this->setUpOrganization();
         $this->setUpPostedEntryFixtures();
         $this->enableProjects();
-        $this->anna = Employee::factory()->for($this->organization)->create(['first_name' => 'Anna', 'last_name' => 'A']);
-        $this->ben = Employee::factory()->for($this->organization)->create(['first_name' => 'Ben', 'last_name' => 'B']);
+        // No salary: the worked example is about jobs and blocks (salaries
+        // still due are drawn as well, see test_salaries_still_due_are_drawn).
+        $this->anna = Employee::factory()->for($this->organization)->create(['first_name' => 'Anna', 'last_name' => 'A', 'gross_salary' => '0.00', 'expense_allowance' => '0.00']);
+        $this->ben = Employee::factory()->for($this->organization)->create(['first_name' => 'Ben', 'last_name' => 'B', 'gross_salary' => '0.00', 'expense_allowance' => '0.00']);
 
         $area = $this->makeProject('AREA', kind: ProjectKind::Area);
         $this->share($area->id, ['anna' => '50', 'ben' => '50']);

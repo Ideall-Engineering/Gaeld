@@ -154,12 +154,12 @@ class GenerateOpeningBalancesAction
             );
         }
 
-        return $this->ledger->postEntry($orgId, new JournalEntryData(
+        return $this->carryForward($this->ledger->postEntry($orgId, new JournalEntryData(
             date: $openingDate,
             reference: "OPENING-{$nextYear}",
             description: "Bilan d'ouverture {$nextYear}",
             lines: $lines,
-        ));
+        )));
     }
 
     /**
@@ -290,12 +290,23 @@ class GenerateOpeningBalancesAction
             $version++;
         }
 
-        return $this->ledger->postEntry($orgId, new JournalEntryData(
+        return $this->carryForward($this->ledger->postEntry($orgId, new JournalEntryData(
             date: $targetFiscalYear->start_date->toDateString(),
             reference: $reference,
             description: "Restatement des soldes d'ouverture {$targetYear}",
             lines: $lines,
-        ), $targetFiscalYear->id);
+        ), $targetFiscalYear->id));
+    }
+
+    /**
+     * Mark an opening as carried forward: its history is in the ledger, so
+     * cumulative balances leave it out (LedgerQueryService::CARRY_FORWARD_TYPE).
+     */
+    private function carryForward(JournalEntry $entry): JournalEntry
+    {
+        $entry->update(['type' => LedgerQueryService::CARRY_FORWARD_TYPE]);
+
+        return $entry;
     }
 
     private function computeBalance(Account $account, string $asOfDate): string
@@ -304,6 +315,7 @@ class GenerateOpeningBalancesAction
             ->whereHas('journalEntry', fn ($q) => $q
                 ->where('is_posted', true)
                 ->where('date', '<=', $asOfDate)
+                ->where(fn ($inner) => LedgerQueryService::withoutCarryForward($inner))
             );
 
         $debits = (string) (clone $query)->sum('debit');

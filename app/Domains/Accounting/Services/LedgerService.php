@@ -19,6 +19,7 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Projects\Services\LineAllocationService;
@@ -142,6 +143,7 @@ class LedgerService
             foreach ($lockedEntry->lines as $line) {
                 $this->createVatEntries($lockedEntry, $line, $vatRateIds);
             }
+            $this->reverseModuleVatEntries($lockedEntry);
             $this->flushCache($lockedEntry->organization_id);
             JournalDraftPosted::dispatch($lockedEntry);
 
@@ -437,6 +439,30 @@ class LedgerService
             }
 
             throw $exception;
+        }
+    }
+
+    /**
+     * A reversal of a module entry (invoice, expense) carries no VAT on its
+     * lines; the module wrote the VAT entries itself. The reversal takes
+     * them over with the opposite sign, so the VAT report nets to zero.
+     */
+    private function reverseModuleVatEntries(JournalEntry $reversal): void
+    {
+        if ($reversal->reversal_of_entry_id === null
+            || VatEntry::query()->where('journal_entry_id', $reversal->id)->exists()) {
+            return;
+        }
+
+        foreach (VatEntry::query()->where('journal_entry_id', $reversal->reversal_of_entry_id)->orderBy('id')->get() as $original) {
+            VatEntry::create([
+                'journal_entry_id' => $reversal->id,
+                'vat_rate_id' => $original->vat_rate_id,
+                'base_amount' => Money::negate((string) $original->base_amount),
+                'vat_amount' => Money::negate((string) $original->vat_amount),
+                'type' => $original->type,
+                'figure' => $original->figure,
+            ]);
         }
     }
 

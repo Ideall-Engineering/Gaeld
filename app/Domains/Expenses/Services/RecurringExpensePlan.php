@@ -48,7 +48,7 @@ class RecurringExpensePlan
 
             $start = ($schedule->starts_on ?? $schedule->next_due_date)->copy()->startOfDay();
             $count = 0;
-            for ($day = $start; $day->lessThanOrEqualTo($to); $day = $schedule->frequency->nextDate($day)) {
+            for ($day = $start; $day->lessThanOrEqualTo($to); $day = $schedule->frequency->nextDate($day, $schedule->anchorDay())) {
                 if ($schedule->end_date !== null && $day->greaterThan($schedule->end_date)) {
                     break;
                 }

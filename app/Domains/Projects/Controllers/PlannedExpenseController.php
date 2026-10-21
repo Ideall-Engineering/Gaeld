@@ -59,14 +59,21 @@ class PlannedExpenseController extends Controller
     {
         $required = $partial ? 'sometimes' : 'required';
 
-        return $request->validate([
+        $validated = $request->validate([
             'date' => [$required, 'date'],
             'label' => [$required, 'string', 'max:120'],
             'amount' => [$required, 'numeric', 'between:-99999999999.99,99999999999.99'],
             'vat_amount' => ['sometimes', 'nullable', 'numeric', 'between:0,99999999999.99'],
             'account_code' => ['sometimes', 'nullable', 'string', 'max:20', Rule::exists('accounts', 'code')->where('organization_id', $currentOrg->id())],
             'done' => ['sometimes', 'boolean'],
-        ]) + ($partial ? [] : ['vat_amount' => $request->input('vat_amount') ?? '0']);
+        ]);
+
+        // An empty VAT field means no VAT.
+        if (! $partial || array_key_exists('vat_amount', $validated)) {
+            $validated['vat_amount'] = $validated['vat_amount'] ?? '0';
+        }
+
+        return $validated;
     }
 
     /** @return array<string, mixed> */

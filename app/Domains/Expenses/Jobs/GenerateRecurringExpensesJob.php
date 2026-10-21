@@ -90,7 +90,7 @@ class GenerateRecurringExpensesJob implements ShouldQueue
 
     private function advanceSchedule(RecurringExpense $recurring): void
     {
-        $nextDate = $recurring->frequency->nextDate($recurring->next_due_date);
+        $nextDate = $recurring->frequency->nextDate($recurring->next_due_date, $recurring->anchorDay());
 
         if ($recurring->end_date && $nextDate->greaterThan($recurring->end_date)) {
             $recurring->update([

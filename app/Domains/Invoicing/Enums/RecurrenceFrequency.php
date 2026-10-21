@@ -12,14 +12,27 @@ enum RecurrenceFrequency: string
     case Quarterly = 'quarterly';
     case Yearly = 'yearly';
 
-    public function nextDate(Carbon $from): Carbon
+    /**
+     * The due day after the given one. Months never overflow: a schedule on
+     * the 31st falls on the last day of shorter months instead of skipping
+     * them, and returns to its own day (the anchor) once the month allows.
+     */
+    public function nextDate(Carbon $from, ?int $anchorDay = null): Carbon
     {
-        return match ($this) {
-            self::Weekly => $from->copy()->addWeek(),
-            self::Monthly => $from->copy()->addMonth(),
-            self::Quarterly => $from->copy()->addMonths(3),
-            self::Yearly => $from->copy()->addYear(),
+        $months = match ($this) {
+            self::Weekly => null,
+            self::Monthly => 1,
+            self::Quarterly => 3,
+            self::Yearly => 12,
         };
+
+        if ($months === null) {
+            return $from->copy()->addWeek();
+        }
+
+        $next = $from->copy()->startOfMonth()->addMonthsNoOverflow($months);
+
+        return $next->day(min($anchorDay ?? $from->day, $next->daysInMonth));
     }
 
     public function label(): string

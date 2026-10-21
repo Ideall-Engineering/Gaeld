@@ -155,6 +155,9 @@ function openEdit(row) {
     journal_entry_id: row.journal_entry_id ?? '', notes: row.notes ?? '',
     people: row.people.map(p => ({ employee_id: p.employee_id, share: String(Number(p.share)) })),
   })
+  // Only a net typed in by hand stays; a computed one follows quantity,
+  // price and VAT when they change.
+  if (Math.abs(Number(row.net_amount) - Number(suggestedNet.value.toFixed(2))) < 0.005) form.net_amount = ''
   form.clearErrors()
   showForm.value = true
 }

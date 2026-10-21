@@ -116,6 +116,13 @@ class LedgerQueryService
      */
     public const STRUCTURAL_ENTRY_TYPES = ['year_end_closing', 'historical_summary'];
 
+    /**
+     * Opening entries the year-end closing posts restate balances whose
+     * history stays in the ledger. Balances summed over that history leave
+     * them out, or every year-end would count the balance sheet twice.
+     */
+    public const CARRY_FORWARD_TYPE = 'opening_carry_forward';
+
     /** Accounts listed per month in a chart tooltip before folding into an overflow row. */
     private const TOOLTIP_ITEM_LIMIT = 8;
 
@@ -399,8 +406,19 @@ class LedgerQueryService
                 ->where(fn ($inner) => $inner
                     ->whereNull('journal_entries.type')
                     ->orWhereNotIn('journal_entries.type', self::STRUCTURAL_ENTRY_TYPES)))
+            ->where(fn ($query) => self::withoutCarryForward($query))
             ->when($fromDate, fn ($query, $date) => $query->where('journal_entries.date', '>=', $date))
             ->when($toDate, fn ($query, $date) => $query->where('journal_entries.date', '<=', $date));
+    }
+
+    /**
+     * Leaves out the carry-forward openings (see {@see CARRY_FORWARD_TYPE}).
+     *
+     * @param  \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder<*>  $query
+     */
+    public static function withoutCarryForward($query, string $table = 'journal_entries'): void
+    {
+        $query->whereNull("{$table}.type")->orWhere("{$table}.type", '<>', self::CARRY_FORWARD_TYPE);
     }
 
     /**
@@ -526,6 +544,7 @@ class LedgerQueryService
                     ->where('journal_entries.organization_id', $organizationId)
                     ->where('journal_entries.is_posted', true)
                     ->when($asOfDate, fn ($query, $date) => $query->where('journal_entries.date', '<=', $date))
+                    ->where(fn ($query) => self::withoutCarryForward($query))
                     ->where('accounts.type', $type->value)
                     ->where(fn ($query) => $this->applyCodePrefixes($query, $codePrefixes))
                     ->selectRaw('COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')

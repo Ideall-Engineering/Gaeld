@@ -198,11 +198,12 @@ class ExpenseService
             // Create VatEntry record for the VAT report (Input VAT).
             // base_amount is NET (= expense->amount under our convention).
             if ($hasVat) {
+                // A supplier credit note takes its VAT off the input tax.
                 VatEntry::create([
                     'journal_entry_id' => $journalEntry->id,
                     'vat_rate_id' => $expense->vat_rate_id,
-                    'base_amount' => (string) $expense->amount,
-                    'vat_amount' => $vatAmount,
+                    'base_amount' => $isCreditNote ? Money::negate((string) $expense->amount) : (string) $expense->amount,
+                    'vat_amount' => $isCreditNote ? Money::negate($vatAmount) : $vatAmount,
                     'type' => VatEntryType::Input,
                 ]);
             }
@@ -214,8 +215,8 @@ class ExpenseService
                     VatEntry::create([
                         'journal_entry_id' => $journalEntry->id,
                         'vat_rate_id' => $expense->vat_rate_id,
-                        'base_amount' => (string) $expense->amount,
-                        'vat_amount' => $vatAmount,
+                        'base_amount' => $isCreditNote ? Money::negate((string) $expense->amount) : (string) $expense->amount,
+                        'vat_amount' => $isCreditNote ? Money::negate($vatAmount) : $vatAmount,
                         'type' => $entryType,
                     ]);
                 }

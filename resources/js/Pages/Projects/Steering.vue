@@ -60,11 +60,16 @@ function editBlock(block) {
   if (editingBlock.value) showBlockForm.value = true
 }
 const num = v => Number(v ?? 0)
+// Shown as an outflow, without a "-0.00" for nothing.
+const out = v => (num(v) === 0 ? 0 : -num(v))
 
 // The open payments of the year and, in a second tab, of the next one.
 const openYear = ref(props.year)
 const openPayments = computed(() => (openYear.value === props.year ? props.steering.open_payments : props.steering.open_payments_next_year) ?? [])
 const openTotal = computed(() => openPayments.value.reduce((sum, p) => sum + num(p.expected), 0))
+// Invoices sent and not paid yet: they come in on their due day.
+const openInvoices = computed(() => props.steering.open_invoices ?? [])
+const openInvoicesTotal = computed(() => openInvoices.value.reduce((sum, i) => sum + num(i.gross), 0))
 const today = new Date().toISOString().slice(0, 10)
 
 // The day a payment is expected, changed right in the list.
@@ -158,7 +163,7 @@ const bankOptions = computed(() => ({ ...axisOptions.value, plugins: { ...axisOp
 // Drawn, one foldable row per person: plan items and acquisitions.
 const drawnRows = computed(() => people.value
   .map(p => ({ ...p, items: itemsOf(p.employee_id) }))
-  .filter(p => p.items.length || num(p.acquisitions) !== 0))
+  .filter(p => p.items.length || num(p.acquisitions) !== 0 || num(p.still_due) !== 0))
 
 const itemForm = useForm({ year: props.year, employee_id: props.employees[0]?.id ?? '', label: '', amount: '' })
 function addItem() {
@@ -226,7 +231,7 @@ function removeItem(item) {
                           <tr v-for="job in person.jobs" :key="job.id">
                             <td class="py-1">
                               <Link :href="`/projects/${job.id}/report?from=${year}-01-01&to=${year}-12-31`" class="hover:underline">{{ job.name }}</Link>
-                              <span class="text-[hsl(var(--muted-foreground))]"><template v-if="job.group"> · {{ job.group }}</template> · {{ t('project_status_' + job.status) }}<template v-if="!job.booked"> · {{ t('person_expected') }}</template></span>
+                              <span class="text-[hsl(var(--muted-foreground))]"><template v-if="job.group"> · {{ job.group }}</template> · {{ job.general ? t('steering_general_job') : t('project_status_' + job.status) }}<template v-if="!job.booked"> · {{ t('person_expected') }}</template><template v-else-if="Number(job.open_part) !== 0"> · {{ t('steering_invoice_open', { amount: formatCurrency(job.open_part) }) }}</template></span>
                             </td>
                             <td class="py-1 text-right tabular-nums text-[hsl(var(--muted-foreground))]">{{ Number(job.share) }} %</td>
                             <td class="py-1 text-right tabular-nums">{{ formatCurrency(job.part) }}</td>
@@ -281,7 +286,11 @@ function removeItem(item) {
                             <td class="py-1"><Link :href="`/projects/acquisitions?year=${year}`" class="hover:underline">{{ t('acquisitions') }}</Link></td>
                             <td class="py-1 text-right tabular-nums">{{ formatCurrency(-person.acquisitions) }}</td>
                           </tr>
-                          <tr v-if="!itemsOf(person.employee_id).length && Number(person.acquisitions) === 0">
+                          <tr v-if="Number(person.still_due) !== 0">
+                            <td class="py-1">{{ t('steering_still_due') }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(-person.still_due) }}</td>
+                          </tr>
+                          <tr v-if="!itemsOf(person.employee_id).length && Number(person.acquisitions) === 0 && Number(person.still_due) === 0">
                             <td colspan="2" class="py-1 text-[hsl(var(--muted-foreground))]">{{ t('steering_drawn_empty') }}</td>
                           </tr>
                         </tbody>
@@ -309,12 +318,12 @@ function removeItem(item) {
                             <td class="py-1">{{ t('steering_play_expected', { year }) }}</td>
                             <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.contribution_expected) }}</td>
                           </tr>
-                          <tr v-for="job in person.jobs.filter(j => !j.booked)" :key="'exp-' + job.id" class="text-[hsl(var(--muted-foreground))]">
+                          <tr v-for="job in person.jobs.filter(j => !j.booked || Number(j.open_part) !== 0)" :key="'exp-' + job.id" class="text-[hsl(var(--muted-foreground))]">
                             <td class="py-0.5 pl-4">
                               <Link :href="`/projects/${job.id}/report?from=${year}-01-01&to=${year}-12-31`" class="hover:underline">{{ job.name }}</Link>
-                              <span> · {{ t('project_status_' + job.status) }}<template v-if="job.billing"> · {{ job.billing }}</template></span>
+                              <span> · {{ job.booked ? t('steering_invoice_open_short') : t('project_status_' + job.status) }}<template v-if="!job.booked && job.billing"> · {{ job.billing }}</template></span>
                             </td>
-                            <td class="py-0.5 text-right tabular-nums">{{ formatCurrency(job.part) }}</td>
+                            <td class="py-0.5 text-right tabular-nums">{{ formatCurrency(job.booked ? job.open_part : job.part) }}</td>
                           </tr>
                           <tr>
                             <td class="py-1">{{ t('steering_effect') }}</td>
@@ -449,6 +458,39 @@ function removeItem(item) {
               </tbody>
             </table>
           </div>
+
+          <template v-if="openYear === year">
+            <h3 class="mb-1 mt-6 text-sm font-semibold">{{ t('steering_open_invoices') }}</h3>
+            <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_open_invoices_desc') }}</p>
+            <p v-if="!openInvoices.length" class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_open_invoices_none') }}</p>
+            <div v-else class="overflow-x-auto">
+              <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
+                <thead>
+                  <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
+                    <th class="pb-2">{{ t('invoices') }}</th>
+                    <th class="pb-2">{{ t('project_kind_project') }}</th>
+                    <th class="pb-2">{{ t('due_date') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_open_invoices_gross') }}</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[hsl(var(--border))]">
+                  <tr v-for="inv in openInvoices" :key="inv.id">
+                    <td class="py-1">
+                      <Link :href="`/invoices/${inv.id}`" class="hover:underline">{{ inv.number }}</Link>
+                      <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ inv.customer }}</div>
+                    </td>
+                    <td class="py-1 text-xs">{{ inv.job ?? '' }}</td>
+                    <td class="py-1 tabular-nums" :class="inv.due_date && inv.due_date < today ? 'text-[hsl(var(--destructive))]' : ''">{{ inv.due_date ? formatDate(inv.due_date) : '' }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(inv.gross) }}</td>
+                  </tr>
+                  <tr class="font-semibold">
+                    <td class="py-2" colspan="3">{{ t('total') }}</td>
+                    <td class="py-2 text-right tabular-nums">{{ formatCurrency(openInvoicesTotal) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
         </CardContent>
       </Card>
 
@@ -574,7 +616,7 @@ function removeItem(item) {
                 </tr>
                 <tr class="border-b border-[hsl(var(--border))]">
                   <td class="py-1">{{ t('steering_outlook_expenses') }}</td>
-                  <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">{{ formatCurrency(-o.expenses) }}</td>
+                  <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">{{ formatCurrency(out(o.expenses)) }}</td>
                 </tr>
                 <tr class="font-semibold">
                   <td class="py-2">{{ t('steering_outlook_result') }}</td>
@@ -621,6 +663,8 @@ function removeItem(item) {
                     <th class="pb-2 text-right">{{ t('steering_outlook_income') }}</th>
                     <th class="pb-2 text-right">{{ t('steering_outlook_expenses') }}</th>
                     <th class="pb-2 text-right">{{ t('steering_outlook_result_cumulative') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_cash_in') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_cash_out') }}</th>
                     <th class="pb-2 text-right">{{ t('steering_outlook_bank') }}</th>
                   </tr>
                 </thead>
@@ -628,8 +672,10 @@ function removeItem(item) {
                   <tr v-for="m in outlookMonths" :key="m.key">
                     <td class="py-1">{{ monthLabel(m.key) }}</td>
                     <td class="py-1 text-right tabular-nums">{{ formatCurrency(m.income) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(-m.expenses) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(out(m.expenses)) }}</td>
                     <td class="py-1 text-right tabular-nums" :class="num(m.result) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ formatCurrency(m.result) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(m.cash_in) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(out(m.cash_out)) }}</td>
                     <td class="py-1 text-right tabular-nums" :class="num(m.bank) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ formatCurrency(m.bank) }}</td>
                   </tr>
                 </tbody>
@@ -743,6 +789,12 @@ function removeItem(item) {
                     <td></td>
                     <td class="py-1"><Link :href="`/projects/acquisitions?year=${year}`" class="hover:underline">{{ t('acquisitions') }}</Link></td>
                     <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.acquisitions) }}</td>
+                    <td></td>
+                  </tr>
+                  <tr v-if="num(person.still_due) !== 0" class="text-[hsl(var(--muted-foreground))]">
+                    <td></td>
+                    <td class="py-1">{{ t('steering_still_due') }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.still_due) }}</td>
                     <td></td>
                   </tr>
                 </template>

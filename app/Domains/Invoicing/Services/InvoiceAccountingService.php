@@ -132,8 +132,9 @@ class InvoiceAccountingService
                     VatEntry::create([
                         'journal_entry_id' => $journalEntry->id,
                         'vat_rate_id' => $vatRateId,
-                        'base_amount' => $netAmount,
-                        'vat_amount' => $vatAmount,
+                        // A credit note takes its VAT off the output tax.
+                        'base_amount' => $isCreditNote ? Money::negate($netAmount) : $netAmount,
+                        'vat_amount' => $isCreditNote ? Money::negate($vatAmount) : $vatAmount,
                         'type' => VatEntryType::Output,
                     ]);
                 }

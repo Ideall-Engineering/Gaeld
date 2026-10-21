@@ -114,6 +114,15 @@ class RecurringExpense extends Model
     }
 
     /**
+     * The day of the month the schedule is due on: that of its first due
+     * day, so a schedule on the 31st keeps the 31st after a short month.
+     */
+    public function anchorDay(): int
+    {
+        return ($this->starts_on ?? $this->next_due_date)->day;
+    }
+
+    /**
      * @param  Builder<static>  $query
      * @return Builder<static>
      */

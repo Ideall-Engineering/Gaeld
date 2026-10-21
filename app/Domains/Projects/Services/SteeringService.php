@@ -5,6 +5,8 @@ namespace App\Domains\Projects\Services;
 use App\Domains\Accounting\Models\Budget;
 use App\Domains\Expenses\Services\RecurringExpensePlan;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
+use App\Domains\Invoicing\Enums\InvoiceType;
+use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Projects\Enums\ProjectKind;
@@ -77,6 +79,14 @@ class SteeringService
         $ids = $people->pluck('id')->all();
         $zero = fn () => array_fill_keys($ids, '0.00');
 
+        // The owners: everyone named in a job's key. What no key names
+        // (a cost block without carry key, general costs) they bear in equal
+        // parts; other staff on the payroll bear nothing.
+        $keyed = ProjectShare::withoutGlobalScopes()->where('organization_id', $organizationId)->pluck('employee_id')->unique()->all();
+        /** @var list<string> $owners */
+        $owners = array_values(array_filter($ids, fn (string $id) => in_array($id, $keyed, true))) ?: array_values($ids);
+        $ownersKey = self::equalKey($owners);
+
         // 1. Contribution of customer projects, by status
         $projects = Project::withoutGlobalScopes()->where('organization_id', $organizationId)->get();
         $byId = $projects->keyBy('id');
@@ -92,10 +102,44 @@ class SteeringService
         $prospectJobs = array_fill_keys($ids, []);
         $laterJobs = array_fill_keys($ids, []);
         $later = $zero();
+        $general = $zero();
         $openPayments = [];
+        $openByJob = $this->openByJob($organizationId);
 
         foreach ($projects as $project) {
+            // Projects, internal jobs ("Allgemein") and lost jobs count with
+            // what is booked on them, by their key or else by the owners.
             if ($project->kind !== ProjectKind::Project || $project->status === ProjectStatus::Lost) {
+                $net = Money::subtract($booked[$project->id]['revenue'] ?? '0.00', $booked[$project->id]['expenses'] ?? '0.00');
+                if (Money::compare($net, '0') === 0) {
+                    continue;
+                }
+                $key = $this->keyFor($project, $byId, $shares) ?: $ownersKey;
+                if ($key === []) {
+                    $unshared = Money::add($unshared, $net);
+
+                    continue;
+                }
+                foreach ($this->split($net, $key) as $employeeId => $part) {
+                    if (isset($general[$employeeId])) {
+                        $general[$employeeId] = Money::add($general[$employeeId], $part);
+                        $jobs[$employeeId][] = [
+                            'id' => $project->id,
+                            'code' => $project->code,
+                            'name' => $project->name,
+                            'group' => $this->groupOf($project, $byId),
+                            'status' => $project->status->value,
+                            'booked' => true,
+                            'general' => true,
+                            'billing' => null,
+                            'share' => (string) (float) $key[$employeeId],
+                            'value' => $net,
+                            'part' => $part,
+                            'open_part' => '0.00',
+                        ];
+                    }
+                }
+
                 continue;
             }
             $value = $this->valueOf($project, $booked[$project->id] ?? null, $year);
@@ -132,7 +176,9 @@ class SteeringService
 
                 continue;
             }
+            $openParts = isset($openByJob[$project->id]) ? $this->split($openByJob[$project->id], $key) : [];
             $entry = fn (string $employeeId, string $amount, string $part) => [
+                'open_part' => $openParts[$employeeId] ?? '0.00',
                 'id' => $project->id,
                 'code' => $project->code,
                 'name' => $project->name,
@@ -167,8 +213,9 @@ class SteeringService
             }
         }
 
-        // Only what is being done or done is planned with.
-        $contribution = $zero();
+        // Only what is being done or done is planned with, plus what is
+        // booked on projects, internal and lost jobs.
+        $contribution = $general;
         $prospects = $zero();
         foreach ($byStatus as $status => $amounts) {
             $counted = in_array(ProjectStatus::from($status), self::COUNTED, true);
@@ -219,13 +266,9 @@ class SteeringService
 
             $carry = $group->people->mapWithKeys(fn (Employee $e) => [$e->id => (string) data_get($e, 'pivot.carry_share')])->filter(fn ($s) => Money::isPositive($s))->all();
             $carryEqual = $carry === [];
-            if ($carry === [] && $ids !== []) {
-                // Nobody named: everyone bears an equal part, the last one
-                // the remainder, so the whole plan is borne.
-                $equal = bcdiv('100', (string) count($ids), 4);
-                $carry = array_fill_keys($ids, $equal);
-                $last = $ids[array_key_last($ids)];
-                $carry[$last] = bcsub('100', bcmul($equal, (string) (count($ids) - 1), 4), 4);
+            if ($carry === []) {
+                // Nobody named: the owners bear equal parts.
+                $carry = $ownersKey;
             }
             $credited = $group->people->mapWithKeys(fn (Employee $e) => [$e->id => (string) data_get($e, 'pivot.credit_share')])->filter(fn ($s) => Money::isPositive($s))->all();
 
@@ -267,12 +310,25 @@ class SteeringService
         $acquired = $this->acquisitions->chargesByPerson($organizationId, $from, $to);
         $salaries = $this->bookedSalaries($organizationId, $year);
 
+        // Spec 012: the expenses still expected, beside the payments; not
+        // worked out for the inner call that only fetches next year's.
+        $expected = $withNextYear ? $this->expected->forYear($organizationId, $year) : null;
+        // Salaries still to pay this year, with the employer's part, are
+        // drawn as well: the plan items only hold what is paid out.
+        $stillDue = [];
+        foreach ($expected['rows'] ?? [] as $row) {
+            if ($row['source'] === 'salary' && isset($row['employee_id'])) {
+                $stillDue[$row['employee_id']] = Money::add($stillDue[$row['employee_id']] ?? '0.00', Money::add($row['amount'], $row['employer']));
+            }
+        }
+
         $rows = [];
         foreach ($people as $person) {
             $id = $person->id;
-            $received = array_reduce($jobs[$id], fn (string $sum, array $job) => $job['booked'] ? Money::add($sum, $job['part']) : $sum, '0.00');
+            // Received is paid: booked, less what open invoices still owe.
+            $received = array_reduce($jobs[$id], fn (string $sum, array $job) => $job['booked'] ? Money::add($sum, Money::subtract($job['part'], $job['open_part'])) : $sum, '0.00');
             $planned = $items->where('employee_id', $id)->reduce(fn (string $sum, SteeringItem $i) => Money::add($sum, (string) $i->amount), '0.00');
-            $drawn = Money::add($planned, $acquired[$id] ?? '0.00');
+            $drawn = Money::add(Money::add($planned, $acquired[$id] ?? '0.00'), $stillDue[$id] ?? '0.00');
             $value = Money::add($contribution[$id], Money::subtract($credit[$id], $burden[$id]));
             $play = Money::subtract($value, $drawn);
 
@@ -295,6 +351,8 @@ class SteeringService
                 'value' => $value,
                 'planned_items' => $planned,
                 'acquisitions' => $acquired[$id] ?? '0.00',
+                'still_due' => $stillDue[$id] ?? '0.00',
+                'general' => $general[$id],
                 'drawn' => $drawn,
                 'booked_salary' => $salaries[$id] ?? '0.00',
                 'play' => $play,
@@ -311,13 +369,12 @@ class SteeringService
         );
         $openNext = $withNextYear ? $this->forYear($organizationId, $year + 1, false)['open_payments'] : [];
 
-        // Spec 012: the expenses still expected, beside the payments, and for
-        // the running year the outlook month by month; not worked out for
-        // the inner call that only fetches next year's payments.
-        $expected = $withNextYear ? $this->expected->forYear($organizationId, $year) : null;
+        // For the running year the outlook month by month, with the open
+        // invoices coming in on their due day.
         $expectedNext = $withNextYear ? $this->expected->forYear($organizationId, $year + 1) : null;
+        $openInvoices = $withNextYear ? $this->openInvoices($organizationId, $byId) : [];
         $outlook = $expected !== null && $expectedNext !== null && $year === (int) now()->year
-            ? $this->expected->outlook($organizationId, [$year => $open, $year + 1 => $openNext], [$year => $expected, $year + 1 => $expectedNext])
+            ? $this->expected->outlook($organizationId, [$year => $open, $year + 1 => $openNext], [$year => $expected, $year + 1 => $expectedNext], $openInvoices)
             : null;
 
         return [
@@ -330,6 +387,7 @@ class SteeringService
             'unshared' => $unshared,
             'open_payments' => $open,
             'open_payments_next_year' => $openNext,
+            'open_invoices' => $openInvoices,
             'expected_expenses' => $expected,
             'expected_expenses_next_year' => $expectedNext,
             'outlook' => $outlook,
@@ -540,6 +598,102 @@ class SteeringService
     }
 
     /**
+     * Equal parts in percent for the given people, the last one taking the
+     * remainder so the parts add up to 100.
+     *
+     * @param  list<string>  $ids
+     * @return array<string, string>
+     */
+    private static function equalKey(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+        $equal = bcdiv('100', (string) count($ids), 4);
+        $key = array_fill_keys($ids, $equal);
+        $key[$ids[array_key_last($ids)]] = bcsub('100', bcmul($equal, (string) (count($ids) - 1), 4), 4);
+
+        return $key;
+    }
+
+    /**
+     * Invoices sent and not yet paid in full: what each still owes, with
+     * VAT (gross) and without (net), less payments and credit notes.
+     *
+     * @param  Collection<int, Project>  $byId
+     * @return list<array<string, mixed>>
+     */
+    public function openInvoices(string $organizationId, Collection $byId): array
+    {
+        $invoices = Invoice::withoutGlobalScopes()
+            ->where('organization_id', $organizationId)
+            ->whereNull('deleted_at')
+            ->where('type', InvoiceType::Invoice->value)
+            ->whereIn('status', [InvoiceStatus::Sent->value, InvoiceStatus::Overdue->value])
+            ->withSum('payments', 'amount')
+            ->with('customer:id,name')
+            ->orderBy('due_date')
+            ->get();
+        if ($invoices->isEmpty()) {
+            return [];
+        }
+
+        $credited = Invoice::withoutGlobalScopes()
+            ->where('organization_id', $organizationId)
+            ->whereNull('deleted_at')
+            ->where('type', InvoiceType::CreditNote->value)
+            ->whereNotIn('status', [InvoiceStatus::Draft->value, InvoiceStatus::Cancelled->value])
+            ->whereIn('related_invoice_id', $invoices->pluck('id'))
+            ->get(['related_invoice_id', 'total'])
+            ->groupBy('related_invoice_id')
+            ->map(fn ($notes) => $notes->reduce(fn (string $sum, Invoice $note) => Money::add($sum, Money::absoluteAmount((string) $note->total)), '0.00'));
+        $jobs = InvoiceProject::withoutGlobalScopes()->whereIn('invoice_id', $invoices->pluck('id'))->pluck('cost_center_id', 'invoice_id');
+
+        $open = [];
+        foreach ($invoices as $invoice) {
+            $gross = Money::subtract(Money::subtract((string) $invoice->total, $invoice->amountPaid()), (string) ($credited[$invoice->id] ?? '0.00'));
+            if (! Money::isPositive($gross)) {
+                continue;
+            }
+            $total = (string) $invoice->total;
+            $net = Money::isPositive($total)
+                ? Money::round(bcdiv(bcmul($gross, Money::of((string) $invoice->subtotal), 8), $total, 8))
+                : $gross;
+            $jobId = isset($jobs[$invoice->id]) ? (int) $jobs[$invoice->id] : null;
+            $job = $jobId !== null ? $byId->get($jobId) : null;
+            $open[] = [
+                'id' => $invoice->id,
+                'number' => $invoice->number,
+                'customer' => $invoice->customer?->name,
+                'due_date' => $invoice->due_date?->toDateString(),
+                'gross' => $gross,
+                'net' => $net,
+                'job_id' => $jobId,
+                'job' => $job !== null ? "{$job->code} {$job->name}" : null,
+            ];
+        }
+
+        return $open;
+    }
+
+    /**
+     * What open invoices still owe per job, net.
+     *
+     * @return array<int, string> job id => net amount
+     */
+    private function openByJob(string $organizationId): array
+    {
+        $byJob = [];
+        foreach ($this->openInvoices($organizationId, collect()) as $invoice) {
+            if ($invoice['job_id'] !== null) {
+                $byJob[$invoice['job_id']] = Money::add($byJob[$invoice['job_id']] ?? '0.00', $invoice['net']);
+            }
+        }
+
+        return $byJob;
+    }
+
+    /**
      * @param  array<string, string>  $key  employee id => percent
      * @return array<string, string>
      */
@@ -581,7 +735,7 @@ class SteeringService
      */
     private function totals(array $rows): array
     {
-        $fields = ['contribution', 'credit', 'burden', 'effect', 'value', 'planned_items', 'acquisitions', 'drawn', 'booked_salary', 'play', 'prospects', 'later'];
+        $fields = ['contribution', 'general', 'credit', 'burden', 'effect', 'value', 'planned_items', 'acquisitions', 'still_due', 'drawn', 'booked_salary', 'play', 'prospects', 'later'];
         $totals = array_fill_keys($fields, '0.00');
         foreach ($rows as $row) {
             foreach ($fields as $field) {

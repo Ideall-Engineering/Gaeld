@@ -4,6 +4,7 @@ namespace App\Domains\Projects\Services;
 
 use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\VatPeriodLockService;
 use App\Domains\Accounting\Services\VatReportService;
@@ -112,16 +113,19 @@ class ExpectedExpensesService
 
     /**
      * Month by month from the running month to the end of next year: income
-     * and expenses still expected, the result added up, and the bank balance
-     * from today's on, with income at its expected amount and expenses gross.
-     * Overdue amounts fall into the running month, undated ones into December
-     * of their year.
+     * and expenses still expected (net, for the result), and the bank
+     * balance from today's on. The bank counts in money as it moves: jobs at
+     * their expected amount plus VAT, open invoices at what they still owe on
+     * their due day, expenses gross, and the VAT those future amounts bring
+     * (output less input) in the month its quarter is due. Overdue amounts
+     * fall into the running month, undated ones into December of their year.
      *
      * @param  array<int, list<array<string, mixed>>>  $payments  year => open payments
      * @param  array<int, array<string, mixed>>  $expenses  year => result of forYear()
+     * @param  list<array<string, mixed>>  $invoices  open invoices (SteeringService::openInvoices)
      * @return array{bank_today: string, months: list<array<string, mixed>>}
      */
-    public function outlook(string $organizationId, array $payments, array $expenses, ?Carbon $today = null): array
+    public function outlook(string $organizationId, array $payments, array $expenses, array $invoices = [], ?Carbon $today = null): array
     {
         $today = ($today ?? now())->copy()->startOfDay();
         $first = $today->copy()->startOfMonth();
@@ -134,19 +138,36 @@ class ExpectedExpensesService
         }
         $income = array_fill_keys($keys, '0.00');
         $costs = array_fill_keys($keys, '0.00');
+        $cashIn = array_fill_keys($keys, '0.00');
         $cashOut = array_fill_keys($keys, '0.00');
+        $vatByQuarter = [];
         $slot = function (?string $date, int $year) use ($first, $income): ?string {
             $key = $date === null ? "{$year}-12" : substr($date, 0, 7);
 
             return $key < $first->format('Y-m') ? $first->format('Y-m') : (isset($income[$key]) ? $key : null);
         };
+        $addVat = function (string $key, string $amount) use (&$vatByQuarter): void {
+            $quarter = substr($key, 0, 4).'-'.intdiv((int) substr($key, 5, 2) + 2, 3);
+            $vatByQuarter[$quarter] = Money::add($vatByQuarter[$quarter] ?? '0.00', $amount);
+        };
+        $rate = (string) (VatRate::withoutGlobalScopes()->where('organization_id', $organizationId)->where('is_default', true)->value('rate') ?? '0');
 
         foreach ($payments as $year => $list) {
             foreach ($list as $payment) {
                 $key = $slot($payment['sort'] ?? null, (int) $year);
                 if ($key !== null) {
+                    $vat = Money::percentage((string) $payment['expected'], $rate);
                     $income[$key] = Money::add($income[$key], (string) $payment['expected']);
+                    $cashIn[$key] = Money::add($cashIn[$key], Money::add((string) $payment['expected'], $vat));
+                    $addVat($key, $vat);
                 }
+            }
+        }
+        foreach ($invoices as $invoice) {
+            $key = $slot($invoice['due_date'] ?? null, (int) $today->year);
+            if ($key !== null) {
+                // Its VAT is booked already and paid with its quarter.
+                $cashIn[$key] = Money::add($cashIn[$key], (string) $invoice['gross']);
             }
         }
         foreach ($expenses as $year => $result) {
@@ -157,8 +178,17 @@ class ExpectedExpensesService
                 }
                 if ($row['in_result']) {
                     $costs[$key] = Money::add($costs[$key], $row['amount']);
+                    // Input VAT comes back with the quarter's settlement.
+                    $addVat($key, Money::negate(Money::subtract($row['gross'], $row['amount'])));
                 }
                 $cashOut[$key] = Money::add($cashOut[$key], $row['gross']);
+            }
+        }
+        foreach ($vatByQuarter as $quarter => $owed) {
+            [$y, $q] = array_map('intval', explode('-', $quarter));
+            $due = Carbon::create($y, $q * 3, 1)->endOfMonth()->startOfDay()->addDays(self::VAT_DUE_DAYS)->format('Y-m');
+            if (isset($cashOut[$due])) {
+                $cashOut[$due] = Money::add($cashOut[$due], $owed);
             }
         }
 
@@ -168,8 +198,8 @@ class ExpectedExpensesService
         $out = [];
         foreach ($keys as $key) {
             $result = Money::add($result, Money::subtract($income[$key], $costs[$key]));
-            $bank = Money::subtract(Money::add($bank, $income[$key]), $cashOut[$key]);
-            $out[] = ['key' => $key, 'income' => $income[$key], 'expenses' => $costs[$key], 'cash_out' => $cashOut[$key], 'result' => $result, 'bank' => $bank];
+            $bank = Money::subtract(Money::add($bank, $cashIn[$key]), $cashOut[$key]);
+            $out[] = ['key' => $key, 'income' => $income[$key], 'expenses' => $costs[$key], 'cash_in' => $cashIn[$key], 'cash_out' => $cashOut[$key], 'result' => $result, 'bank' => $bank];
         }
 
         return ['bank_today' => $bankToday, 'months' => $out];
@@ -230,13 +260,19 @@ class ExpectedExpensesService
             ->map(fn (SalarySlip $s) => "{$s->employee_id}-{$s->period_month}")
             ->flip();
 
-        // The accounts the posting would use (PostPayrollAction).
-        $salaryAccount = Organization::find($organizationId)->payroll_salary_account_code ?? AccountCode::SALARIES;
-        $contributionAccounts = DeductionRate::withoutGlobalScopes()
+        // The accounts the posting would use (PostPayrollAction): a rate set
+        // for one person wins over the organization's rate of the same code.
+        $organization = Organization::find($organizationId);
+        $salaryAccount = $organization->payroll_salary_account_code ?? AccountCode::SALARIES;
+        $reimbursementAccount = $organization->payroll_reimbursement_account_code ?? AccountCode::GENERAL_EXPENSE;
+        $contributionAccounts = [];
+        DeductionRate::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
-            ->whereNull('employee_id')
-            ->pluck('expense_account_code', 'code')
-            ->all();
+            ->orderByRaw('employee_id IS NOT NULL')
+            ->get(['employee_id', 'code', 'expense_account_code'])
+            ->each(function (DeductionRate $rate) use (&$contributionAccounts): void {
+                $contributionAccounts[$rate->employee_id ?? ''][$rate->code] = $rate->expense_account_code;
+            });
 
         $rows = [];
         for ($month = $fromMonth; $month <= 12; $month++) {
@@ -247,13 +283,29 @@ class ExpectedExpensesService
                     continue;
                 }
                 $cost = self::slipCost((string) $slip->gross_salary, (array) $slip->deductions, (array) $slip->adjustments);
+                $personEmployer = '0.00';
                 foreach (self::employerContributions((array) $slip->deductions) as $code => $amount) {
-                    $account = $contributionAccounts[$code] ?? AccountCode::SOCIAL_CHARGES_EMPLOYER;
+                    $account = $contributionAccounts[$slip->employee_id][$code]
+                        ?? $contributionAccounts[''][$code]
+                        ?? AccountCode::SOCIAL_CHARGES_EMPLOYER;
                     $employer[$account] = Money::add($employer[$account] ?? '0.00', $amount);
+                    $personEmployer = Money::add($personEmployer, $amount);
                 }
                 $snapshot = (array) $slip->employee_snapshot;
-                $rows[] = $this->row($date, 'salary', trim(($snapshot['first_name'] ?? '').' '.($snapshot['last_name'] ?? '')), $salaryAccount, $cost['salary'], $cost['salary'],
-                    link: '/payroll/employees/'.$slip->employee_id, month: $month);
+                $accounts = [$salaryAccount => Money::add((string) $slip->gross_salary, '0')];
+                $reimbursement = (string) (((array) $slip->adjustments)['reimbursement_amount'] ?? '0');
+                if (Money::isPositive($reimbursement)) {
+                    $accounts[$reimbursementAccount] = Money::add($accounts[$reimbursementAccount] ?? '0.00', $reimbursement);
+                }
+                $rows[] = [
+                    ...$this->row($date, 'salary', trim(($snapshot['first_name'] ?? '').' '.($snapshot['last_name'] ?? '')), $salaryAccount, $cost['salary'], $cost['salary'],
+                        link: '/payroll/employees/'.$slip->employee_id, month: $month),
+                    // The allowance is posted on its own account; the person
+                    // and their employer part feed the steering per person.
+                    'accounts' => $accounts,
+                    'employee_id' => $slip->employee_id,
+                    'employer' => $personEmployer,
+                ];
             }
             ksort($employer);
             foreach ($employer as $account => $amount) {
@@ -301,7 +353,7 @@ class ExpectedExpensesService
             $label = (string) ($schedule->description ?: ($schedule->supplier->name ?? $schedule->vendor ?? $schedule->category));
             $net = Money::normalize((string) $schedule->amount);
             $gross = Money::add($net, (string) ($schedule->vat_amount ?? '0'));
-            for ($day = $schedule->next_due_date->copy()->startOfDay(); $day->lessThanOrEqualTo($to); $day = $schedule->frequency->nextDate($day)) {
+            for ($day = $schedule->next_due_date->copy()->startOfDay(); $day->lessThanOrEqualTo($to); $day = $schedule->frequency->nextDate($day, $schedule->anchorDay())) {
                 if ($schedule->end_date !== null && $day->greaterThan($schedule->end_date)) {
                     break;
                 }
@@ -393,7 +445,8 @@ class ExpectedExpensesService
                 'planned',
                 $p->label,
                 $p->account_code,
-                Money::normalize((string) $p->amount),
+                // May be negative: an expected refund.
+                Money::add((string) $p->amount, '0'),
                 Money::add((string) $p->amount, (string) $p->vat_amount),
                 overdue: $p->date->lessThan($today),
             ),
@@ -413,8 +466,11 @@ class ExpectedExpensesService
     {
         $expected = [];
         foreach ($rows as $row) {
-            if ($row['in_result'] && $row['account'] !== null) {
-                $expected[$row['account']] = Money::add($expected[$row['account']] ?? '0.00', $row['amount']);
+            if (! $row['in_result']) {
+                continue;
+            }
+            foreach ($row['accounts'] ?? ($row['account'] !== null ? [$row['account'] => $row['amount']] : []) as $account => $amount) {
+                $expected[$account] = Money::add($expected[$account] ?? '0.00', (string) $amount);
             }
         }
 
