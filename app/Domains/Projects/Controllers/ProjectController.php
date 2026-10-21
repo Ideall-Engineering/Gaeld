@@ -10,7 +10,6 @@ use App\Domains\Projects\Enums\AllocationSource;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\AllocationReview;
-use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\InvoiceProject;
 use App\Domains\Projects\Models\LineAllocation;
 use App\Domains\Projects\Models\Project;
@@ -19,7 +18,6 @@ use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Requests\ProjectRequest;
 use App\Domains\Projects\Services\AllocationCoverageService;
 use App\Domains\Projects\Services\LineAllocationService;
-use App\Domains\Projects\Services\PlanActualService;
 use App\Domains\Projects\Services\ProjectOverviewService;
 use App\Http\Controllers\Concerns\AnswersApiCalls;
 use App\Http\Controllers\Controller;
@@ -39,7 +37,7 @@ class ProjectController extends Controller
 {
     use AnswersApiCalls;
 
-    public function index(Request $request, ProjectOverviewService $overview, AllocationCoverageService $coverage, PlanActualService $plans, CurrentOrganization $currentOrg): Response
+    public function index(Request $request, ProjectOverviewService $overview, AllocationCoverageService $coverage, CurrentOrganization $currentOrg): Response
     {
         $this->authorize('viewAny', Project::class);
 
@@ -52,10 +50,6 @@ class ProjectController extends Controller
             'overview' => $overview->overview($currentOrg->id(), "{$year}-01-01", "{$year}-12-31"),
             // Spec 010: whether every receipt of the year has its place.
             'coverage' => $user?->can('allocate', Project::class) ? $coverage->forYear($currentOrg->id(), $year) : null,
-            // Spec 010: the general costs (cost blocks) below the jobs.
-            'plan' => $plans->forYear($currentOrg->id(), $year, withKeys: $steer),
-            'blockOptions' => ProjectQuery::blockOptions(),
-            'hasPreviousYear' => BudgetGroup::query()->where('year', $year - 1)->exists(),
             'year' => $year,
             'contacts' => Contact::query()->orderBy('name')->get(['id', 'name']),
             'employees' => ProjectQuery::employeeOptions(),

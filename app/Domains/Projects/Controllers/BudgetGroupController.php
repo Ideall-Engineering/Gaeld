@@ -8,6 +8,7 @@ use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Requests\BudgetGroupRequest;
+use App\Domains\Projects\Services\GeneralCostsService;
 use App\Domains\Projects\Services\PlanActualService;
 use App\Domains\Projects\Services\ProjectJournalService;
 use App\Http\Controllers\Concerns\AnswersApiCalls;
@@ -35,7 +36,7 @@ class BudgetGroupController extends Controller
     {
         $this->authorize('viewAny', Project::class);
 
-        return redirect()->to(route('projects.index', ['year' => $this->year($request)]).'#general-costs');
+        return redirect()->route('projects.general-costs', ['year' => $this->year($request)]);
     }
 
     public function store(BudgetGroupRequest $request, CurrentOrganization $currentOrg): RedirectResponse
@@ -87,7 +88,7 @@ class BudgetGroupController extends Controller
      * jobs page (spec 010). Lines that sit with a customer job are marked,
      * as the actual leaves them out.
      */
-    public function lines(BudgetGroup $budgetGroup, ProjectJournalService $journal, CurrentOrganization $currentOrg): JsonResponse
+    public function lines(BudgetGroup $budgetGroup, ProjectJournalService $journal, GeneralCostsService $general, CurrentOrganization $currentOrg): JsonResponse
     {
         $this->authorize('viewAny', Project::class);
 
@@ -96,10 +97,14 @@ class BudgetGroupController extends Controller
         $people = Employee::query()->get(['id', 'first_name', 'last_name'])
             ->mapWithKeys(fn (Employee $e) => [$e->id => trim("{$e->first_name} {$e->last_name}")]);
 
-        $rows = collect($journal->forYear($currentOrg->id(), (int) $budgetGroup->year))
+        $year = (int) $budgetGroup->year;
+        // Where each line counts: in the block, or at a job, person or acquisition.
+        $once = $general->forPeriod($currentOrg->id(), $year, "{$year}-01-01", "{$year}-12-31")['lines'];
+
+        $rows = collect($journal->forYear($currentOrg->id(), $year))
             ->filter(fn (array $row) => $accountIds->has($row['account']['id']))
             ->sortBy([['date', 'desc'], ['line_id', 'desc']])
-            ->map(function (array $row) use ($projects, $people): array {
+            ->map(function (array $row) use ($projects, $people, $once): array {
                 /** @var array<int, array{project_id: int|null, employee_id: string|null, share: numeric-string}> $allocations */
                 $allocations = $row['allocations'];
                 $jobs = [];
@@ -142,6 +147,9 @@ class BudgetGroupController extends Controller
                     // at customer jobs is not in the actual.
                     'amount' => $amount,
                     'at_jobs' => Money::round(bcdiv(bcmul($amount, $atJobs, 6), '100', 6)),
+                    // What stays in the block; the rest counts elsewhere.
+                    'in_block' => $once[$row['line_id']]['in_block'] ?? $amount,
+                    'at_acquisitions' => $once[$row['line_id']]['at_acquisitions'] ?? '0.00',
                     'jobs' => array_values($jobs),
                 ];
             })

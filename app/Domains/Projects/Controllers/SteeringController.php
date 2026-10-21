@@ -3,6 +3,7 @@
 namespace App\Domains\Projects\Controllers;
 
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\SteeringItem;
 use App\Domains\Projects\Queries\ProjectQuery;
@@ -58,15 +59,21 @@ class SteeringController extends Controller
         $canSteer = $request->user()?->can('steer', Project::class) ?? false;
         $data = $steering->forYear($currentOrg->id(), $year);
 
+        $plan = $plans->forYear($currentOrg->id(), $year, withKeys: $canSteer);
+
         return Inertia::render('Projects/GeneralCosts', [
             'year' => $year,
             'canSteer' => $canSteer,
+            // Blocks are added, changed and removed here (they left the jobs page).
+            'canManage' => $request->user()?->can('create', Project::class) ?? false,
+            'hasPreviousYear' => BudgetGroup::query()->where('year', $year - 1)->exists(),
+            'elapsed' => $plan['elapsed'],
             'steering' => [
                 'people' => array_map(fn (array $p) => ['employee_id' => $p['employee_id'], 'name' => $p['name']], $data['people']),
                 'blocks' => $data['blocks'],
             ],
             'employees' => ProjectQuery::employeeOptions(),
-            'groups' => $plans->forYear($currentOrg->id(), $year, withKeys: $canSteer)['groups'],
+            'groups' => $plan['groups'],
             'blockOptions' => ProjectQuery::blockOptions(),
             // The bookings of a block can be moved to jobs and people here.
             'allocationOptions' => $request->user()?->can('allocate', Project::class) ? [

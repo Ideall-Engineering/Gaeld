@@ -10,6 +10,7 @@ use App\Domains\Accounting\Models\Budget;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
+use App\Domains\Projects\DTOs\LineAllocationData;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\BudgetGroup;
@@ -17,6 +18,7 @@ use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\ProjectShare;
 use App\Domains\Projects\Models\SteeringItem;
 use App\Domains\Projects\Services\AcquisitionService;
+use App\Domains\Projects\Services\AllocationCoverageService;
 use App\Domains\Projects\Services\SteeringService;
 use App\Domains\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -372,8 +374,8 @@ class SteeringTest extends TestCase
         $this->assignOrganizationRole($viewer, $this->organization, 'viewer');
 
         $this->actingAs($viewer)->withSession(['current_organization_id' => $this->organization->id])
-            ->get('/projects?year=2026')
-            ->assertInertia(fn (AssertableInertia $page) => $page->where('plan.groups.0.people', []));
+            ->get('/projects/general-costs?year=2026')
+            ->assertForbidden();
     }
 
     /** @param  array<string, string>  $shares */
@@ -401,6 +403,54 @@ class SteeringTest extends TestCase
         $this->assertSame('-300.00', $rent['people'][$this->anna->id]['burden']);
         $this->assertSame('-700.00', $rent['people'][$this->ben->id]['burden']);
         $this->assertSame('2000.00', $rent['people'][$this->anna->id]['credit']);
+    }
+
+    public function test_a_booking_counts_once_in_the_block_at_a_person_or_as_an_acquisition(): void
+    {
+        $office = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Office', 'kind' => 'running', 'plan_amount' => '500.00']);
+        $material = $this->makeAccount('6049', 'Material', AccountType::Expense);
+        $assets = $this->makeAccount('1509', 'Equipment', AccountType::Asset);
+        $office->accounts()->sync([$material->id]);
+        $general = app(AllocationCoverageService::class)->generalProject($this->organization->id);
+        $ledger = app(LedgerService::class);
+        $post = fn (string $ref, array $lines) => $ledger->postEntry($this->organization->id, new JournalEntryData('2026-04-01', $ref, 'x', $lines));
+        $credit = fn (string $amount) => new JournalLineData(accountId: (string) $this->bank->id, debit: '0', credit: $amount);
+
+        // Unallocated and "General": both stay in the block.
+        $this->cost($material, '100.00', '2026-04-01');
+        $post('ALLG', [new JournalLineData(accountId: (string) $material->id, debit: '80.00', credit: '0', allocations: $this->whole($general)), $credit('80.00')]);
+        // To a person, alone or with "General": charged to the person.
+        $post('ANNA', [new JournalLineData(accountId: (string) $material->id, debit: '50.00', credit: '0', allocations: [new LineAllocationData(projectId: null, employeeId: $this->anna->id)]), $credit('50.00')]);
+        $post('BEN', [new JournalLineData(accountId: (string) $material->id, debit: '40.00', credit: '0', allocations: [new LineAllocationData(projectId: $general->id, employeeId: $this->ben->id)]), $credit('40.00')]);
+        // A receipt with an asset and a small part, both acquisitions of Ben.
+        $receipt = $post('SHOP', [
+            new JournalLineData(accountId: (string) $assets->id, debit: '200.00', credit: '0'),
+            new JournalLineData(accountId: (string) $material->id, debit: '30.00', credit: '0', allocations: $this->whole($general)),
+            $credit('230.00'),
+        ]);
+        foreach (['Monitor' => '200', 'Cable' => '30'] as $item => $price) {
+            app(AcquisitionService::class)->save(null, $this->organization->id, [
+                'item' => $item, 'purchased_on' => '2026-04-01', 'quantity' => '1', 'unit_price' => $price, 'status' => 'delivered', 'journal_entry_id' => $receipt->id,
+            ], [['employee_id' => $this->ben->id, 'share' => '100']]);
+        }
+
+        $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
+        $block = collect($data['blocks'])->keyBy('name')['Office'];
+        $people = collect($data['people'])->keyBy('name');
+
+        $this->assertSame('180.00', $block['actual']);
+        $this->assertSame('-90.00', $block['people'][$this->anna->id]['burden']);
+        $this->assertSame('50.00', $people['Anna A']['assigned_costs']);
+        $this->assertSame('40.00', $people['Ben B']['assigned_costs']);
+        $this->assertSame('330.00', $people['Ben B']['acquisitions'], 'Keyboard, monitor and cable.');
+        $this->assertSame('0.00', $people['Anna A']['general'], '"General" in a block counts there only.');
+        $this->assertSame('2050.00', $people['Anna A']['drawn']);
+
+        $rows = collect($this->actAsOrg()->getJson("/projects/plan/{$office->id}/lines")->json('rows'))->keyBy('reference');
+        $this->assertSame('0.00', $rows['SHOP']['in_block']);
+        $this->assertSame('30.00', $rows['SHOP']['at_acquisitions']);
+        $this->assertSame('0.00', $rows['ANNA']['in_block']);
+        $this->assertSame('80.00', $rows['ALLG']['in_block']);
     }
 
     private function cost(Account $account, string $amount, string $date): void

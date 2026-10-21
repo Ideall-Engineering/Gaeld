@@ -228,14 +228,18 @@ class PlanActualTest extends TestCase
         $this->assertNull($group->plan_amount);
         $this->assertSame([$this->software1->id], $group->accounts->pluck('id')->all());
 
-        // Spec 010: the blocks live on the jobs page; the old address leads there.
-        $this->actAsOrg()->get('/projects/plan?year=2026')->assertRedirect('/projects?year=2026#general-costs');
-        $this->actAsOrg()->get('/projects?year=2026')
+        // The blocks live on the general costs page (2026-10-21, no longer
+        // below the jobs); the old address leads there.
+        $this->actAsOrg()->get('/projects/plan?year=2026')->assertRedirect('/projects/general-costs?year=2026');
+        $this->actAsOrg()->get('/projects/general-costs?year=2026')
             ->assertOk()
-            ->assertInertia(fn (AssertableInertia $page) => $page->component('Projects/Index')
-                ->where('plan.groups.0.name', 'Software & SaaS')
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('Projects/GeneralCosts')
+                ->where('groups.0.name', 'Software & SaaS')
+                ->where('canManage', true)
                 ->has('blockOptions.accounts')
                 ->has('blockOptions.kinds'));
+        $this->actAsOrg()->get('/projects?year=2026')
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('Projects/Index')->missing('plan'));
         $this->assertStringContainsString('Software & SaaS', $this->actAsOrg()->get('/projects/plan/export?year=2026')->streamedContent());
 
         $this->actAsOrg()->delete("/projects/plan/{$group->id}")->assertSessionHasNoErrors();
@@ -257,14 +261,14 @@ class PlanActualTest extends TestCase
         $this->assertSame([$this->software1->id], $groups[1]->accounts->pluck('id')->all());
     }
 
-    public function test_a_viewer_sees_the_plan_but_cannot_change_it(): void
+    public function test_a_viewer_neither_sees_nor_changes_the_blocks(): void
     {
         $viewer = User::factory()->create(['onboarding_completed_at' => now()]);
         $this->organization->users()->attach($viewer->id, ['role' => 'viewer']);
         $this->assignOrganizationRole($viewer, $this->organization, 'viewer');
         $session = ['current_organization_id' => $this->organization->id];
 
-        $this->actingAs($viewer)->withSession($session)->get('/projects')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('plan.groups'));
+        $this->actingAs($viewer)->withSession($session)->get('/projects/general-costs')->assertForbidden();
         $this->actingAs($viewer)->withSession($session)->post('/projects/plan', ['year' => 2026, 'name' => 'X', 'kind' => 'running'])->assertForbidden();
     }
 

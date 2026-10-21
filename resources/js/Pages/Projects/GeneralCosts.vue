@@ -7,19 +7,25 @@ import CardContent from '@/Components/UI/CardContent.vue'
 import Button from '@/Components/UI/Button.vue'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
+import Badge from '@/Components/UI/Badge.vue'
+import ConfirmDialog from '@/Components/UI/ConfirmDialog.vue'
 import BudgetGroupFormModal from '@/Components/Projects/BudgetGroupFormModal.vue'
 import AllocationDialog from '@/Components/Projects/AllocationDialog.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { router } from '@inertiajs/vue3'
 import { computed, reactive, ref, watch } from 'vue'
-import { ChevronDown, ChevronRight, FolderKanban, Pencil } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, Copy, Download, FolderKanban, Pencil, Plus, Trash2 } from 'lucide-vue-next'
 
-// The general costs of the steering on a page of their own: each cost
-// block, who bears it and who is credited. Only owners (canSteer) edit.
+// The general costs on a page of their own: each cost block, plan against
+// actual, who bears it and who is credited. Blocks are added and changed by
+// managers (canManage); the keys stay with owners (canSteer).
 const props = defineProps({
   year: Number,
   canSteer: { type: Boolean, default: false },
+  canManage: { type: Boolean, default: false },
+  hasPreviousYear: { type: Boolean, default: false },
+  elapsed: { type: [String, Number], default: 0 },
   steering: Object,
   employees: Array,
   groups: { type: Array, default: () => [] },
@@ -122,11 +128,23 @@ function allocateSelected(id) {
   })
 }
 
+// Plan against actual of a block: kind, rest, projection, progress.
+const groupOf = id => props.groups.find(g => g.id === id) ?? {}
+const kindLabel = kind => props.blockOptions.kinds.find(k => k.value === kind)?.label ?? kind
+const elapsedPercent = computed(() => Math.round(Number(props.elapsed ?? 0) * 100))
+
 const showBlockForm = ref(false)
 const editingBlock = ref(null)
-function editBlock(block) {
-  editingBlock.value = props.groups.find(g => g.id === block.id) ?? null
-  if (editingBlock.value) showBlockForm.value = true
+function editBlock(block = null) {
+  editingBlock.value = block ? (props.groups.find(g => g.id === block.id) ?? null) : null
+  if (!block || editingBlock.value) showBlockForm.value = true
+}
+const deletingBlock = ref(null)
+function performDeleteBlock() {
+  router.delete(`/projects/plan/${deletingBlock.value.id}`, { preserveScroll: true, onFinish: () => { deletingBlock.value = null } })
+}
+function copyPreviousBlocks() {
+  router.post('/projects/plan/copy-previous', { year: props.year }, { preserveScroll: true })
 }
 </script>
 
@@ -138,10 +156,18 @@ function editBlock(block) {
       <FormSelect id="year" :model-value="String(year)" :label="t('year')" :options="yearOptions" @update:model-value="v => router.get('/projects/general-costs', { year: v })" />
     </div>
       <Card>
-        <CardHeader><CardTitle>{{ t('steering_blocks') }}</CardTitle></CardHeader>
+        <CardHeader class="flex flex-row flex-wrap items-center justify-between gap-2">
+          <CardTitle>{{ t('steering_blocks') }}</CardTitle>
+          <div class="flex flex-wrap items-center gap-2">
+            <a :href="`/projects/plan/export?year=${year}`"><Button size="sm" variant="ghost"><Download class="mr-1 h-4 w-4" /> CSV</Button></a>
+            <Button v-if="canManage && hasPreviousYear && steering.blocks.length === 0" size="sm" variant="outline" @click="copyPreviousBlocks"><Copy class="mr-1 h-4 w-4" /> {{ t('budget_groups_copy_previous') }}</Button>
+            <Button v-if="canManage" size="sm" variant="outline" @click="editBlock()"><Plus class="mr-1 h-3 w-3" /> {{ t('budget_group_new') }}</Button>
+          </div>
+        </CardHeader>
         <CardContent>
-          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_blocks_desc') }}</p>
-          <div class="overflow-x-auto">
+          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_blocks_desc') }} {{ t('general_costs_elapsed', { percent: elapsedPercent }) }}</p>
+          <p v-if="steering.blocks.length === 0" class="py-4 text-sm text-[hsl(var(--muted-foreground))]">{{ t('budget_groups_empty_desc') }}</p>
+          <div v-else class="overflow-x-auto">
             <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
               <thead>
                 <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
@@ -149,7 +175,7 @@ function editBlock(block) {
                   <th class="pb-2 text-right">{{ t('budget_group_plan') }}</th>
                   <th class="pb-2 text-right">{{ t('budget_group_actual') }}</th>
                   <th v-for="person in people" :key="person.employee_id" class="pb-2 text-right">{{ person.name }}</th>
-                  <th class="w-12 pb-2"></th>
+                  <th class="w-20 pb-2"></th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-[hsl(var(--border))]">
@@ -160,17 +186,35 @@ function editBlock(block) {
                         <component :is="open['block-' + block.id] ? ChevronDown : ChevronRight" class="h-4 w-4 shrink-0" />
                         {{ block.name }}
                       </span>
+                      <span class="block pl-5 text-xs text-[hsl(var(--muted-foreground))]">
+                        {{ kindLabel(groupOf(block.id).kind) }}<template v-if="num(groupOf(block.id).customer_projects) !== 0"> · {{ t('budget_group_customer_projects_short', { amount: formatCurrency(groupOf(block.id).customer_projects) }) }}</template>
+                      </span>
                     </td>
                     <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.plan) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.actual) }}</td>
+                    <td class="py-1 text-right tabular-nums">
+                      <Badge v-if="groupOf(block.id).over_plan" variant="destructive">{{ formatCurrency(block.actual) }}</Badge>
+                      <template v-else>{{ formatCurrency(block.actual) }}</template>
+                      <div v-if="groupOf(block.id).progress != null" class="ml-auto mt-1 h-1.5 w-20 rounded bg-[hsl(var(--muted))]">
+                        <div class="h-1.5 rounded" :class="groupOf(block.id).progress > 100 ? 'bg-[hsl(var(--destructive))]' : 'bg-[hsl(var(--primary))]'" :style="{ width: `${Math.min(groupOf(block.id).progress, 100)}%` }" />
+                      </div>
+                    </td>
                     <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">
                       {{ formatCurrency(block.people[person.employee_id]?.effect ?? 0) }}
                     </td>
                     <td class="py-1 text-right" @click.stop>
-                      <Button v-if="canSteer" variant="ghost" size="icon" :aria-label="t('edit')" @click="editBlock(block)"><Pencil class="h-4 w-4" /></Button>
+                      <span v-if="canManage" class="flex justify-end">
+                        <Button variant="ghost" size="icon" :aria-label="t('edit')" @click="editBlock(block)"><Pencil class="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" :aria-label="t('delete')" @click="deletingBlock = block"><Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" /></Button>
+                      </span>
                     </td>
                   </tr>
                   <template v-if="open['block-' + block.id]">
+                    <tr class="text-xs text-[hsl(var(--muted-foreground))]">
+                      <td class="py-1 pl-5" :colspan="people.length + 4">
+                        <span :class="num(groupOf(block.id).rest) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ t('budget_group_rest') }} {{ formatCurrency(groupOf(block.id).rest ?? 0) }}</span>
+                        · {{ t('budget_group_projection') }} {{ formatCurrency(groupOf(block.id).projection ?? 0) }}
+                      </td>
+                    </tr>
                     <tr class="text-xs text-[hsl(var(--muted-foreground))]">
                       <td class="py-1 pl-5" colspan="3">
                         <template v-if="block.plan_fixed">{{ t('steering_block_plan_fixed') }}</template>
@@ -233,7 +277,7 @@ function editBlock(block) {
                               </tr>
                             </thead>
                             <tbody>
-                              <tr v-for="line in lines[block.id]" :key="line.line_id" class="align-middle" :class="line.jobs.length && Number(line.at_jobs) === Number(line.amount) ? 'text-[hsl(var(--muted-foreground))]' : ''">
+                              <tr v-for="line in lines[block.id]" :key="line.line_id" class="align-middle" :class="Number(line.in_block) === 0 && Number(line.amount) !== 0 ? 'text-[hsl(var(--muted-foreground))]' : ''">
                                 <td v-if="allocationOptions" class="py-0.5">
                                   <input type="checkbox" class="h-3.5 w-3.5 rounded border-[hsl(var(--input))]" :aria-label="line.reference" :checked="!!selected[block.id]?.[line.line_id]" @change="toggleLine(block.id, line)" />
                                 </td>
@@ -243,7 +287,11 @@ function editBlock(block) {
                                 <td class="whitespace-nowrap py-0.5 text-right tabular-nums">{{ formatCurrency(line.amount) }}</td>
                                 <td class="py-0.5">
                                   <span v-if="line.assigned.length">{{ line.assigned.join(', ') }}</span>
-                                  <span v-else class="italic text-[hsl(var(--muted-foreground))]">{{ t('block_line_unassigned') }}</span>
+                                  <span v-else-if="Number(line.at_acquisitions) === 0" class="italic text-[hsl(var(--muted-foreground))]">{{ t('block_line_unassigned') }}</span>
+                                  <span v-if="Number(line.at_acquisitions) !== 0" class="block">
+                                    <a :href="`/projects/acquisitions?year=${year}`" class="hover:underline" @click.stop>{{ t('block_line_acquisition', { amount: formatCurrency(line.at_acquisitions) }) }}</a>
+                                  </span>
+                                  <span v-if="Number(line.in_block) !== Number(line.amount) && Number(line.in_block) !== 0" class="block text-[hsl(var(--muted-foreground))]">{{ t('block_line_in_block', { amount: formatCurrency(line.in_block) }) }}</span>
                                 </td>
                                 <td v-if="allocationOptions" class="py-0.5 text-right">
                                   <Button variant="ghost" size="icon" class="h-6 w-6" :aria-label="t('block_line_assign')" :title="t('block_line_assign')" @click="allocate(line)"><FolderKanban class="h-3.5 w-3.5" /></Button>
@@ -273,15 +321,16 @@ function editBlock(block) {
     <AllocationDialog v-if="allocationOptions" :open="!!allocating" :entry="allocating" :options="allocationOptions" @close="allocating = null" />
 
     <BudgetGroupFormModal
-      v-if="canSteer"
+      v-if="canManage"
       :open="showBlockForm"
       :group="editingBlock"
       :year="year"
       :accounts="blockOptions.accounts"
       :kinds="blockOptions.kinds"
       :employees="employees"
-      can-steer
+      :can-steer="canSteer"
       @close="showBlockForm = false"
     />
+    <ConfirmDialog :open="!!deletingBlock" :title="t('confirm_delete')" :message="deletingBlock?.name ?? ''" @confirm="performDeleteBlock" @cancel="deletingBlock = null" />
   </AppLayout>
 </template>

@@ -32,8 +32,11 @@ use Illuminate\Support\Facades\DB;
  * is booked, before that the expected amount less booked costs.
  * Effect of cost blocks: who did the work is credited the planned amount,
  * everyone bears their part of the actual by the carry key (2026-10-21:
- * the booked costs are shared, not the plan). Drawn: the planned drawings
- * plus acquisitions; booked salary is shown beside it for comparison.
+ * the booked costs are shared, not the plan). A booking counts once: what
+ * is allocated to a person is charged to them, an acquisition charges its
+ * people, and neither stays in a block (GeneralCostsService). Drawn: the
+ * planned drawings, acquisitions and costs allocated to the person; booked
+ * salary is shown beside it for comparison.
  */
 class SteeringService
 {
@@ -46,6 +49,7 @@ class SteeringService
         private RecurringExpensePlan $recurring,
         private ExpectedExpensesService $expected,
         private PlanActualService $plans,
+        private GeneralCostsService $generalCosts,
     ) {}
 
     /**
@@ -111,12 +115,17 @@ class SteeringService
         $general = $zero();
         $openPayments = [];
         $openByJob = $this->openByJob($organizationId);
+        $once = $this->generalCosts->forPeriod($organizationId, $year, $from, $to);
 
         foreach ($projects as $project) {
             // Projects, internal jobs ("Allgemein") and lost jobs count with
             // what is booked on them, by their key or else by the owners.
             if ($project->kind !== ProjectKind::Project || $project->status === ProjectStatus::Lost) {
                 $net = Money::subtract($booked[$project->id]['revenue'] ?? '0.00', $booked[$project->id]['expenses'] ?? '0.00');
+                // "General" lines in a block or at a person count there.
+                if ($project->code === AllocationCoverageService::GENERAL_CODE) {
+                    $net = Money::subtract($net, $once['general_elsewhere']);
+                }
                 if (Money::compare($net, '0') === 0) {
                     continue;
                 }
@@ -343,7 +352,8 @@ class SteeringService
             // The plan items hold the salary of the whole year (fixed salary,
             // 13th, employer contributions, allowance): nothing is added from
             // the expected salaries, or it would be drawn twice.
-            $drawn = Money::add($planned, $acquired[$id] ?? '0.00');
+            $assigned = $once['people'][$id] ?? '0.00';
+            $drawn = Money::add(Money::add($planned, $acquired[$id] ?? '0.00'), $assigned);
             $value = Money::add($contribution[$id], Money::subtract($credit[$id], $burden[$id]));
             $play = Money::subtract($value, $drawn);
 
@@ -366,6 +376,7 @@ class SteeringService
                 'value' => $value,
                 'planned_items' => $planned,
                 'acquisitions' => $acquired[$id] ?? '0.00',
+                'assigned_costs' => $assigned,
                 'general' => $general[$id],
                 'drawn' => $drawn,
                 'booked_salary' => $salaries[$id] ?? '0.00',
@@ -794,7 +805,7 @@ class SteeringService
      */
     private function totals(array $rows): array
     {
-        $fields = ['contribution', 'general', 'credit', 'burden', 'effect', 'value', 'planned_items', 'acquisitions', 'drawn', 'booked_salary', 'play', 'prospects', 'later'];
+        $fields = ['contribution', 'general', 'credit', 'burden', 'effect', 'value', 'planned_items', 'acquisitions', 'assigned_costs', 'drawn', 'booked_salary', 'play', 'prospects', 'later'];
         $totals = array_fill_keys($fields, '0.00');
         foreach ($rows as $row) {
             foreach ($fields as $field) {

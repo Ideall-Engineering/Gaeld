@@ -186,10 +186,11 @@ const bankChart = computed(() => ({
 }))
 const bankOptions = computed(() => ({ ...axisOptions.value, plugins: { ...axisOptions.value.plugins, legend: { display: false } } }))
 
-// Drawn, one foldable row per person: plan items and acquisitions.
+// Drawn, one foldable row per person: plan items, acquisitions and costs
+// allocated to the person.
 const drawnRows = computed(() => people.value
   .map(p => ({ ...p, items: itemsOf(p.employee_id) }))
-  .filter(p => p.items.length || num(p.acquisitions) !== 0))
+  .filter(p => p.items.length || num(p.acquisitions) !== 0 || num(p.assigned_costs) !== 0))
 
 const itemForm = useForm({ year: props.year, employee_id: props.employees[0]?.id ?? '', label: '', amount: '' })
 function addItem() {
@@ -325,7 +326,11 @@ function removeItem(item) {
                             <td class="py-1"><Link :href="`/projects/acquisitions?year=${year}`" class="hover:underline">{{ t('acquisitions') }}</Link></td>
                             <td class="py-1 text-right tabular-nums">{{ formatCurrency(-person.acquisitions) }}</td>
                           </tr>
-                          <tr v-if="!itemsOf(person.employee_id).length && Number(person.acquisitions) === 0">
+                          <tr v-if="Number(person.assigned_costs) !== 0">
+                            <td class="py-1"><Link :href="`/projects/general-costs?year=${year}`" class="hover:underline">{{ t('steering_assigned_costs') }}</Link></td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(-person.assigned_costs) }}</td>
+                          </tr>
+                          <tr v-if="!itemsOf(person.employee_id).length && Number(person.acquisitions) === 0 && Number(person.assigned_costs) === 0">
                             <td colspan="2" class="py-1 text-[hsl(var(--muted-foreground))]">{{ t('steering_drawn_empty') }}</td>
                           </tr>
                         </tbody>
@@ -770,6 +775,12 @@ function removeItem(item) {
                     <td></td>
                     <td class="py-1"><Link :href="`/projects/acquisitions?year=${year}`" class="hover:underline">{{ t('acquisitions') }}</Link></td>
                     <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.acquisitions) }}</td>
+                    <td></td>
+                  </tr>
+                  <tr v-if="num(person.assigned_costs) !== 0" class="text-[hsl(var(--muted-foreground))]">
+                    <td></td>
+                    <td class="py-1"><Link :href="`/projects/general-costs?year=${year}`" class="hover:underline">{{ t('steering_assigned_costs') }}</Link></td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.assigned_costs) }}</td>
                     <td></td>
                   </tr>
                 </template>

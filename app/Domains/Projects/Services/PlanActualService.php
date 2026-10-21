@@ -27,6 +27,7 @@ class PlanActualService
     public function __construct(
         private ProjectReportService $reports,
         private RecurringExpensePlan $recurring,
+        private GeneralCostsService $general,
     ) {}
 
     /**
@@ -70,6 +71,9 @@ class PlanActualService
             ? []
             : $this->reports->totalsByAccount($organizationId, $from->toDateString(), $to->toDateString(), $customerProjects);
 
+        // What leaves each block: shares at jobs, at people and acquisitions.
+        $elsewhere = $to->lessThan($from) ? [] : $this->general->forPeriod($organizationId, $year, $from->toDateString(), $to->toDateString())['blocks'];
+
         $accounts = Account::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
             ->get(['id', 'code', 'name', 'type'])
@@ -104,13 +108,11 @@ class PlanActualService
         $rows = [];
         foreach ($groups as $group) {
             $booked = '0.00';
-            $customer = '0.00';
             $budgeted = '0.00';
             $planned = [];
             foreach ($group->accounts as $account) {
                 $grouped[$account->id] = true;
                 $booked = Money::add($booked, $actualOf($account->id));
-                $customer = Money::add($customer, $customerShare[$account->code] ?? '0.00');
                 $budgeted = Money::add($budgeted, Money::multiply((string) ($budgets[$account->id] ?? '0'), '12'));
                 // Recurring expenses add to the plan of their account.
                 foreach ($recurring[$account->id] ?? [] as $item) {
@@ -119,6 +121,7 @@ class PlanActualService
                 }
             }
 
+            $customer = $elsewhere[$group->id] ?? '0.00';
             $actual = Money::subtract($booked, $customer);
             $plan = $group->plan_amount !== null ? (string) $group->plan_amount : Money::round($budgeted);
             $projection = $group->kind === BudgetGroupKind::Running && $daysPassed > 0
