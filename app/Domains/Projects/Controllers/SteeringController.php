@@ -47,6 +47,31 @@ class SteeringController extends Controller
     }
 
     /**
+     * The general costs of the steering on their own page: the cost blocks,
+     * who bears and who is credited with each.
+     */
+    public function generalCosts(Request $request, SteeringService $steering, PlanActualService $plans, CurrentOrganization $currentOrg): Response
+    {
+        $this->authorize('viewSteering', Project::class);
+
+        $year = $this->year($request);
+        $canSteer = $request->user()?->can('steer', Project::class) ?? false;
+        $data = $steering->forYear($currentOrg->id(), $year);
+
+        return Inertia::render('Projects/GeneralCosts', [
+            'year' => $year,
+            'canSteer' => $canSteer,
+            'steering' => [
+                'people' => array_map(fn (array $p) => ['employee_id' => $p['employee_id'], 'name' => $p['name']], $data['people']),
+                'blocks' => $data['blocks'],
+            ],
+            'employees' => ProjectQuery::employeeOptions(),
+            'groups' => $plans->forYear($currentOrg->id(), $year, withKeys: $canSteer)['groups'],
+            'blockOptions' => ProjectQuery::blockOptions(),
+        ]);
+    }
+
+    /**
      * The steering of a year over the API (accountants and up).
      */
     public function indexApi(Request $request, SteeringService $steering, CurrentOrganization $currentOrg): JsonResponse

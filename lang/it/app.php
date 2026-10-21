@@ -3021,6 +3021,7 @@ return [
     'steering_desc' => 'Quanto ha generato ogni persona: il netto dei suoi incarichi secondo la quota, più la sua parte dei costi generali. Dedotto quanto ha percepito, resta il margine per un salario legato alla prestazione. Contano solo gli incarichi in corso o conclusi di quest’anno; gli incarichi aperti e offerti e gli importi attesi più tardi sono indicati sotto ma non contano. Quanto registrato su progetti, incarichi interni o persi conta secondo la loro chiave, oppure in parti uguali per i soci.',
     'steering_unshared_fix' => 'inserire le persone',
     'steering_assign_revenue' => 'assegnare il ricavo',
+    'steering_general_costs_page' => 'Vedi tutti i costi generali',
     'steering_unshared' => 'Incarichi per un valore di :amount non hanno nessuna persona, né propria né tramite il progetto, e non contano per nessuno.',
     'steering_contribution' => 'Netto dagli incarichi',
     'steering_effect' => 'Costi generali',

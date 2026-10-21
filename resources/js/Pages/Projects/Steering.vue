@@ -13,8 +13,8 @@ import BudgetGroupFormModal from '@/Components/Projects/BudgetGroupFormModal.vue
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { Link, router, useForm } from '@inertiajs/vue3'
-import { computed, reactive, ref } from 'vue'
-import { AlertTriangle, Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-vue-next'
+import { computed, nextTick, reactive, ref } from 'vue'
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
 import { Bar, Line } from 'vue-chartjs'
 import { BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, LineElement, PointElement, Tooltip } from 'chart.js'
 import { useTheme } from '@/lib/useTheme'
@@ -85,6 +85,22 @@ function setPaymentDate(payment, value) {
 // An open invoice without a job gets one of its own.
 function createJob(invoice) {
   router.post(`/invoices/${invoice.id}/job`, {}, { preserveScroll: true })
+}
+
+// The lists behind "what is still expected" stay closed until opened there;
+// a year's amount opens its list on that year.
+const showIncome = ref(false)
+const showExpenses = ref(false)
+function showDetails(kind, y = null) {
+  const shown = kind === 'income' ? showIncome : showExpenses
+  if (y === null) {
+    shown.value = !shown.value
+  } else {
+    shown.value = true
+    if (kind === 'income') openYear.value = y
+    else expectedYear.value = y
+  }
+  if (shown.value) nextTick(() => document.getElementById(kind === 'income' ? 'open-payments' : 'expected-expenses')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
 }
 
 // Spec 012: the expenses still expected, in the same two tabs, grouped by
@@ -277,6 +293,9 @@ function removeItem(item) {
                             <td class="py-1"><button type="button" class="text-left hover:underline" @click="editBlock(block)">{{ block.name }}</button></td>
                             <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.effect) }}</td>
                           </tr>
+                          <tr>
+                            <td class="py-1" colspan="2"><Link :href="`/projects/general-costs?year=${year}`" class="underline hover:no-underline">{{ t('steering_general_costs_page') }}</Link></td>
+                          </tr>
                         </tbody>
                       </table>
                     </td>
@@ -399,6 +418,108 @@ function removeItem(item) {
       </Card>
 
       <Card>
+        <CardHeader><CardTitle>{{ t('steering_outlook') }}</CardTitle></CardHeader>
+        <CardContent>
+          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_outlook_desc') }}</p>
+          <div class="overflow-x-auto">
+            <table class="w-full max-w-xl text-sm">
+              <thead>
+                <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
+                  <th class="pb-2"></th>
+                  <th v-for="o in outlook" :key="o.year" class="pb-2 text-right tabular-nums">{{ o.year }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="py-1">
+                    <button type="button" class="flex items-center gap-1 hover:underline" :aria-expanded="showIncome" @click="showDetails('income')">
+                      <component :is="showIncome ? ChevronDown : ChevronRight" class="h-4 w-4" />
+                      {{ t('steering_outlook_income') }}
+                    </button>
+                  </td>
+                  <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">
+                    <button type="button" class="tabular-nums hover:underline" @click="showDetails('income', o.year)">{{ formatCurrency(o.income) }}</button>
+                  </td>
+                </tr>
+                <tr class="border-b border-[hsl(var(--border))]">
+                  <td class="py-1">
+                    <button type="button" class="flex items-center gap-1 hover:underline" :aria-expanded="showExpenses" @click="showDetails('expenses')">
+                      <component :is="showExpenses ? ChevronDown : ChevronRight" class="h-4 w-4" />
+                      {{ t('steering_outlook_expenses') }}
+                    </button>
+                  </td>
+                  <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">
+                    <button type="button" class="tabular-nums hover:underline" @click="showDetails('expenses', o.year)">{{ formatCurrency(out(o.expenses)) }}</button>
+                  </td>
+                </tr>
+                <tr class="font-semibold">
+                  <td class="py-2">{{ t('steering_outlook_result') }}</td>
+                  <td
+                    v-for="o in outlook"
+                    :key="o.year"
+                    class="py-2 text-right tabular-nums"
+                    :class="o.result < 0 ? 'text-[hsl(var(--destructive))]' : 'text-green-700 dark:text-green-400'"
+                  >{{ formatCurrency(o.result) }}</td>
+                </tr>
+                <template v-if="steering.outlook">
+                  <tr class="text-[hsl(var(--muted-foreground))]">
+                    <td class="pt-3">{{ t('steering_outlook_bank_today') }}</td>
+                    <td class="pt-3 text-right tabular-nums">{{ formatCurrency(steering.outlook.bank_today) }}</td>
+                    <td></td>
+                  </tr>
+                  <tr class="font-semibold">
+                    <td class="py-1">{{ t('steering_outlook_bank_end') }}</td>
+                    <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums" :class="o.bank !== null && o.bank < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ o.bank !== null ? formatCurrency(o.bank) : '' }}</td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <template v-if="outlookMonths.length">
+            <h3 class="mb-1 mt-6 text-sm font-semibold">{{ t('steering_outlook_months') }}</h3>
+            <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_outlook_months_desc') }}</p>
+            <div class="grid gap-6 lg:grid-cols-2">
+              <div>
+                <div class="mb-1 text-sm font-medium">{{ t('steering_outlook_flow') }}</div>
+                <div class="h-64"><Bar :data="flowChart" :options="axisOptions" /></div>
+              </div>
+              <div>
+                <div class="mb-1 text-sm font-medium">{{ t('steering_outlook_bank') }}</div>
+                <div class="h-64"><Line :data="bankChart" :options="bankOptions" /></div>
+              </div>
+            </div>
+            <div class="mt-4 overflow-x-auto">
+              <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
+                <thead>
+                  <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
+                    <th class="pb-2">{{ t('month') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_income') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_expenses') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_result_cumulative') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_cash_in') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_cash_out') }}</th>
+                    <th class="pb-2 text-right">{{ t('steering_outlook_bank') }}</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[hsl(var(--border))]">
+                  <tr v-for="m in outlookMonths" :key="m.key">
+                    <td class="py-1">{{ monthLabel(m.key) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(m.income) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(out(m.expenses)) }}</td>
+                    <td class="py-1 text-right tabular-nums" :class="num(m.result) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ formatCurrency(m.result) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(m.cash_in) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(out(m.cash_out)) }}</td>
+                    <td class="py-1 text-right tabular-nums" :class="num(m.bank) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ formatCurrency(m.bank) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+        </CardContent>
+      </Card>
+
+      <Card v-if="showIncome" id="open-payments">
         <CardHeader>
           <div class="flex flex-wrap items-center gap-4">
             <CardTitle>{{ t('steering_open_payments') }}</CardTitle>
@@ -515,7 +636,7 @@ function removeItem(item) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card v-if="showExpenses" id="expected-expenses">
         <CardHeader>
           <div class="flex flex-wrap items-center gap-4">
             <CardTitle>{{ t('steering_expected_expenses') }}</CardTitle>
@@ -615,167 +736,6 @@ function removeItem(item) {
             <FormInput id="planned_vat" v-model="plannedForm.vat_amount" type="number" step="0.01" min="0" :label="t('steering_planned_vat')" :error="plannedForm.errors.vat_amount" class="w-28" />
             <Button type="submit" size="sm" :disabled="plannedForm.processing"><Plus class="mr-1 h-4 w-4" /> {{ t('add') }}</Button>
           </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>{{ t('steering_outlook') }}</CardTitle></CardHeader>
-        <CardContent>
-          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_outlook_desc') }}</p>
-          <div class="overflow-x-auto">
-            <table class="w-full max-w-xl text-sm">
-              <thead>
-                <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
-                  <th class="pb-2"></th>
-                  <th v-for="o in outlook" :key="o.year" class="pb-2 text-right tabular-nums">{{ o.year }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="py-1">{{ t('steering_outlook_income') }}</td>
-                  <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">{{ formatCurrency(o.income) }}</td>
-                </tr>
-                <tr class="border-b border-[hsl(var(--border))]">
-                  <td class="py-1">{{ t('steering_outlook_expenses') }}</td>
-                  <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums">{{ formatCurrency(out(o.expenses)) }}</td>
-                </tr>
-                <tr class="font-semibold">
-                  <td class="py-2">{{ t('steering_outlook_result') }}</td>
-                  <td
-                    v-for="o in outlook"
-                    :key="o.year"
-                    class="py-2 text-right tabular-nums"
-                    :class="o.result < 0 ? 'text-[hsl(var(--destructive))]' : 'text-green-700 dark:text-green-400'"
-                  >{{ formatCurrency(o.result) }}</td>
-                </tr>
-                <template v-if="steering.outlook">
-                  <tr class="text-[hsl(var(--muted-foreground))]">
-                    <td class="pt-3">{{ t('steering_outlook_bank_today') }}</td>
-                    <td class="pt-3 text-right tabular-nums">{{ formatCurrency(steering.outlook.bank_today) }}</td>
-                    <td></td>
-                  </tr>
-                  <tr class="font-semibold">
-                    <td class="py-1">{{ t('steering_outlook_bank_end') }}</td>
-                    <td v-for="o in outlook" :key="o.year" class="py-1 text-right tabular-nums" :class="o.bank !== null && o.bank < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ o.bank !== null ? formatCurrency(o.bank) : '' }}</td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </div>
-
-          <template v-if="outlookMonths.length">
-            <h3 class="mb-1 mt-6 text-sm font-semibold">{{ t('steering_outlook_months') }}</h3>
-            <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_outlook_months_desc') }}</p>
-            <div class="grid gap-6 lg:grid-cols-2">
-              <div>
-                <div class="mb-1 text-sm font-medium">{{ t('steering_outlook_flow') }}</div>
-                <div class="h-64"><Bar :data="flowChart" :options="axisOptions" /></div>
-              </div>
-              <div>
-                <div class="mb-1 text-sm font-medium">{{ t('steering_outlook_bank') }}</div>
-                <div class="h-64"><Line :data="bankChart" :options="bankOptions" /></div>
-              </div>
-            </div>
-            <div class="mt-4 overflow-x-auto">
-              <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
-                <thead>
-                  <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
-                    <th class="pb-2">{{ t('month') }}</th>
-                    <th class="pb-2 text-right">{{ t('steering_outlook_income') }}</th>
-                    <th class="pb-2 text-right">{{ t('steering_outlook_expenses') }}</th>
-                    <th class="pb-2 text-right">{{ t('steering_outlook_result_cumulative') }}</th>
-                    <th class="pb-2 text-right">{{ t('steering_outlook_cash_in') }}</th>
-                    <th class="pb-2 text-right">{{ t('steering_outlook_cash_out') }}</th>
-                    <th class="pb-2 text-right">{{ t('steering_outlook_bank') }}</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-[hsl(var(--border))]">
-                  <tr v-for="m in outlookMonths" :key="m.key">
-                    <td class="py-1">{{ monthLabel(m.key) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(m.income) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(out(m.expenses)) }}</td>
-                    <td class="py-1 text-right tabular-nums" :class="num(m.result) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ formatCurrency(m.result) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(m.cash_in) }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(out(m.cash_out)) }}</td>
-                    <td class="py-1 text-right tabular-nums" :class="num(m.bank) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ formatCurrency(m.bank) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </template>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>{{ t('steering_blocks') }}</CardTitle></CardHeader>
-        <CardContent>
-          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_blocks_desc') }}</p>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
-              <thead>
-                <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
-                  <th class="pb-2">{{ t('name') }}</th>
-                  <th class="pb-2 text-right">{{ t('budget_group_plan') }}</th>
-                  <th v-for="person in people" :key="person.employee_id" class="pb-2 text-right">{{ person.name }}</th>
-                  <th class="w-12 pb-2"></th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-[hsl(var(--border))]">
-                <template v-for="block in steering.blocks" :key="block.id">
-                  <tr class="cursor-pointer hover:bg-[hsl(var(--muted))]/40" @click="toggle('block-' + block.id)">
-                    <td class="py-1">
-                      <span class="flex items-center gap-1">
-                        <component :is="open['block-' + block.id] ? ChevronDown : ChevronRight" class="h-4 w-4 shrink-0" />
-                        {{ block.name }}
-                      </span>
-                    </td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.plan) }}</td>
-                    <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">
-                      {{ formatCurrency(block.people[person.employee_id]?.effect ?? 0) }}
-                    </td>
-                    <td class="py-1 text-right" @click.stop>
-                      <Button v-if="canSteer" variant="ghost" size="icon" :aria-label="t('edit')" @click="editBlock(block)"><Pencil class="h-4 w-4" /></Button>
-                    </td>
-                  </tr>
-                  <template v-if="open['block-' + block.id]">
-                    <tr class="text-xs text-[hsl(var(--muted-foreground))]">
-                      <td class="py-1 pl-5" colspan="2">
-                        <template v-if="block.plan_fixed">{{ t('steering_block_plan_fixed') }}</template>
-                        <template v-else-if="block.accounts?.length">
-                          <template v-for="a in block.accounts" :key="a.code">
-                            <div class="flex justify-between gap-3">
-                              <span>{{ a.code }} {{ a.name }}: {{ t('steering_block_monthly', { amount: formatCurrency(a.monthly) }) }}</span>
-                              <span class="tabular-nums">{{ formatCurrency(a.budget_yearly ?? a.yearly) }}</span>
-                            </div>
-                            <div v-for="r in a.recurring ?? []" :key="r.id" class="flex justify-between gap-3 pl-3">
-                              <a :href="`/expenses/recurring/${r.uuid}/edit`" class="hover:underline" @click.stop>{{ t('steering_block_recurring', { label: r.label, count: r.count, amount: formatCurrency(r.amount) }) }}</a>
-                              <span class="tabular-nums">{{ formatCurrency(r.yearly) }}</span>
-                            </div>
-                          </template>
-                        </template>
-                        <template v-else>{{ t('steering_block_plan_none') }}</template>
-                      </td>
-                      <td :colspan="people.length + 1"></td>
-                    </tr>
-                    <tr class="text-xs text-[hsl(var(--muted-foreground))]">
-                      <td class="py-1 pl-5" colspan="2">{{ block.carry_equal ? t('steering_block_carry_equal') : t('steering_block_carry') }}</td>
-                      <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">
-                        {{ num(block.people[person.employee_id]?.carry_share) }} % · {{ formatCurrency(block.people[person.employee_id]?.burden ?? 0) }}
-                      </td>
-                      <td></td>
-                    </tr>
-                    <tr class="text-xs text-[hsl(var(--muted-foreground))]">
-                      <td class="py-1 pl-5" colspan="2">{{ Object.values(block.people).some(p => num(p.credit_share) > 0) ? t('steering_block_credit') : t('steering_block_credit_none') }}</td>
-                      <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">
-                        {{ num(block.people[person.employee_id]?.credit_share) }} % · {{ formatCurrency(block.people[person.employee_id]?.credit ?? 0) }}
-                      </td>
-                      <td></td>
-                    </tr>
-                  </template>
-                </template>
-              </tbody>
-            </table>
-          </div>
         </CardContent>
       </Card>
 

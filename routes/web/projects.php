@@ -33,6 +33,7 @@ Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::put('/projects/acquisitions/{acquisition}', [AcquisitionController::class, 'update'])->name('projects.acquisitions.update');
     Route::delete('/projects/acquisitions/{acquisition}', [AcquisitionController::class, 'destroy'])->name('projects.acquisitions.destroy');
     Route::get('/projects/steering', [SteeringController::class, 'index'])->name('projects.steering');
+    Route::get('/projects/general-costs', [SteeringController::class, 'generalCosts'])->name('projects.general-costs');
     Route::get('/projects/steering/export/{format}', [SteeringController::class, 'export'])->name('projects.steering.export');
     // Spec 012: single expected expenses entered by hand.
     Route::post('/projects/steering/planned-expenses', [PlannedExpenseController::class, 'store'])->name('projects.planned-expenses.store');

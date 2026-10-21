@@ -245,6 +245,10 @@ class SteeringTest extends TestCase
         $this->actAsOrg()->get('/projects/steering?year=2026')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->component('Projects/Steering')->has('steering.people', 2)->has('groups')->has('blockOptions.kinds')->has('steering.blocks.0.id'));
+        // The general costs have a page of their own.
+        $this->actAsOrg()->get('/projects/general-costs?year=2026')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('Projects/GeneralCosts')->where('canSteer', true)->has('steering.people', 2)->has('steering.blocks.0.people')->has('groups'));
         $this->assertStringContainsString('Anna A', $this->actAsOrg()->get('/projects/steering/export/csv?year=2026')->streamedContent());
         $this->actAsOrg()->get('/projects/steering/export/pdf?year=2026')->assertOk();
 
@@ -254,6 +258,10 @@ class SteeringTest extends TestCase
         // Spec 012: seen from accountants up, keys stay with owners.
         $this->actingAs($admin)->withSession(['current_organization_id' => $this->organization->id])
             ->get('/projects/steering?year=2026')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('canSteer', false)->where('groups.0.people', []));
+        $this->actingAs($admin)->withSession(['current_organization_id' => $this->organization->id])
+            ->get('/projects/general-costs?year=2026')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('canSteer', false)->where('groups.0.people', []));
         $this->actingAs($admin)->withSession(['current_organization_id' => $this->organization->id])

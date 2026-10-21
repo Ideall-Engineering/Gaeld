@@ -3079,6 +3079,7 @@ return [
     'steering_desc' => 'What each person earned: net from their jobs by share, plus their part of the general costs. Less what they drew, the rest is the room for performance pay. Only jobs in progress or done and only this year count; open and quoted jobs and amounts expected later are shown below but not counted. What is booked on projects, internal or lost jobs counts by their key, or for the owners in equal parts.',
     'steering_unshared_fix' => 'add people',
     'steering_assign_revenue' => 'assign revenue',
+    'steering_general_costs_page' => 'See all general costs',
     'steering_unshared' => 'Jobs worth :amount have no person, neither themselves nor through their project, and count for nobody.',
     'steering_contribution' => 'Net from jobs',
     'steering_effect' => 'General costs',

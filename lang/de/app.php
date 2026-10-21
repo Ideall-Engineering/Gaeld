@@ -3017,6 +3017,7 @@ return [
     'steering_desc' => 'Was jede Person erwirtschaftet hat: Netto aus ihren Aufträgen nach Anteil, dazu ihr Anteil an den allgemeinen Kosten. Abzüglich Bezogenem bleibt der Spielraum für einen Leistungslohn. Gerechnet wird nur mit Aufträgen in Arbeit oder erledigt und nur mit diesem Jahr; offene und offerierte Aufträge und später erwartete Beträge stehen darunter, zählen aber nicht. Was auf Projekte, interne oder verlorene Aufträge gebucht ist, zählt nach deren Schlüssel oder für die Inhaber zu gleichen Teilen.',
     'steering_unshared_fix' => 'Personen eintragen',
     'steering_assign_revenue' => 'Einnahme zuordnen',
+    'steering_general_costs_page' => 'Alle allgemeinen Kosten ansehen',
     'steering_unshared' => 'Aufträge im Wert von :amount haben keine Person eingetragen, weder selbst noch über ihr Projekt, und zählen deshalb für niemanden.',
     'steering_contribution' => 'Netto aus Aufträgen',
     'steering_effect' => 'Allgemeine Kosten',

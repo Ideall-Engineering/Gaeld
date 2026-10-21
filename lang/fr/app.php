@@ -3025,6 +3025,7 @@ return [
     'steering_desc' => 'Ce que chaque personne a généré : le net de ses mandats selon sa part, plus sa part des frais généraux. Après déduction de ce qu’elle a perçu, il reste la marge pour un salaire au mérite. Seuls les mandats en cours ou terminés de cette année comptent ; les mandats ouverts et offerts et les montants attendus plus tard figurent en dessous sans être comptés. Ce qui est comptabilisé sur des projets, des mandats internes ou perdus compte selon leur clé, ou à parts égales pour les associés.',
     'steering_unshared_fix' => 'saisir les personnes',
     'steering_assign_revenue' => 'attribuer le revenu',
+    'steering_general_costs_page' => 'Voir tous les coûts généraux',
     'steering_unshared' => 'Des mandats d’une valeur de :amount n’ont aucune personne, ni eux-mêmes ni par leur projet, et ne comptent pour personne.',
     'steering_contribution' => 'Net des mandats',
     'steering_effect' => 'Frais généraux',
