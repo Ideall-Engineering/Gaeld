@@ -176,6 +176,7 @@ class JobPageTest extends TestCase
         $this->assertCount(1, $ben['jobs']);
         $this->assertSame([
             'open_part' => '0.00',
+            'rest_part' => '0.00',
             'id' => $this->job->id,
             'code' => 'P26-01',
             'name' => 'Course city',

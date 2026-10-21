@@ -318,12 +318,12 @@ function removeItem(item) {
                             <td class="py-1">{{ t('steering_play_expected', { year }) }}</td>
                             <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.contribution_expected) }}</td>
                           </tr>
-                          <tr v-for="job in person.jobs.filter(j => !j.booked || Number(j.open_part) !== 0)" :key="'exp-' + job.id" class="text-[hsl(var(--muted-foreground))]">
+                          <tr v-for="job in person.jobs.filter(j => !j.booked || Number(j.open_part) !== 0 || Number(j.rest_part) !== 0)" :key="'exp-' + job.id" class="text-[hsl(var(--muted-foreground))]">
                             <td class="py-0.5 pl-4">
                               <Link :href="`/projects/${job.id}/report?from=${year}-01-01&to=${year}-12-31`" class="hover:underline">{{ job.name }}</Link>
-                              <span> · {{ job.booked ? t('steering_invoice_open_short') : t('project_status_' + job.status) }}<template v-if="!job.booked && job.billing"> · {{ job.billing }}</template></span>
+                              <span> · {{ job.booked ? (Number(job.rest_part) !== 0 ? t('steering_rest_to_invoice') : t('steering_invoice_open_short')) : t('project_status_' + job.status) }}<template v-if="!job.booked && job.billing"> · {{ job.billing }}</template></span>
                             </td>
-                            <td class="py-0.5 text-right tabular-nums">{{ formatCurrency(job.booked ? job.open_part : job.part) }}</td>
+                            <td class="py-0.5 text-right tabular-nums">{{ formatCurrency(job.booked ? num(job.open_part) + num(job.rest_part) : job.part) }}</td>
                           </tr>
                           <tr>
                             <td class="py-1">{{ t('steering_effect') }}</td>
@@ -439,7 +439,10 @@ function removeItem(item) {
                       {{ p.billing_month ? t('steering_open_from_billing', { month: p.billing_month }) : (p.billing ? t('steering_open_from_target', { month: p.billing }) : t('steering_open_undated')) }}
                     </div>
                   </td>
-                  <td class="py-1 text-right tabular-nums">{{ formatCurrency(p.expected) }}</td>
+                  <td class="py-1 text-right tabular-nums">
+                    {{ formatCurrency(p.expected) }}
+                    <div v-if="Number(p.invoiced) > 0" class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('steering_open_rest_of', { total: formatCurrency(p.expected_total), invoiced: formatCurrency(p.invoiced) }) }}</div>
+                  </td>
                   <td class="py-1 text-right tabular-nums">{{ Number(p.costs) ? formatCurrency(-p.costs) : '' }}</td>
                   <td class="py-1 text-xs">
                     <div v-for="person in p.people" :key="person.name">{{ person.name }} {{ formatCurrency(person.part) }}</div>

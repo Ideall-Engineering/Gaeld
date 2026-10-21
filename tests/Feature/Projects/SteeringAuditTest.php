@@ -71,8 +71,6 @@ class SteeringAuditTest extends TestCase
      */
     public function test_a_partly_invoiced_job_keeps_its_rest_in_view(): void
     {
-        $this->markTestIncomplete('Waits for the decision on the rest of a job (question 2, 2026-10-21).');
-
         $job = $this->makeProject('P1');
         $job->update(['status' => ProjectStatus::InProgress, 'expected_amount' => '10000.00', 'billing_month' => '2026-11-01']);
         $this->share($job, [$this->anna->id => '100']);
@@ -260,8 +258,6 @@ class SteeringAuditTest extends TestCase
      */
     public function test_a_job_invoiced_before_its_planned_year_counts_once(): void
     {
-        $this->markTestIncomplete('Waits for the decision on the rest of a job (question 2, 2026-10-21).');
-
         $job = $this->makeProject('P3');
         $job->update(['status' => ProjectStatus::InProgress, 'expected_amount' => '10000.00', 'payment_expected_on' => '2027-01-15']);
         $this->share($job, [$this->anna->id => '100']);

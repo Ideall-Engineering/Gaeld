@@ -92,6 +92,9 @@ class SteeringService
         $byId = $projects->keyBy('id');
         $shares = ProjectShare::withoutGlobalScopes()->where('organization_id', $organizationId)->get()->groupBy('cost_center_id');
         $booked = $this->reports->totalsByProject($organizationId, $from, $to);
+        // Revenue ever booked per job: what is invoiced in any year comes off
+        // the expected amount (question 2, 2026-10-21).
+        $ever = $this->reports->totalsByProject($organizationId, '1900-01-01', '2999-12-31');
 
         $byStatus = [];
         foreach (ProjectStatus::cases() as $status) {
@@ -142,8 +145,11 @@ class SteeringService
 
                 continue;
             }
-            $value = $this->valueOf($project, $booked[$project->id] ?? null, $year);
-            $expectedLater = $this->expectedLater($project, $booked[$project->id] ?? null, $year);
+            $everRevenue = $ever[$project->id]['revenue'] ?? '0.00';
+            $rest = $this->restOf($project, $everRevenue);
+            $restInYear = $this->expectsInYear($project, $year) ? $rest : '0.00';
+            $value = $this->valueOf($project, $booked[$project->id] ?? null, $year, $everRevenue);
+            $expectedLater = $this->expectedLater($project, $rest, $year);
             if (Money::compare($value, '0') === 0 && $expectedLater === null) {
                 continue;
             }
@@ -151,8 +157,8 @@ class SteeringService
             $key = $this->keyFor($project, $byId, $shares);
             $isBooked = Money::isPositive($booked[$project->id]['revenue'] ?? '0');
 
-            // Still to come in this year: counted, nothing received yet.
-            if ($counted && ! $isBooked && $this->expectsInYear($project, $year)) {
+            // Still to come in this year: counted, part of it not invoiced yet.
+            if ($counted && Money::isPositive($restInYear)) {
                 $openPayments[] = [
                     'id' => $project->id,
                     'code' => $project->code,
@@ -163,7 +169,9 @@ class SteeringService
                     'payment_expected_on' => $project->payment_expected_on?->toDateString(),
                     'billing_month' => $project->billing_month?->format('Y-m'),
                     'sort' => $this->plannedOn($project)?->toDateString(),
-                    'expected' => (string) $project->expected_amount,
+                    'expected' => $restInYear,
+                    'expected_total' => (string) $project->expected_amount,
+                    'invoiced' => $everRevenue,
                     'costs' => $booked[$project->id]['expenses'] ?? '0.00',
                     'value' => $value,
                     'people' => $key === [] ? [] : $this->split($value, $key),
@@ -177,14 +185,16 @@ class SteeringService
                 continue;
             }
             $openParts = isset($openByJob[$project->id]) ? $this->split($openByJob[$project->id], $key) : [];
+            $restParts = Money::isPositive($restInYear) ? $this->split($restInYear, $key) : [];
             $entry = fn (string $employeeId, string $amount, string $part) => [
                 'open_part' => $openParts[$employeeId] ?? '0.00',
+                'rest_part' => $restParts[$employeeId] ?? '0.00',
                 'id' => $project->id,
                 'code' => $project->code,
                 'name' => $project->name,
                 'group' => $this->groupOf($project, $byId),
                 'status' => $project->status->value,
-                'booked' => Money::isPositive($booked[$project->id]['revenue'] ?? '0'),
+                'booked' => $isBooked,
                 'billing' => $this->plannedOn($project)?->format('Y-m'),
                 'share' => (string) (float) $key[$employeeId],
                 'value' => $amount,
@@ -326,7 +336,7 @@ class SteeringService
         foreach ($people as $person) {
             $id = $person->id;
             // Received is paid: booked, less what open invoices still owe.
-            $received = array_reduce($jobs[$id], fn (string $sum, array $job) => $job['booked'] ? Money::add($sum, Money::subtract($job['part'], $job['open_part'])) : $sum, '0.00');
+            $received = array_reduce($jobs[$id], fn (string $sum, array $job) => $job['booked'] ? Money::add($sum, Money::subtract(Money::subtract($job['part'], $job['open_part']), $job['rest_part'] ?? '0.00')) : $sum, '0.00');
             $planned = $items->where('employee_id', $id)->reduce(fn (string $sum, SteeringItem $i) => Money::add($sum, (string) $i->amount), '0.00');
             $drawn = Money::add(Money::add($planned, $acquired[$id] ?? '0.00'), $stillDue[$id] ?? '0.00');
             $value = Money::add($contribution[$id], Money::subtract($credit[$id], $burden[$id]));
@@ -397,21 +407,38 @@ class SteeringService
     }
 
     /**
-     * Value of a customer project: the booked net once revenue is booked,
-     * the expected amount less booked costs before.
+     * Value of a customer project in a year: what is booked in the year,
+     * plus the rest still expected when it is expected in that year.
      *
      * @param  array{revenue: string, expenses: string}|null  $booked
+     * @param  string|null  $everRevenue  revenue booked on the job in any year; read when not given
      */
-    public function valueOf(Project $project, ?array $booked, int $year): string
+    public function valueOf(Project $project, ?array $booked, int $year, ?string $everRevenue = null): string
     {
-        $revenue = $booked['revenue'] ?? '0.00';
-        $expenses = $booked['expenses'] ?? '0.00';
-
-        if (Money::isPositive($revenue)) {
-            return Money::subtract($revenue, $expenses);
+        $net = Money::subtract($booked['revenue'] ?? '0.00', $booked['expenses'] ?? '0.00');
+        if (! $this->expectsInYear($project, $year)) {
+            return $net;
         }
+        $everRevenue ??= $this->reports->totalsByProject($project->organization_id, '1900-01-01', '2999-12-31')[$project->id]['revenue'] ?? '0.00';
 
-        return Money::subtract($this->expectsInYear($project, $year) ? (string) $project->expected_amount : '0.00', $expenses);
+        return Money::add($net, $this->restOf($project, $everRevenue));
+    }
+
+    /**
+     * What a job still brings beyond everything invoiced on it in any year:
+     * the expected amount less the revenue ever booked, never below zero. A
+     * job done and invoiced is final; one done without any revenue still
+     * waits for its invoice.
+     */
+    public function restOf(Project $project, string $everRevenue): string
+    {
+        if ($project->expected_amount === null
+            || ($project->status === ProjectStatus::Done && Money::isPositive($everRevenue))) {
+            return '0.00';
+        }
+        $rest = Money::subtract((string) $project->expected_amount, $everRevenue);
+
+        return Money::isPositive($rest) ? $rest : '0.00';
     }
 
     /**
@@ -510,20 +537,17 @@ class SteeringService
     }
 
     /**
-     * The expected amount of a job that is to be invoiced after the given
-     * year and has no revenue booked in it yet; null when there is none.
-     *
-     * @param  array{revenue: string, expenses: string}|null  $booked
+     * The rest of a job that is expected after the given year; null when
+     * there is none.
      */
-    private function expectedLater(Project $project, ?array $booked, int $year): ?string
+    private function expectedLater(Project $project, string $rest, int $year): ?string
     {
         $planned = $this->plannedOn($project);
-        if ($planned === null || (int) $planned->year <= $year || $project->expected_amount === null
-            || $project->status === ProjectStatus::Done || Money::isPositive($booked['revenue'] ?? '0')) {
+        if ($planned === null || (int) $planned->year <= $year || ! Money::isPositive($rest)) {
             return null;
         }
 
-        return (string) $project->expected_amount;
+        return $rest;
     }
 
     /**
