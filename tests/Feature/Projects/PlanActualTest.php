@@ -15,6 +15,7 @@ use App\Domains\Invoicing\Enums\RecurrenceFrequency;
 use App\Domains\Projects\DTOs\LineAllocationData;
 use App\Domains\Projects\Enums\BudgetGroupKind;
 use App\Domains\Projects\Models\BudgetGroup;
+use App\Domains\Projects\Models\LineAllocation;
 use App\Domains\Projects\Services\PlanActualService;
 use App\Domains\Projects\Services\SteeringService;
 use App\Domains\Users\Models\User;
@@ -165,6 +166,35 @@ class PlanActualTest extends TestCase
         $this->assertSame('0.00', $rows[1]['at_jobs']);
         $this->assertSame((string) $this->bank->code, $rows[0]['counter']);
         $this->assertSame([], $rows[1]['jobs']);
+        // What the general costs page needs to show and change the allocation.
+        $this->assertSame([$customer->name.' 60 %'], $rows[0]['assigned']);
+        $this->assertSame('200.00', $rows[0]['debit']);
+        $this->assertSame('0', $rows[0]['credit']);
+        $this->assertSame($customer->id, $rows[0]['allocations'][0]['project_id']);
+        $this->assertSame([], $rows[1]['assigned']);
+    }
+
+    public function test_bookings_of_a_block_move_to_a_job_without_touching_other_lines_of_the_entry(): void
+    {
+        $group = $this->group('Software', [$this->software1], '1000.00');
+        $job = $this->makeProject('JOB');
+        $entry = app(LedgerService::class)->postEntry($this->organization->id, new JournalEntryData('2026-03-01', 'TWO', 'x', [
+            new JournalLineData(accountId: (string) $this->software1->id, debit: '200.00', credit: '0'),
+            new JournalLineData(accountId: (string) $this->marketing->id, debit: '50.00', credit: '0'),
+            new JournalLineData(accountId: (string) $this->bank->id, debit: '0', credit: '250.00'),
+        ]));
+        $line = $this->actAsOrg()->getJson("/projects/plan/{$group->id}/lines")->json('rows.0');
+
+        $this->actAsOrg()->post('/accounting/journal-entry-allocations/bulk', [
+            'entry_ids' => [$entry->id],
+            'line_ids' => [$line['line_id']],
+            'project_id' => $job->id,
+            'overwrite' => true,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame([$job->name], $this->actAsOrg()->getJson("/projects/plan/{$group->id}/lines")->json('rows.0.assigned'));
+        $marketingLine = $entry->lines()->where('account_id', $this->marketing->id)->sole();
+        $this->assertSame(0, LineAllocation::query()->where('transaction_line_id', $marketingLine->id)->count());
     }
 
     public function test_accounts_with_costs_outside_any_block_are_listed(): void

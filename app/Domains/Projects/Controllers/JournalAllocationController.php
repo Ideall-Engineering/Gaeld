@@ -87,6 +87,9 @@ class JournalAllocationController extends Controller
                 Rule::exists('cost_centers', 'id')->where('organization_id', $orgId)->where('is_active', true),
             ],
             'overwrite' => ['sometimes', 'boolean'],
+            // Only these lines of the entries, e.g. the bookings of one cost block.
+            'line_ids' => ['sometimes', 'array', 'max:500'],
+            'line_ids.*' => ['integer'],
         ]);
 
         $overwrite = (bool) ($validated['overwrite'] ?? false);
@@ -106,6 +109,7 @@ class JournalAllocationController extends Controller
                 $lines = TransactionLine::query()
                     ->where('journal_entry_id', $entry->id)
                     ->whereHas('account', fn ($q) => $q->whereIn('type', [AccountType::Revenue->value, AccountType::Expense->value]))
+                    ->when(isset($validated['line_ids']), fn ($q) => $q->whereIn('id', $validated['line_ids']))
                     ->pluck('id')
                     ->map(fn ($id) => (int) $id);
 

@@ -248,7 +248,7 @@ class SteeringTest extends TestCase
         // The general costs have a page of their own.
         $this->actAsOrg()->get('/projects/general-costs?year=2026')
             ->assertOk()
-            ->assertInertia(fn (AssertableInertia $page) => $page->component('Projects/GeneralCosts')->where('canSteer', true)->has('steering.people', 2)->has('steering.blocks.0.people')->has('groups'));
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('Projects/GeneralCosts')->where('canSteer', true)->has('steering.people', 2)->has('steering.blocks.0.people')->has('groups')->has('allocationOptions.projects')->has('allocationOptions.employees'));
         $this->assertStringContainsString('Anna A', $this->actAsOrg()->get('/projects/steering/export/csv?year=2026')->streamedContent());
         $this->actAsOrg()->get('/projects/steering/export/pdf?year=2026')->assertOk();
 

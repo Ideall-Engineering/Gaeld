@@ -3,6 +3,7 @@
 namespace App\Domains\Projects\Controllers;
 
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Payroll\Models\Employee;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\Project;
@@ -92,12 +93,14 @@ class BudgetGroupController extends Controller
 
         $accountIds = $budgetGroup->accounts()->pluck('accounts.id')->map(fn ($id) => (int) $id)->flip();
         $projects = Project::query()->get(['id', 'name', 'kind'])->keyBy('id');
+        $people = Employee::query()->get(['id', 'first_name', 'last_name'])
+            ->mapWithKeys(fn (Employee $e) => [$e->id => trim("{$e->first_name} {$e->last_name}")]);
 
         $rows = collect($journal->forYear($currentOrg->id(), (int) $budgetGroup->year))
             ->filter(fn (array $row) => $accountIds->has($row['account']['id']))
             ->sortBy([['date', 'desc'], ['line_id', 'desc']])
-            ->map(function (array $row) use ($projects): array {
-                /** @var array<int, array{project_id: int|null, share: numeric-string}> $allocations */
+            ->map(function (array $row) use ($projects, $people): array {
+                /** @var array<int, array{project_id: int|null, employee_id: string|null, share: numeric-string}> $allocations */
                 $allocations = $row['allocations'];
                 $jobs = [];
                 $atJobs = '0';
@@ -109,6 +112,16 @@ class BudgetGroupController extends Controller
                     }
                 }
                 $amount = Money::negate($row['net']);
+                // Where the line sits now, in words: job or group, person, share.
+                $assigned = array_map(function (array $a) use ($projects, $people): string {
+                    $parts = array_filter([
+                        $a['project_id'] !== null ? $projects->get($a['project_id'])?->name : null,
+                        $a['employee_id'] !== null ? $people->get($a['employee_id']) : null,
+                    ]);
+                    $label = implode(' · ', $parts);
+
+                    return (float) $a['share'] === 100.0 ? $label : $label.' '.(float) $a['share'].' %';
+                }, $allocations);
 
                 return [
                     'line_id' => $row['line_id'],
@@ -118,6 +131,12 @@ class BudgetGroupController extends Controller
                     'document_url' => $row['document_url'],
                     'description' => $row['description'],
                     'account' => $row['account']['code'],
+                    'account_name' => $row['account']['name'],
+                    // As booked, for the allocation dialog of the line.
+                    'debit' => $row['debit_account'] === $row['account']['code'] ? $row['amount'] : '0',
+                    'credit' => $row['debit_account'] === $row['account']['code'] ? '0' : $row['amount'],
+                    'allocations' => $allocations,
+                    'assigned' => array_values($assigned),
                     'counter' => $row['debit_account'] === $row['account']['code'] ? $row['credit_account'] : $row['debit_account'],
                     // Cost positive, as the block's actual counts it; the part
                     // at customer jobs is not in the actual.

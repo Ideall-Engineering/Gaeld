@@ -68,6 +68,11 @@ class SteeringController extends Controller
             'employees' => ProjectQuery::employeeOptions(),
             'groups' => $plans->forYear($currentOrg->id(), $year, withKeys: $canSteer)['groups'],
             'blockOptions' => ProjectQuery::blockOptions(),
+            // The bookings of a block can be moved to jobs and people here.
+            'allocationOptions' => $request->user()?->can('allocate', Project::class) ? [
+                'projects' => ProjectQuery::tree(),
+                'employees' => ProjectQuery::employeeOptions(),
+            ] : null,
         ]);
     }
 
