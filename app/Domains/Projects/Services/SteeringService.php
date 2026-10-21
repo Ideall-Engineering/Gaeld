@@ -391,7 +391,7 @@ class SteeringService
             'unshared' => $unshared,
             'open_payments' => $open,
             'open_payments_next_year' => $openNext,
-            'open_invoices' => $openInvoices,
+            'open_invoices' => $this->namedInvoices($openInvoices, $byId, $shares, array_column($rows, 'name', 'employee_id')),
             'expected_expenses' => $expected,
             'expected_expenses_next_year' => $expectedNext,
             'outlook' => $outlook,
@@ -692,6 +692,36 @@ class SteeringService
         }
 
         return $open;
+    }
+
+    /**
+     * Open invoices with the job they belong to and each person's part of
+     * what they still owe (net), as the open payments show them.
+     *
+     * @param  list<array<string, mixed>>  $invoices
+     * @param  Collection<int, Project>  $byId
+     * @param  Collection<array-key, \Illuminate\Database\Eloquent\Collection<int, ProjectShare>>  $shares
+     * @param  array<string, string>  $names
+     * @return list<array<string, mixed>>
+     */
+    private function namedInvoices(array $invoices, Collection $byId, Collection $shares, array $names): array
+    {
+        return array_map(function (array $invoice) use ($byId, $shares, $names): array {
+            $job = $invoice['job_id'] !== null ? $byId->get($invoice['job_id']) : null;
+            $key = $job !== null ? $this->keyFor($job, $byId, $shares) : [];
+            $people = [];
+            foreach ($key === [] ? [] : $this->split((string) $invoice['net'], $key) as $id => $part) {
+                $people[] = ['name' => $names[$id] ?? '', 'part' => $part];
+            }
+
+            return [
+                ...$invoice,
+                'job_code' => $job?->code,
+                'job_name' => $job?->name,
+                'group' => $job !== null ? $this->groupOf($job, $byId) : null,
+                'people' => $people,
+            ];
+        }, $invoices);
     }
 
     /**

@@ -65,11 +65,16 @@ const out = v => (num(v) === 0 ? 0 : -num(v))
 
 // The open payments of the year and, in a second tab, of the next one.
 const openYear = ref(props.year)
-const openPayments = computed(() => (openYear.value === props.year ? props.steering.open_payments : props.steering.open_payments_next_year) ?? [])
+// Open invoices are payments with a date: they join the list of their
+// due year (overdue or undated ones the running year), marked as invoices.
+const invoicesOf = y => (props.steering.open_invoices ?? []).filter(i => (i.due_date && i.due_date.slice(0, 4) > String(props.year) ? Number(i.due_date.slice(0, 4)) : props.year) === y)
+const paymentsOf = y => [
+  ...((y === props.year ? props.steering.open_payments : props.steering.open_payments_next_year) ?? []),
+  ...invoicesOf(y).map(i => ({ ...i, invoice: true, key: 'inv-' + i.id, sort: i.due_date, expected: i.net })),
+].sort((a, b) => (a.sort ?? '9999').localeCompare(b.sort ?? '9999'))
+const openPayments = computed(() => paymentsOf(openYear.value))
 const openTotal = computed(() => openPayments.value.reduce((sum, p) => sum + num(p.expected), 0))
 // Invoices sent and not paid yet: they come in on their due day.
-const openInvoices = computed(() => props.steering.open_invoices ?? [])
-const openInvoicesTotal = computed(() => openInvoices.value.reduce((sum, i) => sum + num(i.gross), 0))
 const today = new Date().toISOString().slice(0, 10)
 
 // The day a payment is expected, changed right in the list.
@@ -394,7 +399,7 @@ function removeItem(item) {
                 @click="openYear = y"
               >
                 {{ y }}
-                <span class="ml-1 text-xs text-[hsl(var(--muted-foreground))]">{{ (y === year ? steering.open_payments : steering.open_payments_next_year)?.length ?? 0 }}</span>
+                <span class="ml-1 text-xs text-[hsl(var(--muted-foreground))]">{{ paymentsOf(y).length }}</span>
               </button>
             </div>
           </div>
@@ -416,7 +421,35 @@ function removeItem(item) {
                 </tr>
               </thead>
               <tbody class="divide-y divide-[hsl(var(--border))]">
-                <tr v-for="p in openPayments" :key="p.id">
+                <template v-for="p in openPayments" :key="p.key ?? p.id">
+                  <tr v-if="p.invoice">
+                    <td class="py-1">
+                      <template v-if="p.job_id">
+                        <Link :href="`/projects/${p.job_id}/report?from=${openYear}-01-01&to=${openYear}-12-31`" class="hover:underline">{{ p.job_name }}</Link>
+                        <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ p.job_code }}<template v-if="p.group"> · {{ p.group }}</template></div>
+                      </template>
+                      <template v-else>
+                        {{ p.customer }}
+                        <div class="text-xs text-amber-700 dark:text-amber-300">{{ t('steering_open_invoice_no_job') }}</div>
+                      </template>
+                    </td>
+                    <td class="py-1">{{ t('steering_invoice_open_short') }}</td>
+                    <td class="py-1 tabular-nums" :class="p.due_date && p.due_date < today ? 'text-[hsl(var(--destructive))]' : ''">
+                      {{ p.due_date ? formatDate(p.due_date) : t('steering_open_undated') }}
+                      <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('steering_open_invoice_due') }}</div>
+                    </td>
+                    <td class="py-1 text-right tabular-nums">
+                      {{ formatCurrency(p.net) }}
+                      <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('steering_open_invoice_gross', { amount: formatCurrency(p.gross) }) }}</div>
+                    </td>
+                    <td class="py-1"></td>
+                    <td class="py-1 text-xs">
+                      <div v-for="person in p.people" :key="person.name">{{ person.name }} {{ formatCurrency(person.part) }}</div>
+                      <span v-if="!p.people.length" class="text-amber-700 dark:text-amber-300">{{ t('steering_open_nobody') }}</span>
+                    </td>
+                    <td class="py-1 text-xs"><Link :href="`/invoices/${p.id}`" class="hover:underline">{{ p.number }}</Link></td>
+                  </tr>
+                  <tr v-else>
                   <td class="py-1">
                     <Link :href="`/projects/${p.id}/report?from=${openYear}-01-01&to=${openYear}-12-31`" class="hover:underline">{{ p.name }}</Link>
                     <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ p.code }}<template v-if="p.group"> · {{ p.group }}</template></div>
@@ -449,6 +482,7 @@ function removeItem(item) {
                     <span v-if="!p.invoices.length" class="text-[hsl(var(--muted-foreground))]">{{ t('steering_open_no_invoice') }}</span>
                   </td>
                 </tr>
+                </template>
                 <tr class="font-semibold">
                   <td class="py-2" colspan="3">{{ t('total') }}</td>
                   <td class="py-2 text-right tabular-nums">{{ formatCurrency(openTotal) }}</td>
@@ -458,38 +492,6 @@ function removeItem(item) {
             </table>
           </div>
 
-          <template v-if="openYear === year">
-            <h3 class="mb-1 mt-6 text-sm font-semibold">{{ t('steering_open_invoices') }}</h3>
-            <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_open_invoices_desc') }}</p>
-            <p v-if="!openInvoices.length" class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_open_invoices_none') }}</p>
-            <div v-else class="overflow-x-auto">
-              <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
-                <thead>
-                  <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
-                    <th class="pb-2">{{ t('invoices') }}</th>
-                    <th class="pb-2">{{ t('project_kind_project') }}</th>
-                    <th class="pb-2">{{ t('due_date') }}</th>
-                    <th class="pb-2 text-right">{{ t('steering_open_invoices_gross') }}</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-[hsl(var(--border))]">
-                  <tr v-for="inv in openInvoices" :key="inv.id">
-                    <td class="py-1">
-                      <Link :href="`/invoices/${inv.id}`" class="hover:underline">{{ inv.number }}</Link>
-                      <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ inv.customer }}</div>
-                    </td>
-                    <td class="py-1 text-xs">{{ inv.job ?? '' }}</td>
-                    <td class="py-1 tabular-nums" :class="inv.due_date && inv.due_date < today ? 'text-[hsl(var(--destructive))]' : ''">{{ inv.due_date ? formatDate(inv.due_date) : '' }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(inv.gross) }}</td>
-                  </tr>
-                  <tr class="font-semibold">
-                    <td class="py-2" colspan="3">{{ t('total') }}</td>
-                    <td class="py-2 text-right tabular-nums">{{ formatCurrency(openInvoicesTotal) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </template>
         </CardContent>
       </Card>
 

@@ -127,6 +127,8 @@ class SteeringAuditTest extends TestCase
         $this->assertSame('0.00', $anna['contribution_received'], 'Invoiced is not received.');
         $this->assertSame('10000.00', $anna['contribution_expected']);
         $this->assertSame([$invoice->number], array_column($data['open_invoices'], 'number'));
+        // Listed with the open payments: its job, its due day, each part net.
+        $this->assertSame(['P2', '2026-11-20', '10000.00'], [$data['open_invoices'][0]['job_code'], $data['open_invoices'][0]['due_date'], $data['open_invoices'][0]['people'][0]['part']]);
         $this->assertSame('5000.00', $data['outlook']['bank_today']);
         $this->assertSame('0.00', $months['2026-11']['income'], 'The revenue is booked already, not in the result again.');
         $this->assertSame('10000.00', $months['2026-11']['cash_in']);
