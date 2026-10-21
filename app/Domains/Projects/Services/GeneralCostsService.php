@@ -26,7 +26,7 @@ class GeneralCostsService
 
     /**
      * @return array{
-     *     lines: array<int, array{block_id: int, amount: string, at_jobs: string, at_people: array<string, string>, at_acquisitions: string, in_block: string}>,
+     *     lines: array<int, array{block_id: int, amount: string, at_jobs: string, at_people: array<string, string>, at_acquisitions: string, at_assets: string, in_block: string}>,
      *     blocks: array<int, string>,
      *     people: array<string, string>,
      *     general_elsewhere: string,
@@ -94,19 +94,23 @@ class GeneralCostsService
             ->each(function (Acquisition $a) use (&$acquired): void {
                 $acquired[$a->journal_entry_id] = Money::add($acquired[$a->journal_entry_id] ?? '0.00', (string) $a->net_amount);
             });
-        if ($acquired !== []) {
-            DB::table('transaction_lines')
-                ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
-                ->whereIn('transaction_lines.journal_entry_id', array_keys($acquired))
-                ->where(function ($q): void {
-                    foreach (self::ASSET_PREFIXES as $prefix) {
-                        $q->orWhere('accounts.code', 'like', $prefix.'%');
-                    }
-                })
-                ->get(['transaction_lines.journal_entry_id', 'transaction_lines.debit', 'transaction_lines.credit'])
-                ->each(function ($l) use (&$acquired): void {
-                    $acquired[$l->journal_entry_id] = Money::subtract($acquired[$l->journal_entry_id], Money::subtract((string) $l->debit, (string) $l->credit));
-                });
+        // What each entry puts on fixed assets (debits only: a write-off in
+        // the same entry does not undo the capitalisation).
+        $toAssets = [];
+        DB::table('transaction_lines')
+            ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
+            ->whereIn('transaction_lines.journal_entry_id', $entryIds)
+            ->where(function ($q): void {
+                foreach (self::ASSET_PREFIXES as $prefix) {
+                    $q->orWhere('accounts.code', 'like', $prefix.'%');
+                }
+            })
+            ->get(['transaction_lines.journal_entry_id', 'transaction_lines.debit', 'transaction_lines.credit'])
+            ->each(function ($l) use (&$toAssets): void {
+                $toAssets[$l->journal_entry_id] = Money::add($toAssets[$l->journal_entry_id] ?? '0.00', (string) $l->debit);
+            });
+        foreach ($acquired as $entryId => $net) {
+            $acquired[$entryId] = Money::subtract($net, $toAssets[$entryId] ?? '0.00');
         }
 
         foreach ($lines as $line) {
@@ -149,6 +153,13 @@ class GeneralCostsService
             }
 
             $left = Money::subtract(Money::subtract($amount, $atJobs), array_reduce($atPeople, fn (string $s, string $p) => Money::add($s, $p), '0.00'));
+            // A credit that moves a cost to fixed assets (e.g. an article bought
+            // as material and later capitalised) is no general cost either.
+            $atAssets = '0.00';
+            if (Money::isNegative($left) && Money::isPositive($toAssets[$line->journal_entry_id] ?? '0.00')) {
+                $atAssets = $left;
+                $left = '0.00';
+            }
             $atAcquisitions = '0.00';
             if ($onAcquisition && Money::isPositive($acquired[$line->journal_entry_id]) && Money::isPositive($left)) {
                 $atAcquisitions = Money::compare($acquired[$line->journal_entry_id], $left) < 0 ? $acquired[$line->journal_entry_id] : $left;
@@ -162,6 +173,7 @@ class GeneralCostsService
                 'at_jobs' => $atJobs,
                 'at_people' => $atPeople,
                 'at_acquisitions' => $atAcquisitions,
+                'at_assets' => $atAssets,
                 'in_block' => $left,
             ];
             $result['blocks'][$block] = Money::add($result['blocks'][$block] ?? '0.00', Money::subtract($amount, $left));

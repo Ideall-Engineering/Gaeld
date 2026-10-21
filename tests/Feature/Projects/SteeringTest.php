@@ -434,6 +434,16 @@ class SteeringTest extends TestCase
             ], [['employee_id' => $this->ben->id, 'share' => '100']]);
         }
 
+        // Material bought earlier and moved to assets in an entry that also
+        // writes assets off: the credit is no general cost.
+        $writeOff = $this->makeAccount('6829', 'Write-offs', AccountType::Expense);
+        $post('RECLASS', [
+            new JournalLineData(accountId: (string) $assets->id, debit: '20.00', credit: '0'),
+            new JournalLineData(accountId: (string) $material->id, debit: '0', credit: '20.00'),
+            new JournalLineData(accountId: (string) $writeOff->id, debit: '219.00', credit: '0'),
+            new JournalLineData(accountId: (string) $assets->id, debit: '0', credit: '219.00'),
+        ]);
+
         $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
         $block = collect($data['blocks'])->keyBy('name')['Office'];
         $people = collect($data['people'])->keyBy('name');
