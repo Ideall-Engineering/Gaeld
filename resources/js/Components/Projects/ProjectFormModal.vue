@@ -9,7 +9,7 @@ import FormSelect from '@/Components/UI/FormSelect.vue'
 import FormTextarea from '@/Components/UI/FormTextarea.vue'
 import SearchableSelect from '@/Components/UI/SearchableSelect.vue'
 import { useTranslations } from '@/lib/useTranslations'
-import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, FileText, Plus, Trash2 } from 'lucide-vue-next'
 
 // Create or edit a job or a project (spec 010). The everyday fields come
 // first; code, responsible person, billing month and notes sit under
@@ -27,6 +27,8 @@ const props = defineProps({
   // Sent along with a new record, e.g. { allocate_line_id: 12 } to give the
   // new job a receipt right away (spec 010).
   extra: { type: Object, default: () => ({}) },
+  // Offer starting an invoice for the job being edited.
+  canInvoice: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close'])
@@ -202,6 +204,9 @@ function submit() {
       <div class="flex justify-end gap-2">
         <Button v-if="project && canDelete" variant="ghost" type="button" class="mr-auto text-[hsl(var(--destructive))]" @click="askDelete">
           <Trash2 class="mr-1 h-4 w-4" /> {{ t('delete') }}
+        </Button>
+        <Button v-if="project && canInvoice && !isGroup" as="a" variant="outline" :href="`/invoices/create?project_id=${project.id}`" :class="canDelete ? '' : 'mr-auto'">
+          <FileText class="mr-1 h-4 w-4" /> {{ t('job_create_invoice') }}
         </Button>
         <Button variant="outline" type="button" @click="emit('close')">{{ t('cancel') }}</Button>
         <Button type="submit" :disabled="form.processing" :loading="form.processing">{{ t('save') }}</Button>

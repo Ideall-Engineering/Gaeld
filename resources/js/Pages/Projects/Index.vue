@@ -494,7 +494,10 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
                 <td class="px-2 py-2 text-right font-medium tabular-nums whitespace-nowrap" :class="Number(job.net) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ money(job.net) }}</td>
                 <td class="hidden px-2 py-2 text-right tabular-nums md:table-cell">{{ margin(job) === null ? '' : `${margin(job)} %` }}</td>
                 <td class="hidden px-2 py-2 text-right sm:table-cell" @click.stop>
-                  <Button v-if="can.manage" variant="ghost" size="icon" :aria-label="t('edit')" @click="openEdit(job)"><Pencil class="h-4 w-4" /></Button>
+                  <div class="flex justify-end">
+                    <Button v-if="can.allocate" as="a" variant="ghost" size="icon" :href="`/invoices/create?project_id=${job.id}`" :aria-label="t('job_create_invoice')" :title="t('job_create_invoice')"><FileText class="h-4 w-4" /></Button>
+                    <Button v-if="can.manage" variant="ghost" size="icon" :aria-label="t('edit')" @click="openEdit(job)"><Pencil class="h-4 w-4" /></Button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -618,7 +621,7 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
       </div>
     </Card>
 
-    <ProjectFormModal :open="showForm" :project="editing" :preset="preset" :options="formOptions" :can-steer="can.steer" :can-delete="can.manage" @close="showForm = false" />
+    <ProjectFormModal :open="showForm" :project="editing" :preset="preset" :options="formOptions" :can-steer="can.steer" :can-delete="can.manage" :can-invoice="can.allocate" @close="showForm = false" />
 
     <BudgetGroupFormModal
       v-if="plan"

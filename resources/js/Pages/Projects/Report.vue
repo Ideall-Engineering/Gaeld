@@ -244,7 +244,7 @@ const showNewJob = ref(false)
       </div>
     </div>
 
-    <ProjectFormModal :open="showForm" :project="project" :options="options" :can-steer="can.steer" @close="showForm = false" />
+    <ProjectFormModal :open="showForm" :project="project" :options="options" :can-steer="can.steer" :can-invoice="can.allocate" @close="showForm = false" />
     <ProjectFormModal :open="showNewJob" :preset="{ parent_id: project.id }" :options="options" :can-steer="can.steer" @close="showNewJob = false" />
     <ConfirmDialog
       :open="showDelete"
