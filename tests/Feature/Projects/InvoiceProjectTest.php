@@ -116,9 +116,11 @@ class InvoiceProjectTest extends TestCase
         $this->assertEquals($invoiceBefore, (array) DB::table('invoices')->where('id', $invoice->id)->first(), 'The invoice record stays untouched.');
         $this->assertSame(1, JournalEntry::query()->whereKey($invoice->journal_entry_id)->value('revision'));
 
+        // A booked invoice is never without a job: cleared, it gets its own.
         $this->actAsOrg()->put("/invoices/{$invoice->id}/project", ['project_id' => null])->assertSessionHasNoErrors();
-        $this->assertSame(0, LineAllocation::count());
-        $this->assertSame(0, InvoiceProject::count());
+        $own = InvoiceProject::sole()->cost_center_id;
+        $this->assertNotContains($own, [$other->id, $this->website->id]);
+        $this->assertSame($own, LineAllocation::sole()->cost_center_id);
     }
 
     public function test_a_credit_note_keeps_the_project_of_its_invoice(): void
@@ -276,8 +278,12 @@ class InvoiceProjectTest extends TestCase
 
     public function test_unallocated_lines_come_with_suggestions_and_can_be_taken_over(): void
     {
-        // 1. an invoice without project of a customer with one open project
-        app(FinalizeInvoiceAction::class)->execute($this->createInvoice());
+        // 1. an invoice without project of a customer with one open project,
+        // booked before every invoice got a job of its own
+        $invoice = app(FinalizeInvoiceAction::class)->execute($this->createInvoice());
+        $own = InvoiceProject::query()->where('invoice_id', $invoice->id)->value('cost_center_id');
+        InvoiceProject::query()->where('invoice_id', $invoice->id)->delete();
+        LineAllocation::query()->where('cost_center_id', $own)->delete();
         // 2. a cost like one allocated before
         app(LedgerService::class)->postEntry($this->org->id, new JournalEntryData('2026-02-10', 'SW-1', 'Software 01/2026', [
             new JournalLineData(accountId: (string) $this->expenseAccount->id, debit: '30.00', credit: '0', allocations: $this->whole($this->area)),

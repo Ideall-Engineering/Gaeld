@@ -6,6 +6,7 @@ use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Projects\Services\InvoiceProjectService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -15,6 +16,7 @@ class CancelInvoiceAction
 {
     public function __construct(
         private LedgerService $ledgerService,
+        private InvoiceProjectService $invoiceProjects,
     ) {}
 
     public function execute(Invoice $invoice): Invoice
@@ -35,6 +37,7 @@ class CancelInvoiceAction
             }
 
             $invoice->update(['status' => InvoiceStatus::Cancelled]);
+            $this->invoiceProjects->invoiceCancelled($invoice);
 
             return $invoice->fresh();
         });

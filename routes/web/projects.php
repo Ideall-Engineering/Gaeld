@@ -53,6 +53,7 @@ Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 
     Route::put('/invoices/{invoice}/project', [InvoiceProjectController::class, 'update'])->name('invoices.project.update');
+    Route::post('/invoices/{invoice}/job', [InvoiceProjectController::class, 'createJob'])->name('invoices.job.store');
     Route::put('/accounting/journal-entries/{journalEntry}/allocations', [JournalAllocationController::class, 'update'])->name('accounting.journal-entries.allocations.update');
     Route::post('/accounting/journal-entry-allocations/bulk', [JournalAllocationController::class, 'bulk'])->name('accounting.journal-entries.allocations.bulk');
 });

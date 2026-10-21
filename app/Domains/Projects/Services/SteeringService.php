@@ -101,6 +101,7 @@ class SteeringService
             $byStatus[$status->value] = $zero();
         }
         $unshared = '0.00';
+        $unsharedJobs = [];
         $jobs = array_fill_keys($ids, []);
         $prospectJobs = array_fill_keys($ids, []);
         $laterJobs = array_fill_keys($ids, []);
@@ -120,6 +121,7 @@ class SteeringService
                 $key = $this->keyFor($project, $byId, $shares) ?: $ownersKey;
                 if ($key === []) {
                     $unshared = Money::add($unshared, $net);
+                    $unsharedJobs[] = ['id' => $project->id, 'code' => $project->code, 'name' => $project->name, 'group' => $this->groupOf($project, $byId), 'amount' => $net];
 
                     continue;
                 }
@@ -180,6 +182,7 @@ class SteeringService
             if ($key === []) {
                 if ($counted) {
                     $unshared = Money::add($unshared, $value);
+                    $unsharedJobs[] = ['id' => $project->id, 'code' => $project->code, 'name' => $project->name, 'group' => $this->groupOf($project, $byId), 'amount' => $value];
                 }
 
                 continue;
@@ -389,6 +392,7 @@ class SteeringService
                 'id' => $i->id, 'employee_id' => $i->employee_id, 'label' => $i->label, 'amount' => (string) $i->amount,
             ])->values()->all(),
             'unshared' => $unshared,
+            'unshared_jobs' => $unsharedJobs,
             'open_payments' => $open,
             'open_payments_next_year' => $openNext,
             'open_invoices' => $this->namedInvoices($openInvoices, $byId, $shares, array_column($rows, 'name', 'employee_id')),

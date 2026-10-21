@@ -82,6 +82,11 @@ function setPaymentDate(payment, value) {
   router.put(`/projects/${payment.id}/payment-date`, { payment_expected_on: value || null }, { preserveScroll: true })
 }
 
+// An open invoice without a job gets one of its own.
+function createJob(invoice) {
+  router.post(`/invoices/${invoice.id}/job`, {}, { preserveScroll: true })
+}
+
 // Spec 012: the expenses still expected, in the same two tabs, grouped by
 // month with the undated ones last. VAT is a payment, not a cost: listed,
 // but kept out of the net total.
@@ -198,9 +203,15 @@ function removeItem(item) {
         </CardHeader>
         <CardContent>
           <p class="mb-4 text-sm text-[hsl(var(--muted-foreground))]">{{ t('steering_desc') }}</p>
-          <p v-if="Number(steering.unshared) !== 0" class="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-            {{ t('steering_unshared', { amount: formatCurrency(steering.unshared) }) }}
-          </p>
+          <div v-if="Number(steering.unshared) !== 0" class="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            <p>{{ t('steering_unshared', { amount: formatCurrency(steering.unshared) }) }}</p>
+            <ul v-if="steering.unshared_jobs?.length" class="mt-2 space-y-0.5">
+              <li v-for="job in steering.unshared_jobs" :key="job.id" class="flex flex-wrap justify-between gap-x-3">
+                <Link :href="`/projects/${job.id}/report?edit=1`" class="underline hover:no-underline">{{ job.code }} {{ job.name }}<span v-if="job.group" class="opacity-75"> · {{ job.group }}</span></Link>
+                <span class="tabular-nums">{{ formatCurrency(job.amount) }} · {{ t('steering_unshared_fix') }}</span>
+              </li>
+            </ul>
+          </div>
           <div v-if="steering.done_without_revenue?.length" class="mb-4 rounded-md border border-[hsl(var(--destructive))]/40 bg-[hsl(var(--destructive))]/10 p-3 text-sm" role="alert">
             <div class="flex items-center gap-2 font-medium text-[hsl(var(--destructive))]">
               <AlertTriangle class="h-4 w-4 shrink-0" />
@@ -209,8 +220,12 @@ function removeItem(item) {
             <p class="mt-1 text-[hsl(var(--muted-foreground))]">{{ t('steering_done_without_revenue_hint') }}</p>
             <ul class="mt-2 space-y-0.5">
               <li v-for="job in steering.done_without_revenue" :key="job.id" class="flex flex-wrap justify-between gap-x-3">
-                <Link :href="`/projects/${job.id}/report`" class="hover:underline">{{ job.code }} {{ job.name }}<span v-if="job.group" class="text-[hsl(var(--muted-foreground))]"> · {{ job.group }}</span></Link>
-                <span class="tabular-nums text-[hsl(var(--muted-foreground))]">{{ job.expected !== null ? t('job_expected_hint', { amount: formatCurrency(job.expected) }) : '' }}</span>
+                <Link :href="`/projects/${job.id}/report`" class="underline hover:no-underline">{{ job.code }} {{ job.name }}<span v-if="job.group" class="text-[hsl(var(--muted-foreground))]"> · {{ job.group }}</span></Link>
+                <span class="flex flex-wrap gap-x-3 tabular-nums text-[hsl(var(--muted-foreground))]">
+                  <span v-if="job.expected !== null">{{ t('job_expected_hint', { amount: formatCurrency(job.expected) }) }}</span>
+                  <Link :href="`/invoices/create?project_id=${job.id}`" class="underline hover:no-underline">{{ t('job_create_invoice') }}</Link>
+                  <Link href="/projects/unallocated?tab=revenue" class="underline hover:no-underline">{{ t('steering_assign_revenue') }}</Link>
+                </span>
               </li>
             </ul>
           </div>
@@ -426,11 +441,15 @@ function removeItem(item) {
                     <td class="py-1">
                       <template v-if="p.job_id">
                         <Link :href="`/projects/${p.job_id}/report?from=${openYear}-01-01&to=${openYear}-12-31`" class="hover:underline">{{ p.job_name }}</Link>
-                        <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ p.job_code }}<template v-if="p.group"> · {{ p.group }}</template></div>
+                        <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ p.job_code }}<template v-if="p.group"> · {{ p.group }}</template><span v-else class="text-amber-700 dark:text-amber-300"> · {{ t('job_no_group') }}</span></div>
                       </template>
                       <template v-else>
                         {{ p.customer }}
                         <div class="text-xs text-amber-700 dark:text-amber-300">{{ t('steering_open_invoice_no_job') }}</div>
+                        <div class="mt-1 flex flex-wrap gap-2 text-xs">
+                          <button type="button" class="underline hover:no-underline" @click="createJob(p)">{{ t('steering_invoice_new_job') }}</button>
+                          <Link :href="`/invoices/${p.id}`" class="underline hover:no-underline">{{ t('steering_invoice_assign_job') }}</Link>
+                        </div>
                       </template>
                     </td>
                     <td class="py-1">{{ t('steering_invoice_open_short') }}</td>
@@ -452,7 +471,7 @@ function removeItem(item) {
                   <tr v-else>
                   <td class="py-1">
                     <Link :href="`/projects/${p.id}/report?from=${openYear}-01-01&to=${openYear}-12-31`" class="hover:underline">{{ p.name }}</Link>
-                    <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ p.code }}<template v-if="p.group"> · {{ p.group }}</template></div>
+                    <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ p.code }}<template v-if="p.group"> · {{ p.group }}</template><span v-else class="text-amber-700 dark:text-amber-300"> · {{ t('job_no_group') }}</span></div>
                   </td>
                   <td class="py-1">{{ t('project_status_' + p.status) }}</td>
                   <td class="py-1">
@@ -480,6 +499,7 @@ function removeItem(item) {
                   <td class="py-1 text-xs">
                     <div v-for="inv in p.invoices" :key="inv.id"><Link :href="`/invoices/${inv.id}`" class="hover:underline">{{ inv.number ?? t('draft') }}</Link> · {{ t('invoice_status_' + inv.status) }}</div>
                     <span v-if="!p.invoices.length" class="text-[hsl(var(--muted-foreground))]">{{ t('steering_open_no_invoice') }}</span>
+                    <div><Link :href="`/invoices/create?project_id=${p.id}`" class="underline hover:no-underline">{{ t('job_create_invoice') }}</Link></div>
                   </td>
                 </tr>
                 </template>

@@ -234,7 +234,10 @@ class SteeringTest extends TestCase
     {
         $this->makeProject('LOOSE')->update(['status' => ProjectStatus::InProgress, 'expected_amount' => '123.00', 'billing_month' => '2026-09-01']);
 
-        $this->assertSame('123.00', app(SteeringService::class)->forYear($this->organization->id, 2026)['unshared']);
+        $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
+        $this->assertSame('123.00', $data['unshared']);
+        // Named, so the page can lead straight to the job.
+        $this->assertSame([['LOOSE', '123.00']], array_map(fn (array $job) => [$job['code'], $job['amount']], $data['unshared_jobs']));
     }
 
     public function test_the_page_and_exports_are_seen_by_admins_but_changed_by_owners(): void

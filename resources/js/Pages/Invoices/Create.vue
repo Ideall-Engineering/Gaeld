@@ -40,6 +40,8 @@ const props = defineProps({
   projectOptions: { type: Array, default: null },
   contactPersons: { type: Array, default: () => [] },
   canCreateProject: { type: Boolean, default: false },
+  // An invoice started from a job: its customer, the job and its rest.
+  prefill: { type: Object, default: null },
 })
 
 const { t } = useTranslations()
@@ -48,7 +50,7 @@ const { formatCurrency } = useFormatters()
 const { isClosed: isIssueDateClosed, closedYear } = useClosedFiscalYear(() => form.issue_date)
 
 const form = useForm({
-  customer_id: '',
+  customer_id: props.prefill?.customer_id ?? '',
   contact_person_id: '',
   delivery_note: '',
   intro_text: '',
@@ -58,10 +60,10 @@ const form = useForm({
   notes: props.defaultNotes,
   payment_terms: '',
   tax_treatment: 'standard',
-  lines: [{ type: 'item', discount_type: 'flat', description: '', quantity: 1, unit: '', unit_price: 0, vat_rate_id: props.defaultVatRateId ? String(props.defaultVatRateId) : '' }],
+  lines: [{ type: 'item', discount_type: 'flat', description: props.prefill?.description ?? '', quantity: 1, unit: '', unit_price: Number(props.prefill?.unit_price ?? 0), vat_rate_id: props.defaultVatRateId ? String(props.defaultVatRateId) : '' }],
   justificatif: null,
   finalize: false,
-  project_id: '',
+  project_id: props.prefill?.project_id ?? '',
 })
 
 // Reload the suggested-number preview whenever the issue-date year changes so
@@ -166,6 +168,7 @@ function applyPaymentTerms() {
 
 watch(() => form.customer_id, applyPaymentTerms)
 watch(() => form.issue_date, applyPaymentTerms)
+if (form.customer_id) applyPaymentTerms()
 
 // When the user manually changes payment_terms, recompute due_date too
 // (unless they previously edited the due_date by hand).

@@ -10,6 +10,8 @@ use App\Domains\Projects\Models\InvoiceProject;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Services\InvoiceProjectService;
+use App\Domains\Projects\Services\ProjectReportService;
+use App\Domains\Projects\Services\SteeringService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -90,6 +92,34 @@ final class InvoiceProjectInput
                 && $row['kind'] !== ProjectKind::Area->value
                 && ! in_array($row['status'], [ProjectStatus::Done->value, ProjectStatus::Lost->value], true),
         ], ProjectQuery::tree());
+    }
+
+    /**
+     * A new invoice started from a job (?project_id=): its customer, the job
+     * and one line with what the job still brings beyond everything invoiced.
+     *
+     * @return array{customer_id: string, project_id: string, description: string, unit_price: string}|null
+     */
+    public static function prefill(Request $request): ?array
+    {
+        if (self::options($request) === null || ! $request->filled('project_id')) {
+            return null;
+        }
+
+        $job = Project::query()->whereKey($request->integer('project_id'))->where('kind', '<>', ProjectKind::Area->value)->first();
+        if ($job === null) {
+            return null;
+        }
+
+        $steering = app(SteeringService::class);
+        $ever = app(ProjectReportService::class)->totalsByProject($job->organization_id, '1900-01-01', '2999-12-31')[$job->id]['revenue'] ?? '0.00';
+
+        return [
+            'customer_id' => $job->contact_id === null ? '' : (string) $job->contact_id,
+            'project_id' => (string) $job->id,
+            'description' => $job->name,
+            'unit_price' => $steering->restOf($job, $ever),
+        ];
     }
 
     public static function currentFor(Invoice $invoice): ?int

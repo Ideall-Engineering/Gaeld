@@ -51,11 +51,13 @@ class ProjectRequest extends FormRequest
     }
 
     /**
-     * The next free code for a new job or group of the current organization.
+     * The next free code for a new job or group of the current organization,
+     * or of the one given (a job made by Gäld itself, outside a request).
      */
-    public static function nextCode(string $kind, string $name): string
+    public static function nextCode(string $kind, string $name, ?string $organizationId = null, ?int $year = null): string
     {
-        $taken = Project::query()->pluck('code')->map(fn ($code) => strtoupper((string) $code))->flip();
+        $query = $organizationId === null ? Project::query() : Project::withoutGlobalScopes()->where('organization_id', $organizationId);
+        $taken = $query->pluck('code')->map(fn ($code) => strtoupper((string) $code))->flip();
 
         if ($kind === ProjectKind::Area->value) {
             $base = 'B-'.(Str::of($name)->ascii()->upper()->replaceMatches('/[^A-Z0-9]+/', '-')->trim('-')->limit(20, '')->value() ?: 'PROJEKT');
@@ -67,7 +69,7 @@ class ProjectRequest extends FormRequest
             return $code;
         }
 
-        $prefix = 'P'.now()->format('y').'-';
+        $prefix = 'P'.substr((string) ($year ?? now()->year), -2).'-';
         $next = $taken->keys()
             ->filter(fn (string $code) => str_starts_with($code, $prefix) && ctype_digit(substr($code, strlen($prefix))))
             ->map(fn (string $code) => (int) substr($code, strlen($prefix)))

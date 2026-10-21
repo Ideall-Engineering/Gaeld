@@ -91,6 +91,7 @@ class InvoiceController extends Controller
             'projectOptions' => InvoiceProjectInput::options($request),
             'contactPersons' => DocumentContactPerson::options(),
             'canCreateProject' => InvoiceProjectInput::options($request) !== null && $request->user()->can('create', Project::class),
+            'prefill' => InvoiceProjectInput::prefill($request),
         ]);
     }
 

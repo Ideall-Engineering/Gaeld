@@ -16,7 +16,7 @@ import ProjectFormModal from '@/Components/Projects/ProjectFormModal.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 import { ref, computed } from 'vue'
-import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
+import { FileText, Pencil, Plus, Trash2 } from 'lucide-vue-next'
 
 // The page of a job or a project (spec 010, US4): what it brought in and
 // cost, who works on it with which net share, and every allocated receipt.
@@ -63,7 +63,8 @@ const usesExpected = computed(() => !isGroup.value && Number(props.report.total_
 const jobs = computed(() => props.report.projects.filter(p => p.id !== props.project.id))
 const jobName = computed(() => Object.fromEntries(props.report.projects.map(p => [p.id, p.name])))
 
-const showForm = ref(false)
+// ?edit=1 (from a steering warning) opens the form right away.
+const showForm = ref(props.can.manage && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('edit') === '1')
 const showDelete = ref(false)
 const deleting = ref(false)
 const deleteErrors = ref({})
@@ -96,12 +97,14 @@ const showNewJob = ref(false)
           <span>{{ isGroup ? t('project_kind_area') : t('project_kind_' + project.kind) }} · {{ project.code }}</span>
           <Badge v-if="!isGroup" :variant="statusVariant[project.status] ?? 'default'">{{ statusLabel(project.status) }}</Badge>
           <span v-if="project.contact_name">· {{ project.contact_name }}</span>
+          <span v-if="!isGroup && !project.parent" class="text-amber-700 dark:text-amber-300">· {{ t('job_no_group') }}</span>
           <span v-if="project.target_date">· {{ t('project_target_date') }} {{ formatDate(project.target_date) }}</span>
         </div>
       </div>
       <div class="flex flex-wrap items-end gap-2">
         <FormSelect id="year" :model-value="isWholeYear ? year : ''" :options="isWholeYear ? yearOptions : [{ value: '', label: `${formatDate(filters.from)} – ${formatDate(filters.to)}` }, ...yearOptions]" :aria-label="t('year')" class="w-40" @update:model-value="v => v && changeYear(v)" />
         <ExportDropdown :base-url="`/projects/${project.id}/report/export`" :params="exportParams" />
+        <Button v-if="!isGroup && can.allocate" as="a" variant="outline" :href="`/invoices/create?project_id=${project.id}`"><FileText class="mr-1 h-4 w-4" /> {{ t('job_create_invoice') }}</Button>
         <Button v-if="can.manage" variant="outline" @click="showForm = true"><Pencil class="mr-1 h-4 w-4" /> {{ t('edit') }}</Button>
         <Button v-if="can.manage && jobs.length === 0" variant="ghost" size="icon" :aria-label="t('delete')" @click="deleteErrors = {}; showDelete = true">
           <Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" />
