@@ -163,7 +163,7 @@ const bankOptions = computed(() => ({ ...axisOptions.value, plugins: { ...axisOp
 // Drawn, one foldable row per person: plan items and acquisitions.
 const drawnRows = computed(() => people.value
   .map(p => ({ ...p, items: itemsOf(p.employee_id) }))
-  .filter(p => p.items.length || num(p.acquisitions) !== 0 || num(p.still_due) !== 0))
+  .filter(p => p.items.length || num(p.acquisitions) !== 0))
 
 const itemForm = useForm({ year: props.year, employee_id: props.employees[0]?.id ?? '', label: '', amount: '' })
 function addItem() {
@@ -286,11 +286,7 @@ function removeItem(item) {
                             <td class="py-1"><Link :href="`/projects/acquisitions?year=${year}`" class="hover:underline">{{ t('acquisitions') }}</Link></td>
                             <td class="py-1 text-right tabular-nums">{{ formatCurrency(-person.acquisitions) }}</td>
                           </tr>
-                          <tr v-if="Number(person.still_due) !== 0">
-                            <td class="py-1">{{ t('steering_still_due') }}</td>
-                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(-person.still_due) }}</td>
-                          </tr>
-                          <tr v-if="!itemsOf(person.employee_id).length && Number(person.acquisitions) === 0 && Number(person.still_due) === 0">
+                          <tr v-if="!itemsOf(person.employee_id).length && Number(person.acquisitions) === 0">
                             <td colspan="2" class="py-1 text-[hsl(var(--muted-foreground))]">{{ t('steering_drawn_empty') }}</td>
                           </tr>
                         </tbody>
@@ -792,12 +788,6 @@ function removeItem(item) {
                     <td></td>
                     <td class="py-1"><Link :href="`/projects/acquisitions?year=${year}`" class="hover:underline">{{ t('acquisitions') }}</Link></td>
                     <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.acquisitions) }}</td>
-                    <td></td>
-                  </tr>
-                  <tr v-if="num(person.still_due) !== 0" class="text-[hsl(var(--muted-foreground))]">
-                    <td></td>
-                    <td class="py-1">{{ t('steering_still_due') }}</td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.still_due) }}</td>
                     <td></td>
                   </tr>
                 </template>

@@ -25,6 +25,7 @@ use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\ProjectShare;
+use App\Domains\Projects\Models\SteeringItem;
 use App\Domains\Projects\Services\AllocationCoverageService;
 use App\Domains\Projects\Services\ExpectedExpensesService;
 use App\Domains\Projects\Services\InvoiceProjectService;
@@ -140,19 +141,18 @@ class SteeringAuditTest extends TestCase
     }
 
     /**
-     * Anna's salary of 6'000 a month is still to pay for October to December
-     * (no slip booked). By hand: drawn 18'000 plus the employer's 5.3 %.
+     * Anna's year is in the plan items (fixed salary 60'000), October to
+     * December are not booked yet. By hand: drawn 60'000, the expected
+     * salaries are not added again.
      */
-    public function test_salaries_still_due_are_drawn(): void
+    public function test_expected_salaries_are_not_drawn_twice(): void
     {
         $this->anna->update(['gross_salary' => '6000.00', 'entry_date' => '2025-01-01', 'has_thirteenth_salary' => false, 'expense_allowance' => '0.00']);
-        DeductionRate::create(['organization_id' => $this->organization->id, 'name' => 'AHV AG', 'code' => 'avs_employer', 'rate' => '5.3000', 'type' => 'employer', 'is_active' => true]);
+        SteeringItem::create(['organization_id' => $this->organization->id, 'year' => 2026, 'employee_id' => $this->anna->id, 'label' => 'Fixed salary, ten months', 'amount' => '60000.00']);
 
         $anna = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['people'])->keyBy('name')['Anna A'];
 
-        $this->assertSame('18954.00', $anna['still_due']);
-        $this->assertSame('18954.00', $anna['drawn']);
-        $this->assertSame('-18954.00', $anna['play']);
+        $this->assertSame('60000.00', $anna['drawn']);
     }
 
     /**

@@ -323,14 +323,6 @@ class SteeringService
         // Spec 012: the expenses still expected, beside the payments; not
         // worked out for the inner call that only fetches next year's.
         $expected = $withNextYear ? $this->expected->forYear($organizationId, $year) : null;
-        // Salaries still to pay this year, with the employer's part, are
-        // drawn as well: the plan items only hold what is paid out.
-        $stillDue = [];
-        foreach ($expected['rows'] ?? [] as $row) {
-            if ($row['source'] === 'salary' && isset($row['employee_id'])) {
-                $stillDue[$row['employee_id']] = Money::add($stillDue[$row['employee_id']] ?? '0.00', Money::add($row['amount'], $row['employer']));
-            }
-        }
 
         $rows = [];
         foreach ($people as $person) {
@@ -338,7 +330,10 @@ class SteeringService
             // Received is paid: booked, less what open invoices still owe.
             $received = array_reduce($jobs[$id], fn (string $sum, array $job) => $job['booked'] ? Money::add($sum, Money::subtract(Money::subtract($job['part'], $job['open_part']), $job['rest_part'] ?? '0.00')) : $sum, '0.00');
             $planned = $items->where('employee_id', $id)->reduce(fn (string $sum, SteeringItem $i) => Money::add($sum, (string) $i->amount), '0.00');
-            $drawn = Money::add(Money::add($planned, $acquired[$id] ?? '0.00'), $stillDue[$id] ?? '0.00');
+            // The plan items hold the salary of the whole year (fixed salary,
+            // 13th, employer contributions, allowance): nothing is added from
+            // the expected salaries, or it would be drawn twice.
+            $drawn = Money::add($planned, $acquired[$id] ?? '0.00');
             $value = Money::add($contribution[$id], Money::subtract($credit[$id], $burden[$id]));
             $play = Money::subtract($value, $drawn);
 
@@ -361,7 +356,6 @@ class SteeringService
                 'value' => $value,
                 'planned_items' => $planned,
                 'acquisitions' => $acquired[$id] ?? '0.00',
-                'still_due' => $stillDue[$id] ?? '0.00',
                 'general' => $general[$id],
                 'drawn' => $drawn,
                 'booked_salary' => $salaries[$id] ?? '0.00',
@@ -759,7 +753,7 @@ class SteeringService
      */
     private function totals(array $rows): array
     {
-        $fields = ['contribution', 'general', 'credit', 'burden', 'effect', 'value', 'planned_items', 'acquisitions', 'still_due', 'drawn', 'booked_salary', 'play', 'prospects', 'later'];
+        $fields = ['contribution', 'general', 'credit', 'burden', 'effect', 'value', 'planned_items', 'acquisitions', 'drawn', 'booked_salary', 'play', 'prospects', 'later'];
         $totals = array_fill_keys($fields, '0.00');
         foreach ($rows as $row) {
             foreach ($fields as $field) {
