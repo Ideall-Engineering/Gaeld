@@ -71,7 +71,10 @@ class SteeringController extends Controller
             'steering' => [
                 'people' => array_map(fn (array $p) => ['employee_id' => $p['employee_id'], 'name' => $p['name']], $data['people']),
                 'blocks' => $data['blocks'],
+                'settlements' => $data['settlements'],
             ],
+            // Jobs a settlement can refer to.
+            'jobOptions' => ProjectQuery::tree(),
             'employees' => ProjectQuery::employeeOptions(),
             'groups' => $plan['groups'],
             'blockOptions' => ProjectQuery::blockOptions(),

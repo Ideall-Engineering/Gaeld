@@ -290,6 +290,10 @@ function removeItem(item) {
                     <td colspan="2" class="pb-2 pl-5">
                       <table class="w-full text-xs">
                         <tbody class="divide-y divide-[hsl(var(--border))]">
+                          <tr v-if="Number(person.settlements) !== 0">
+                            <td class="py-1"><Link :href="`/projects/general-costs?year=${year}`" class="hover:underline">{{ t('steering_settlements') }}</Link></td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.settlements) }}</td>
+                          </tr>
                           <tr v-for="block in blocksOf(person.employee_id)" :key="block.id">
                             <td class="py-1"><button type="button" class="text-left hover:underline" @click="editBlock(block)">{{ block.name }}</button></td>
                             <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.effect) }}</td>

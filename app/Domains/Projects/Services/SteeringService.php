@@ -12,6 +12,7 @@ use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\BudgetGroup;
+use App\Domains\Projects\Models\InternalSettlement;
 use App\Domains\Projects\Models\InvoiceProject;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\ProjectShare;
@@ -30,9 +31,10 @@ use Illuminate\Support\Facades\DB;
  * and quoted jobs, and amounts expected after the year, are shown beside it
  * but never planned with. The value is the booked net once revenue
  * is booked, before that the expected amount less booked costs.
- * Effect of cost blocks: who did the work is credited the planned amount,
- * everyone bears their part of the actual by the carry key (2026-10-21:
- * the booked costs are shared, not the plan). A booking counts once: what
+ * Effect of cost blocks: everyone bears their part of the actual by the
+ * carry key (2026-10-21: the booked costs are shared, not the plan). Work
+ * one does for everyone is paid by internal settlements (2026-10-22, the
+ * credit of a block is no longer counted). A booking counts once: what
  * is allocated to a person is charged to them, an acquisition charges its
  * people, and neither stays in a block (GeneralCostsService). Drawn: the
  * planned drawings, acquisitions and costs allocated to the person; booked
@@ -252,7 +254,7 @@ class SteeringService
             }
         }
 
-        // 2. Effect of cost blocks: credit for work done minus the part borne
+        // 2. Effect of cost blocks (the part borne) and internal settlements
         $groups = BudgetGroup::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
             ->where('year', $year)
@@ -267,7 +269,7 @@ class SteeringService
         // What is booked on each block so far, less the part at customer jobs.
         $actuals = array_column($this->plans->forYear($organizationId, $year)['groups'], 'actual', 'id');
 
-        $credit = $zero();
+        $settled = $zero();
         $burden = $zero();
         $blocks = [];
         foreach ($groups as $group) {
@@ -297,8 +299,6 @@ class SteeringService
                 // Nobody named: the owners bear equal parts.
                 $carry = $ownersKey;
             }
-            $credited = $group->people->mapWithKeys(fn (Employee $e) => [$e->id => (string) data_get($e, 'pivot.credit_share')])->filter(fn ($s) => Money::isPositive($s))->all();
-
             $actual = (string) ($actuals[$group->id] ?? '0.00');
             $row = [
                 'id' => $group->id,
@@ -310,22 +310,35 @@ class SteeringService
                 'carry_equal' => $carryEqual,
                 'people' => [],
             ];
+            // Since 2026-10-22 work done for everyone is an internal
+            // settlement; a credit key of a block no longer counts.
             $carryParts = $this->split($actual, $carry);
-            $creditParts = $credited === [] ? [] : $this->split($plan, $credited);
             foreach ($ids as $id) {
-                $c = $creditParts[$id] ?? '0.00';
                 $b = $carryParts[$id] ?? '0.00';
-                $credit[$id] = Money::add($credit[$id], $c);
                 $burden[$id] = Money::add($burden[$id], $b);
                 $row['people'][$id] = [
                     'carry_share' => isset($carry[$id]) ? (string) (float) $carry[$id] : '0',
-                    'credit_share' => isset($credited[$id]) ? (string) (float) $credited[$id] : '0',
-                    'credit' => $c,
                     'burden' => Money::negate($b),
-                    'effect' => Money::subtract($c, $b),
+                    'effect' => Money::negate($b),
                 ];
             }
             $blocks[] = $row;
+        }
+
+        // Internal settlements: the receiver gains, the payer gives up.
+        $settlements = InternalSettlement::withoutGlobalScopes()
+            ->where('organization_id', $organizationId)
+            ->where('year', $year)
+            ->with('project:id,code,name')
+            ->orderBy('id')
+            ->get();
+        foreach ($settlements as $settlement) {
+            if (isset($settled[$settlement->to_employee_id])) {
+                $settled[$settlement->to_employee_id] = Money::add($settled[$settlement->to_employee_id], (string) $settlement->amount);
+            }
+            if (isset($settled[$settlement->from_employee_id])) {
+                $settled[$settlement->from_employee_id] = Money::subtract($settled[$settlement->from_employee_id], (string) $settlement->amount);
+            }
         }
 
         // 3. Drawn: plan items and acquisitions; booked salary for comparison
@@ -354,7 +367,7 @@ class SteeringService
             // the expected salaries, or it would be drawn twice.
             $assigned = $once['people'][$id] ?? '0.00';
             $drawn = Money::add(Money::add($planned, $acquired[$id] ?? '0.00'), $assigned);
-            $value = Money::add($contribution[$id], Money::subtract($credit[$id], $burden[$id]));
+            $value = Money::add($contribution[$id], Money::subtract($settled[$id], $burden[$id]));
             $play = Money::subtract($value, $drawn);
 
             $rows[] = [
@@ -370,9 +383,11 @@ class SteeringService
                 // expected this year (expected amount less booked costs).
                 'contribution_received' => $received,
                 'contribution_expected' => Money::subtract($contribution[$id], $received),
-                'credit' => $credit[$id],
+                // What internal settlements bring (+) or cost (-) the person.
+                'settlements' => $settled[$id],
+                'credit' => $settled[$id],
                 'burden' => Money::negate($burden[$id]),
-                'effect' => Money::subtract($credit[$id], $burden[$id]),
+                'effect' => Money::subtract($settled[$id], $burden[$id]),
                 'value' => $value,
                 'planned_items' => $planned,
                 'acquisitions' => $acquired[$id] ?? '0.00',
@@ -406,6 +421,15 @@ class SteeringService
             'year' => $year,
             'people' => $rows,
             'blocks' => $blocks,
+            'settlements' => $settlements->map(fn (InternalSettlement $s) => [
+                'id' => $s->id,
+                'label' => $s->label,
+                'from_employee_id' => $s->from_employee_id,
+                'to_employee_id' => $s->to_employee_id,
+                'cost_center_id' => $s->cost_center_id,
+                'project' => $s->project?->only('id', 'code', 'name'),
+                'amount' => (string) $s->amount,
+            ])->values()->all(),
             'items' => $items->map(fn (SteeringItem $i) => [
                 'id' => $i->id, 'employee_id' => $i->employee_id, 'label' => $i->label, 'amount' => (string) $i->amount,
             ])->values()->all(),
@@ -805,7 +829,7 @@ class SteeringService
      */
     private function totals(array $rows): array
     {
-        $fields = ['contribution', 'general', 'credit', 'burden', 'effect', 'value', 'planned_items', 'acquisitions', 'assigned_costs', 'drawn', 'booked_salary', 'play', 'prospects', 'later'];
+        $fields = ['contribution', 'general', 'credit', 'settlements', 'burden', 'effect', 'value', 'planned_items', 'acquisitions', 'assigned_costs', 'drawn', 'booked_salary', 'play', 'prospects', 'later'];
         $totals = array_fill_keys($fields, '0.00');
         foreach ($rows as $row) {
             foreach ($fields as $field) {

@@ -14,6 +14,7 @@ use App\Domains\Projects\DTOs\LineAllocationData;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\BudgetGroup;
+use App\Domains\Projects\Models\InternalSettlement;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\ProjectShare;
 use App\Domains\Projects\Models\SteeringItem;
@@ -76,7 +77,8 @@ class SteeringTest extends TestCase
         // Lost projects count for nobody
         $this->makeProject('L', $area)->update(['status' => ProjectStatus::Lost, 'expected_amount' => '9999.00']);
 
-        // Cost block of 1000, all booked: Anna did the work, bears 30 %, Ben 70 %
+        // Cost block of 1000, all booked: Anna bears 30 %, Ben 70 %; for her
+        // work for everyone Ben pays Anna 1000 as an internal settlement.
         $block = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Rent', 'kind' => 'running', 'plan_amount' => '1000.00']);
         $rent = $this->makeAccount('6009', 'Rent', AccountType::Expense);
         $block->accounts()->sync([$rent->id]);
@@ -85,6 +87,7 @@ class SteeringTest extends TestCase
             $this->anna->id => ['carry_share' => '30', 'credit_share' => '100'],
             $this->ben->id => ['carry_share' => '70', 'credit_share' => '0'],
         ]);
+        InternalSettlement::create(['organization_id' => $this->organization->id, 'year' => 2026, 'label' => 'Bookkeeping', 'from_employee_id' => $this->ben->id, 'to_employee_id' => $this->anna->id, 'amount' => '1000.00']);
 
         SteeringItem::create(['organization_id' => $this->organization->id, 'year' => 2026, 'employee_id' => $this->anna->id, 'label' => 'Salary', 'amount' => '2000.00']);
         app(AcquisitionService::class)->save(null, $this->organization->id, [
@@ -111,14 +114,17 @@ class SteeringTest extends TestCase
         $this->assertSame('250.00', $ben['prospects']);
         $this->assertSame('B', $ben['prospect_jobs'][0]['code']);
         $this->assertSame('700.00', $anna['effect']);
-        $this->assertSame('-700.00', $ben['effect']);
+        $this->assertSame('-1700.00', $ben['effect']);
         $this->assertSame('1400.00', $anna['value']);
-        $this->assertSame('-300.00', $ben['value']);
+        $this->assertSame('-1300.00', $ben['value']);
         $this->assertSame('2000.00', $anna['drawn']);
         $this->assertSame('100.00', $ben['drawn']);
         $this->assertSame('-600.00', $anna['play']);
-        $this->assertSame('-400.00', $ben['play']);
-        $this->assertSame('-1000.00', $data['totals']['play']);
+        $this->assertSame('-1400.00', $ben['play']);
+        // The settlement moves money between them; the rent is a real cost.
+        $this->assertSame('-2000.00', $data['totals']['play']);
+        $this->assertSame('1000.00', $anna['settlements']);
+        $this->assertSame('-1000.00', $ben['settlements']);
     }
 
     public function test_a_block_without_a_key_is_borne_equally_and_credits_nobody(): void
@@ -131,7 +137,7 @@ class SteeringTest extends TestCase
         $people = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['people'])->keyBy('name');
 
         $this->assertSame('600.00', $people['Anna A']['effect']);
-        $this->assertSame('-800.00', $people['Ben B']['effect']);
+        $this->assertSame('-1800.00', $people['Ben B']['effect']);
     }
 
     public function test_open_jobs_are_shown_but_not_counted(): void
@@ -227,9 +233,8 @@ class SteeringTest extends TestCase
         $this->assertTrue($rent['plan_fixed']);
         $this->assertFalse($rent['carry_equal']);
         $this->assertSame('30', $rent['people'][$this->anna->id]['carry_share']);
-        $this->assertSame('100', $rent['people'][$this->anna->id]['credit_share']);
         $this->assertSame('-300.00', $rent['people'][$this->anna->id]['burden']);
-        $this->assertSame('1000.00', $rent['people'][$this->anna->id]['credit']);
+        $this->assertArrayNotHasKey('credit', $rent['people'][$this->anna->id], 'A block credits nobody since 2026-10-22.');
 
         $office = $blocks['Office'];
         $this->assertFalse($office['plan_fixed']);
@@ -237,7 +242,6 @@ class SteeringTest extends TestCase
         $this->assertSame('300.00', $office['plan']);
         $this->assertSame('300.00', $office['accounts'][0]['yearly']);
         $this->assertSame('50', $office['people'][$this->ben->id]['carry_share']);
-        $this->assertSame('0', $office['people'][$this->ben->id]['credit_share']);
     }
 
     public function test_a_project_without_any_key_is_reported_as_unshared(): void
@@ -348,7 +352,7 @@ class SteeringTest extends TestCase
 
         $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
 
-        $this->assertSame('-1000.00', $data['totals']['play'], 'Ben\'s part is still counted.');
+        $this->assertSame('-2000.00', $data['totals']['play'], 'Ben\'s part is still counted.');
         $this->assertCount(2, $data['people']);
     }
 
@@ -391,7 +395,7 @@ class SteeringTest extends TestCase
         }
     }
 
-    public function test_the_actual_is_borne_and_the_credit_follows_the_plan(): void
+    public function test_only_the_actual_is_borne(): void
     {
         // Half the rent is still to come: only what is booked is borne.
         $block = BudgetGroup::query()->where('name', 'Rent')->sole();
@@ -402,7 +406,6 @@ class SteeringTest extends TestCase
         $this->assertSame('1000.00', $rent['actual']);
         $this->assertSame('-300.00', $rent['people'][$this->anna->id]['burden']);
         $this->assertSame('-700.00', $rent['people'][$this->ben->id]['burden']);
-        $this->assertSame('2000.00', $rent['people'][$this->anna->id]['credit']);
     }
 
     public function test_a_booking_counts_once_in_the_block_at_a_person_or_as_an_acquisition(): void
@@ -461,6 +464,39 @@ class SteeringTest extends TestCase
         $this->assertSame('30.00', $rows['SHOP']['at_acquisitions']);
         $this->assertSame('0.00', $rows['ANNA']['in_block']);
         $this->assertSame('80.00', $rows['ALLG']['in_block']);
+    }
+
+    public function test_owners_keep_internal_settlements_on_the_general_costs_page(): void
+    {
+        $job = Project::query()->where('code', 'C')->sole();
+        $this->actAsOrg()->post('/projects/settlements', [
+            'year' => 2026, 'label' => 'Tax return', 'from_employee_id' => $this->anna->id, 'to_employee_id' => $this->ben->id, 'cost_center_id' => $job->id, 'amount' => '400',
+        ])->assertSessionHasNoErrors();
+        $this->actAsOrg()->post('/projects/settlements', [
+            'year' => 2026, 'label' => 'Self', 'from_employee_id' => $this->anna->id, 'to_employee_id' => $this->anna->id, 'amount' => '1',
+        ])->assertSessionHasErrors('to_employee_id');
+
+        $settlement = InternalSettlement::query()->where('label', 'Tax return')->sole();
+        $this->actAsOrg()->get('/projects/general-costs?year=2026')
+            ->assertInertia(fn (AssertableInertia $page) => $page->has('steering.settlements', 2)->where('steering.settlements.1.project.id', $job->id)->has('jobOptions'));
+        $people = collect(app(SteeringService::class)->forYear($this->organization->id, 2026)['people'])->keyBy('name');
+        $this->assertSame('600.00', $people['Anna A']['settlements']);
+        $this->assertSame('-600.00', $people['Ben B']['settlements']);
+
+        $this->actAsOrg()->put("/projects/settlements/{$settlement->id}", [
+            'year' => 2026, 'label' => 'Tax return 2025', 'from_employee_id' => $this->anna->id, 'to_employee_id' => $this->ben->id, 'amount' => '450',
+        ])->assertSessionHasNoErrors();
+        $this->assertSame('450.00', (string) $settlement->fresh()->amount);
+        $this->assertNull($settlement->fresh()->cost_center_id);
+
+        $admin = User::factory()->create(['onboarding_completed_at' => now()]);
+        $this->organization->users()->attach($admin->id, ['role' => 'admin']);
+        $this->assignOrganizationRole($admin, $this->organization, 'admin');
+        $this->actingAs($admin)->withSession(['current_organization_id' => $this->organization->id])
+            ->delete("/projects/settlements/{$settlement->id}")->assertForbidden();
+
+        $this->actAsOrg()->delete("/projects/settlements/{$settlement->id}")->assertSessionHasNoErrors();
+        $this->assertNull($settlement->fresh());
     }
 
     private function cost(Account $account, string $amount, string $date): void

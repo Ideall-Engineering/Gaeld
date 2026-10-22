@@ -25,6 +25,7 @@ use App\Domains\Projects\Controllers\AcquisitionController;
 use App\Domains\Projects\Controllers\AllocationReviewController;
 use App\Domains\Projects\Controllers\BudgetGroupApiController;
 use App\Domains\Projects\Controllers\BudgetGroupController;
+use App\Domains\Projects\Controllers\InternalSettlementController;
 use App\Domains\Projects\Controllers\JournalAllocationApiController;
 use App\Domains\Projects\Controllers\JournalAllocationController;
 use App\Domains\Projects\Controllers\PlannedExpenseController;
@@ -201,6 +202,9 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
         Route::put('/budget-groups/{budgetGroup}/people', [BudgetGroupApiController::class, 'people'])->name('api.budget-groups.people');
         Route::get('/steering', [SteeringController::class, 'indexApi'])->name('api.steering.index');
         Route::post('/steering-items', [SteeringController::class, 'storeItemApi'])->name('api.steering-items.store');
+        Route::post('/internal-settlements', [InternalSettlementController::class, 'store'])->name('api.internal-settlements.store');
+        Route::patch('/internal-settlements/{internalSettlement}', [InternalSettlementController::class, 'update'])->name('api.internal-settlements.update');
+        Route::delete('/internal-settlements/{internalSettlement}', [InternalSettlementController::class, 'destroy'])->name('api.internal-settlements.destroy');
         Route::post('/planned-expenses', [PlannedExpenseController::class, 'store'])->name('api.planned-expenses.store');
         Route::patch('/planned-expenses/{plannedExpense}', [PlannedExpenseController::class, 'update'])->name('api.planned-expenses.update');
         Route::delete('/planned-expenses/{plannedExpense}', [PlannedExpenseController::class, 'destroy'])->name('api.planned-expenses.destroy');

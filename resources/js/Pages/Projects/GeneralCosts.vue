@@ -7,13 +7,14 @@ import CardContent from '@/Components/UI/CardContent.vue'
 import Button from '@/Components/UI/Button.vue'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
+import FormInput from '@/Components/UI/FormInput.vue'
 import Badge from '@/Components/UI/Badge.vue'
 import ConfirmDialog from '@/Components/UI/ConfirmDialog.vue'
 import BudgetGroupFormModal from '@/Components/Projects/BudgetGroupFormModal.vue'
 import AllocationDialog from '@/Components/Projects/AllocationDialog.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
-import { router } from '@inertiajs/vue3'
+import { router, useForm } from '@inertiajs/vue3'
 import { computed, reactive, ref, watch } from 'vue'
 import { ChevronDown, ChevronRight, Copy, Download, FolderKanban, Pencil, Plus, Trash2 } from 'lucide-vue-next'
 
@@ -31,6 +32,7 @@ const props = defineProps({
   groups: { type: Array, default: () => [] },
   blockOptions: { type: Object, default: () => ({ accounts: [], kinds: [] }) },
   allocationOptions: { type: Object, default: null },
+  jobOptions: { type: Array, default: () => [] },
 })
 
 const { t } = useTranslations()
@@ -143,6 +145,54 @@ const deletingBlock = ref(null)
 function performDeleteBlock() {
   router.delete(`/projects/plan/${deletingBlock.value.id}`, { preserveScroll: true, onFinish: () => { deletingBlock.value = null } })
 }
+// Internal settlements: one person pays another for work done for everyone,
+// optionally for a job. Owners add, change and remove them.
+const settlements = computed(() => props.steering.settlements ?? [])
+const nameOf = id => people.value.find(p => p.employee_id === id)?.name ?? props.employees.find(e => e.id === id)?.name ?? '?'
+const settledOf = id => settlements.value.reduce((sum, s) => sum + (s.to_employee_id === id ? num(s.amount) : 0) - (s.from_employee_id === id ? num(s.amount) : 0), 0)
+const personOptions = computed(() => props.employees.map(e => ({ value: e.id, label: e.name })))
+const settlementJobOptions = computed(() => [
+  { value: '', label: t('settlement_no_job') },
+  ...props.jobOptions.filter(p => p.is_active).map(p => ({ value: String(p.id), label: `${'· '.repeat(p.depth)}${p.code} ${p.name}` })),
+])
+const blankSettlement = () => ({
+  year: props.year,
+  label: '',
+  from_employee_id: props.employees[1]?.id ?? '',
+  to_employee_id: props.employees[0]?.id ?? '',
+  cost_center_id: '',
+  amount: '',
+})
+const settlementForm = useForm(blankSettlement())
+const editingSettlement = ref(null)
+function editSettlement(row) {
+  editingSettlement.value = row
+  settlementForm.clearErrors()
+  Object.assign(settlementForm, {
+    year: props.year,
+    label: row.label,
+    from_employee_id: row.from_employee_id,
+    to_employee_id: row.to_employee_id,
+    cost_center_id: row.cost_center_id ? String(row.cost_center_id) : '',
+    amount: row.amount,
+  })
+}
+function resetSettlement() {
+  editingSettlement.value = null
+  settlementForm.clearErrors()
+  Object.assign(settlementForm, blankSettlement())
+}
+function saveSettlement() {
+  const options = { preserveScroll: true, onSuccess: resetSettlement }
+  settlementForm.transform(data => ({ ...data, cost_center_id: data.cost_center_id ? Number(data.cost_center_id) : null }))
+  if (editingSettlement.value) settlementForm.put(`/projects/settlements/${editingSettlement.value.id}`, options)
+  else settlementForm.post('/projects/settlements', options)
+}
+const deletingSettlement = ref(null)
+function performDeleteSettlement() {
+  router.delete(`/projects/settlements/${deletingSettlement.value.id}`, { preserveScroll: true, onFinish: () => { deletingSettlement.value = null } })
+}
+
 function copyPreviousBlocks() {
   router.post('/projects/plan/copy-previous', { year: props.year }, { preserveScroll: true })
 }
@@ -241,13 +291,6 @@ function copyPreviousBlocks() {
                       </td>
                       <td></td>
                     </tr>
-                    <tr class="text-xs text-[hsl(var(--muted-foreground))]">
-                      <td class="py-1 pl-5" colspan="3">{{ Object.values(block.people).some(p => num(p.credit_share) > 0) ? t('steering_block_credit') : t('steering_block_credit_none') }}</td>
-                      <td v-for="person in people" :key="person.employee_id" class="py-1 text-right tabular-nums">
-                        {{ num(block.people[person.employee_id]?.credit_share) }} % · {{ formatCurrency(block.people[person.employee_id]?.credit ?? 0) }}
-                      </td>
-                      <td></td>
-                    </tr>
                     <tr>
                       <td class="pb-3 pl-5 pt-1" :colspan="people.length + 4">
                         <p class="mb-1 text-xs font-medium">{{ t('block_lines_title', { year }) }}</p>
@@ -317,6 +360,64 @@ function copyPreviousBlocks() {
         </CardContent>
       </Card>
 
+      <Card class="mt-4">
+        <CardHeader><CardTitle>{{ t('settlements_title') }}</CardTitle></CardHeader>
+        <CardContent>
+          <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('settlements_desc') }}</p>
+          <p v-if="!settlements.length" class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('settlements_empty') }}</p>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-sm [&_td]:pr-3 [&_th]:pr-3">
+              <thead>
+                <tr class="border-b text-left text-[hsl(var(--muted-foreground))]">
+                  <th class="pb-2">{{ t('description') }}</th>
+                  <th class="pb-2">{{ t('settlement_from') }}</th>
+                  <th class="pb-2">{{ t('settlement_to') }}</th>
+                  <th class="hidden pb-2 sm:table-cell">{{ t('project') }}</th>
+                  <th class="pb-2 text-right">{{ t('amount') }}</th>
+                  <th v-if="canSteer" class="w-20 pb-2"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[hsl(var(--border))]">
+                <tr v-for="row in settlements" :key="row.id" :class="editingSettlement?.id === row.id ? 'bg-[hsl(var(--muted))]/40' : ''">
+                  <td class="py-1">{{ row.label }}</td>
+                  <td class="py-1">{{ nameOf(row.from_employee_id) }}</td>
+                  <td class="py-1">{{ nameOf(row.to_employee_id) }}</td>
+                  <td class="hidden py-1 sm:table-cell">
+                    <a v-if="row.project" :href="`/projects/${row.project.id}/report?from=${year}-01-01&to=${year}-12-31`" class="hover:underline">{{ row.project.name }}</a>
+                  </td>
+                  <td class="py-1 text-right tabular-nums">{{ formatCurrency(row.amount) }}</td>
+                  <td v-if="canSteer" class="py-1 text-right">
+                    <span class="flex justify-end">
+                      <Button variant="ghost" size="icon" :aria-label="t('edit')" @click="editSettlement(row)"><Pencil class="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" :aria-label="t('delete')" @click="deletingSettlement = row"><Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" /></Button>
+                    </span>
+                  </td>
+                </tr>
+                <tr class="border-t font-semibold">
+                  <td class="py-2" colspan="4">{{ t('settlements_balance') }}</td>
+                  <td class="py-2 text-right" :colspan="canSteer ? 2 : 1">
+                    <span v-for="person in people" :key="person.employee_id" class="block tabular-nums" :class="settledOf(person.employee_id) < 0 ? 'text-[hsl(var(--destructive))]' : ''">
+                      {{ person.name }} {{ settledOf(person.employee_id) > 0 ? '+' : '' }}{{ formatCurrency(settledOf(person.employee_id)) }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <form v-if="canSteer" class="mt-4 flex flex-wrap items-end gap-2" @submit.prevent="saveSettlement">
+            <FormInput id="settlement_label" v-model="settlementForm.label" :label="t('description')" :placeholder="t('settlement_placeholder')" :error="settlementForm.errors.label" class="min-w-[12rem] flex-1" />
+            <FormSelect id="settlement_from" v-model="settlementForm.from_employee_id" :label="t('settlement_from')" :options="personOptions" :error="settlementForm.errors.from_employee_id" class="min-w-[9rem]" />
+            <FormSelect id="settlement_to" v-model="settlementForm.to_employee_id" :label="t('settlement_to')" :options="personOptions" :error="settlementForm.errors.to_employee_id" class="min-w-[9rem]" />
+            <FormSelect id="settlement_job" v-model="settlementForm.cost_center_id" :label="t('project')" :options="settlementJobOptions" :error="settlementForm.errors.cost_center_id" class="min-w-[10rem]" />
+            <FormInput id="settlement_amount" v-model="settlementForm.amount" type="number" step="0.01" min="0" :label="t('amount')" :error="settlementForm.errors.amount" class="w-32" />
+            <Button type="submit" size="sm" :disabled="settlementForm.processing">
+              <Plus v-if="!editingSettlement" class="mr-1 h-4 w-4" /> {{ editingSettlement ? t('save') : t('add') }}
+            </Button>
+            <Button v-if="editingSettlement" type="button" size="sm" variant="outline" @click="resetSettlement">{{ t('cancel') }}</Button>
+          </form>
+        </CardContent>
+      </Card>
+
 
     <AllocationDialog v-if="allocationOptions" :open="!!allocating" :entry="allocating" :options="allocationOptions" @close="allocating = null" />
 
@@ -331,6 +432,7 @@ function copyPreviousBlocks() {
       :can-steer="canSteer"
       @close="showBlockForm = false"
     />
+    <ConfirmDialog :open="!!deletingSettlement" :title="t('confirm_delete')" :message="deletingSettlement?.label ?? ''" @confirm="performDeleteSettlement" @cancel="deletingSettlement = null" />
     <ConfirmDialog :open="!!deletingBlock" :title="t('confirm_delete')" :message="deletingBlock?.name ?? ''" @confirm="performDeleteBlock" @cancel="deletingBlock = null" />
   </AppLayout>
 </template>

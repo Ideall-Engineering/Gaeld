@@ -29,8 +29,8 @@ const { t } = useTranslations()
 const accountFilter = ref('')
 const showAccounts = ref(false)
 
-// Everyone bears an equal part unless set otherwise; nobody is credited
-// until someone is named as having done the work.
+// Everyone bears an equal part unless set otherwise. Work done for everyone
+// is paid by internal settlements (2026-10-22), not by a credit here.
 function equalCarry() {
   const n = Math.max(props.employees.length, 1)
   const equal = Math.floor((100 / n) * 10000) / 10000
@@ -96,9 +96,6 @@ function shared() {
 function alone(employee) {
   form.people = form.people.map(p => ({ ...p, carry_share: p.employee_id === employee.id ? '100' : '0' }))
 }
-function creditTo(employee) {
-  form.people = form.people.map(p => ({ ...p, credit_share: employee && p.employee_id === employee.id ? '100' : '0' }))
-}
 const firstName = e => e.name.split(' ')[0]
 
 function submit() {
@@ -133,20 +130,9 @@ const accountError = computed(() => Object.entries(form.errors).find(([key]) => 
             {{ t('job_quick_alone', { name: firstName(employee) }) }}
           </Button>
         </div>
-        <div class="mb-1 text-xs text-[hsl(var(--muted-foreground))]">{{ t('budget_group_credit') }}</div>
-        <div class="mb-3 flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" @click="creditTo(null)">{{ t('budget_group_quick_external') }}</Button>
-          <Button v-for="employee in employees" :key="'credit-' + employee.id" type="button" size="sm" variant="outline" @click="creditTo(employee)">
-            {{ t('budget_group_quick_did', { name: firstName(employee) }) }}
-          </Button>
-        </div>
-        <div class="grid grid-cols-3 gap-2 text-xs text-[hsl(var(--muted-foreground))]">
-          <span></span><span>{{ t('budget_group_carry') }}</span><span>{{ t('budget_group_credit') }}</span>
-        </div>
-        <div v-for="(person, index) in form.people" :key="person.employee_id" class="grid grid-cols-3 items-center gap-2">
+        <div v-for="(person, index) in form.people" :key="person.employee_id" class="grid grid-cols-2 items-center gap-2">
           <span class="text-sm">{{ employees.find(e => e.id === person.employee_id)?.name }}</span>
           <FormInput :id="`carry_${index}`" v-model="person.carry_share" type="number" step="0.01" min="0" max="100" :aria-label="t('budget_group_carry')" />
-          <FormInput :id="`credit_${index}`" v-model="person.credit_share" type="number" step="0.01" min="0" max="100" :aria-label="t('budget_group_credit')" />
         </div>
         <p v-if="form.errors.people" class="mt-1 text-xs text-[hsl(var(--destructive))]">{{ form.errors.people }}</p>
       </div>
