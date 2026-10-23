@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG PHP_IMAGE=php:8.4.23-fpm-alpine3.23
+ARG PHP_IMAGE=php:8.4.27-fpm-alpine3.23
 ARG NODE_IMAGE=node:22.23.1-alpine3.24
 ARG COMPOSER_IMAGE=composer:2.8.12
 ARG NGINX_IMAGE=nginx:1.30.0-alpine3.23
