@@ -5,6 +5,7 @@ namespace App\Http\Middleware\Api;
 use App\Domains\Api\Exceptions\ApiIdempotencyConflictException;
 use App\Domains\Api\Models\PersonalAccessToken;
 use App\Domains\Api\Services\ApiIdempotencyService;
+use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -105,6 +106,23 @@ class HandleApiIdempotency
             ], true);
     }
 
+    /**
+     * An invoice reverted to draft and finalized again goes through the same
+     * calls a second time; those are new requests, not retries. Finalizing
+     * opens a new posting after each reversal, every other call acts on the
+     * current posting, so a retry within one round still replays.
+     */
+    private function invoiceRound(Request $request, Invoice $invoice): string
+    {
+        $reversals = $invoice->ledgerEntries()->where('reference', 'like', 'REV-%')->count();
+
+        if ($request->route()?->getName() === 'api.invoices.finalize') {
+            return 'round'.$reversals;
+        }
+
+        return 'round'.($invoice->ledgerEntries()->count() - $reversals);
+    }
+
     private function fallbackReference(Request $request): string
     {
         foreach (['reference', 'number', 'external_reference'] as $field) {
@@ -132,6 +150,10 @@ class HandleApiIdempotency
         }
 
         foreach ($request->route()?->parameters() ?? [] as $parameter) {
+            if ($parameter instanceof Invoice) {
+                return $parameter->id.':'.$this->invoiceRound($request, $parameter).':'.$content;
+            }
+
             if (is_object($parameter) && isset($parameter->id)) {
                 return $parameter->id.':'.$content;
             }

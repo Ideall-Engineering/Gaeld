@@ -31,12 +31,13 @@ class PurgeInvoiceAction
             return;
         }
 
-        // Delete the reversal entry (REV-{number}) if it exists
-        JournalEntry::where('organization_id', $invoice->organization_id)
-            ->where('reference', 'REV-'.$invoice->number)
-            ->delete();
+        // Reversals first, each one points at the entry it reverses. An
+        // invoice corrected after issue holds several postings (see
+        // Invoice::ledgerEntries()).
+        $invoice->ledgerEntries()->where('reference', 'like', 'REV-%')->delete();
 
-        // Delete the original journal entry (cascades to transaction_lines & vat_entries)
+        // Then the postings themselves (cascades to transaction_lines & vat_entries)
+        $invoice->ledgerEntries()->delete();
         JournalEntry::where('id', $invoice->journal_entry_id)->delete();
     }
 }

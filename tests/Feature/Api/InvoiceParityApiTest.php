@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Api;
 
+use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
@@ -102,6 +104,32 @@ class InvoiceParityApiTest extends SecurityTestCase
 
         // As on the web, only an issued invoice goes back to draft.
         $this->withToken($this->tokenA)->postJson("/api/v1/invoices/{$id}/revert-to-draft")->assertForbidden();
+    }
+
+    public function test_an_issued_invoice_is_reverted_corrected_and_finalized_again(): void
+    {
+        foreach (['1100' => AccountType::Asset, '3000' => AccountType::Revenue, '2200' => AccountType::Liability] as $code => $type) {
+            Account::create(['organization_id' => $this->orgA->id, 'code' => $code, 'name' => "Konto {$code}", 'type' => $type->value]);
+        }
+        $id = $this->draft();
+        $this->withToken($this->tokenA)->patchJson("/api/v1/invoices/{$id}", ['due_date' => '2026-11-19'])->assertOk();
+        $this->withToken($this->tokenA)->postJson("/api/v1/invoices/{$id}/finalize")->assertOk();
+
+        $this->withToken($this->tokenA)->postJson("/api/v1/invoices/{$id}/revert-to-draft")
+            ->assertOk()->assertJsonPath('data.status', 'draft');
+        $this->withToken($this->tokenA)->patchJson("/api/v1/invoices/{$id}", ['notes' => 'Korrigiert'])->assertOk();
+
+        $this->withToken($this->tokenA)->postJson("/api/v1/invoices/{$id}/finalize")
+            ->assertOk()->assertJsonPath('data.status', 'sent');
+        $invoice = Invoice::findOrFail($id);
+        $this->assertSame($invoice->number.'-v2', $invoice->journalEntry->reference);
+
+        // A retry within the round still replays; the next round is new again.
+        $this->withToken($this->tokenA)->postJson("/api/v1/invoices/{$id}/finalize")->assertOk();
+        $this->withToken($this->tokenA)->postJson("/api/v1/invoices/{$id}/revert-to-draft")
+            ->assertOk()->assertJsonPath('data.status', 'draft');
+        $this->withToken($this->tokenA)->postJson("/api/v1/invoices/{$id}/finalize")->assertOk();
+        $this->assertSame($invoice->number.'-v3', $invoice->fresh()->journalEntry->reference);
     }
 
     public function test_a_cancelled_invoice_is_removed_for_good(): void

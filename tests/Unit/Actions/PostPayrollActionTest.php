@@ -39,6 +39,7 @@ class PostPayrollActionTest extends TestCase
 
         $this->ledger = Mockery::mock(LedgerService::class);
         $this->ledgerQuery = Mockery::mock(LedgerQueryService::class);
+        $this->ledgerQuery->shouldReceive('isDuplicateReferenceAny')->andReturnFalse()->byDefault();
         $sendEmail = Mockery::mock(SendSalarySlipEmailAction::class);
         $sendEmail->shouldReceive('execute')->zeroOrMoreTimes();
         $sourceTax = Mockery::mock(SourceTaxServiceInterface::class);

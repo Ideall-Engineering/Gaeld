@@ -5,9 +5,12 @@ namespace Tests\Feature\Invoicing;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
+use App\Domains\Invoicing\Actions\DeleteInvoiceAction;
 use App\Domains\Invoicing\Actions\FinalizeInvoiceAction;
 use App\Domains\Invoicing\Actions\RevertInvoiceToDraftAction;
 use App\Domains\Invoicing\DTOs\CreateInvoiceData;
@@ -90,6 +93,64 @@ class RevertInvoiceToDraftTest extends TestCase
             ->first();
         $this->assertNotNull($reversal);
         $this->assertTrue($reversal->is_posted);
+    }
+
+    public function test_a_reverted_invoice_is_finalized_again_under_a_versioned_reference(): void
+    {
+        $invoice = app(FinalizeInvoiceAction::class)->execute($this->createInvoice());
+        $invoice = app(RevertInvoiceToDraftAction::class)->execute($invoice);
+        $invoice->lines()->first()->update(['quantity' => 12, 'amount' => '1800.00', 'vat_amount' => '145.80']);
+        $invoice->recalculate();
+
+        $invoice = app(FinalizeInvoiceAction::class)->execute($invoice->fresh());
+
+        $this->assertEquals(InvoiceStatus::Sent, $invoice->status);
+        $this->assertSame('INV-2026-001', $invoice->number);
+        $this->assertSame('INV-2026-001-v2', $invoice->journalEntry->reference);
+
+        // Original, its reversal and the new entry: the books hold the corrected invoice once.
+        $this->assertSame(
+            ['INV-2026-001', 'INV-2026-001-v2', 'REV-INV-2026-001'],
+            JournalEntry::where('organization_id', $this->org->id)->orderBy('reference')->pluck('reference')->all(),
+        );
+        $this->assertEqualsWithDelta(1945.80, $this->receivableBalance(), 0.001);
+        $this->assertEqualsWithDelta(145.80, (float) VatEntry::sum('vat_amount'), 0.001);
+    }
+
+    public function test_an_invoice_is_corrected_a_second_time(): void
+    {
+        $invoice = app(FinalizeInvoiceAction::class)->execute($this->createInvoice());
+        $invoice = app(RevertInvoiceToDraftAction::class)->execute($invoice);
+        $invoice = app(FinalizeInvoiceAction::class)->execute($invoice);
+        $invoice = app(RevertInvoiceToDraftAction::class)->execute($invoice);
+
+        $invoice = app(FinalizeInvoiceAction::class)->execute($invoice);
+
+        $this->assertSame('INV-2026-001-v3', $invoice->journalEntry->reference);
+        $this->assertTrue(JournalEntry::where('reference', 'REV-INV-2026-001-v2')->where('is_posted', true)->exists());
+        $this->assertEqualsWithDelta(1621.50, $this->receivableBalance(), 0.001);
+    }
+
+    public function test_deleting_a_corrected_draft_removes_every_entry_it_posted(): void
+    {
+        $invoice = app(FinalizeInvoiceAction::class)->execute($this->createInvoice());
+        $invoice = app(RevertInvoiceToDraftAction::class)->execute($invoice);
+        $invoice = app(FinalizeInvoiceAction::class)->execute($invoice);
+        $invoice = app(RevertInvoiceToDraftAction::class)->execute($invoice);
+
+        app(DeleteInvoiceAction::class)->execute($invoice);
+
+        $this->assertSame(0, JournalEntry::where('organization_id', $this->org->id)->count());
+    }
+
+    private function receivableBalance(): float
+    {
+        $account = Account::where('organization_id', $this->org->id)->where('code', '1100')->firstOrFail();
+
+        return (float) TransactionLine::where('account_id', $account->id)
+            ->whereHas('journalEntry', fn ($query) => $query->where('is_posted', true))
+            ->selectRaw('COALESCE(SUM(debit - credit), 0) AS balance')
+            ->value('balance');
     }
 
     public function test_it_refuses_to_revert_a_paid_invoice(): void

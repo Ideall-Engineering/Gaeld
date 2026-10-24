@@ -160,6 +160,26 @@ class Invoice extends Model
         return $this->belongsTo(JournalEntry::class);
     }
 
+    /**
+     * Every journal entry this invoice posted: one per finalization
+     * ({number}, {number}-v2, ...) and the reversal of each (REV-...).
+     *
+     * @return Builder<JournalEntry>
+     */
+    public function ledgerEntries(): Builder
+    {
+        $number = (string) $this->number;
+
+        return JournalEntry::query()
+            ->where('organization_id', $this->organization_id)
+            ->where(function (Builder $query) use ($number): void {
+                foreach (['', 'REV-'] as $prefix) {
+                    $query->orWhere('reference', $prefix.$number)
+                        ->orWhere('reference', 'like', addcslashes($prefix.$number, '%_\\').'-v%');
+                }
+            });
+    }
+
     /** @return HasMany<InvoiceLine, $this> */
     public function lines(): HasMany
     {

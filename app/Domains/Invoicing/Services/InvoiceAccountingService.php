@@ -115,7 +115,7 @@ class InvoiceAccountingService
             $docType = $isCreditNote ? 'Credit Note' : 'Invoice';
             $journalEntry = $this->ledgerService->postEntry($orgId, new JournalEntryData(
                 date: $invoice->issue_date->toDateString(),
-                reference: $invoice->number,
+                reference: $this->resolveReference($invoice),
                 description: "{$docType} {$invoice->number} — ".($invoice->customer->name ?? 'N/A'),
                 lines: $lines,
             ));
@@ -150,6 +150,27 @@ class InvoiceAccountingService
 
             return $invoice->fresh(['lines', 'customer', 'journalEntry.lines']);
         });
+    }
+
+    /**
+     * The invoice number, or a versioned one ({number}-v2, -v3, ...) once an
+     * earlier posting of the same invoice was reverted to draft: the
+     * reversed entry keeps its reference, and references are unique.
+     */
+    private function resolveReference(Invoice $invoice): string
+    {
+        $base = (string) $invoice->number;
+
+        if (! $this->ledgerQuery->isDuplicateReferenceAny($invoice->organization_id, $base)) {
+            return $base;
+        }
+
+        $version = 2;
+        while ($this->ledgerQuery->isDuplicateReferenceAny($invoice->organization_id, "{$base}-v{$version}")) {
+            $version++;
+        }
+
+        return "{$base}-v{$version}";
     }
 
     /**

@@ -170,7 +170,7 @@ class PostPayrollAction
 
         $entry = new JournalEntryData(
             date: self::postingDate($slip, $organization)->toDateString(),
-            reference: "PAY-{$tag}-{$slip->period_year}-{$monthPad}",
+            reference: $this->resolveReference($orgId, "PAY-{$tag}-{$slip->period_year}-{$monthPad}"),
             description: $description,
             lines: $lines,
         );
@@ -380,5 +380,24 @@ class PostPayrollAction
         if ($slip->exists) {
             $slip->saveQuietly();
         }
+    }
+
+    /**
+     * A slip unposted and posted again gets a versioned reference
+     * ({base}-v2, -v3, ...): the reversed entry keeps the first one, and
+     * references are unique.
+     */
+    private function resolveReference(string $orgId, string $base): string
+    {
+        if (! $this->ledgerQuery->isDuplicateReferenceAny($orgId, $base)) {
+            return $base;
+        }
+
+        $version = 2;
+        while ($this->ledgerQuery->isDuplicateReferenceAny($orgId, "{$base}-v{$version}")) {
+            $version++;
+        }
+
+        return "{$base}-v{$version}";
     }
 }
