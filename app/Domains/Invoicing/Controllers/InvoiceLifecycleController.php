@@ -18,6 +18,7 @@ use App\Domains\Invoicing\Models\InvoicePayment;
 use App\Domains\Invoicing\Notifications\InvoicePaymentRecordedNotification;
 use App\Domains\Invoicing\Requests\RecordPaymentRequest;
 use App\Domains\Invoicing\Requests\UpdatePaymentDateRequest;
+use App\Domains\Invoicing\Services\InvoiceAccountingService;
 use App\Domains\Organizations\Enums\Permission;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
@@ -66,9 +67,15 @@ class InvoiceLifecycleController extends Controller
         return $target->with('success', __('app.invoice_cancelled'));
     }
 
-    public function revertToDraft(Invoice $invoice, RevertInvoiceToDraftAction $action): RedirectResponse
-    {
+    public function revertToDraft(
+        Invoice $invoice,
+        RevertInvoiceToDraftAction $action,
+        InvoiceAccountingService $accounting,
+    ): RedirectResponse {
         $this->authorize('revertToDraft', $invoice);
+
+        $postedOn = $invoice->journalEntry?->date->toDateString();
+        $settled = $postedOn !== null && $accounting->correctionDate($invoice->organization_id, $postedOn) !== $postedOn;
 
         try {
             $action->execute($invoice);
@@ -77,7 +84,7 @@ class InvoiceLifecycleController extends Controller
         }
 
         return redirect()->route('invoices.edit', $invoice)
-            ->with('success', __('app.invoice_reverted_to_draft'));
+            ->with('success', __($settled ? 'app.invoice_reverted_to_draft_settled_period' : 'app.invoice_reverted_to_draft'));
     }
 
     public function recordPayment(RecordPaymentRequest $request, Invoice $invoice, RecordPaymentAction $action): RedirectResponse

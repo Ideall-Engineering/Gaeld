@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Invoicing;
 
+use App\Domains\Accounting\Actions\PostVatSettlementAction;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
@@ -141,6 +142,37 @@ class RevertInvoiceToDraftTest extends TestCase
         app(DeleteInvoiceAction::class)->execute($invoice);
 
         $this->assertSame(0, JournalEntry::where('organization_id', $this->org->id)->count());
+    }
+
+    public function test_the_reversal_stays_in_the_open_period_of_the_invoice(): void
+    {
+        $this->travelTo('2026-10-25');
+        $invoice = app(FinalizeInvoiceAction::class)->execute($this->createInvoice());
+
+        $invoice = app(RevertInvoiceToDraftAction::class)->execute($invoice);
+        $invoice = app(FinalizeInvoiceAction::class)->execute($invoice);
+
+        $this->assertSame('2026-03-16', JournalEntry::where('reference', 'REV-INV-2026-001')->firstOrFail()->date->toDateString());
+        $this->assertSame('2026-03-16', $invoice->journalEntry->date->toDateString());
+    }
+
+    public function test_a_settled_period_is_left_alone_and_the_correction_goes_to_today(): void
+    {
+        Account::create(['organization_id' => $this->org->id, 'code' => '1170', 'name' => 'VAT Input', 'type' => AccountType::Asset->value]);
+        Account::create(['organization_id' => $this->org->id, 'code' => '2201', 'name' => 'VAT payable', 'type' => AccountType::Liability->value]);
+        $this->travelTo('2026-10-25');
+        $invoice = app(FinalizeInvoiceAction::class)->execute($this->createInvoice());
+        app(PostVatSettlementAction::class)->execute($this->org->id, '2026-01-01', '2026-03-31');
+
+        $response = $this->actAsOrg()->post("/invoices/{$invoice->id}/revert-to-draft");
+        $response->assertSessionHas('success', __('app.invoice_reverted_to_draft_settled_period'));
+        $invoice = app(FinalizeInvoiceAction::class)->execute($invoice->fresh());
+
+        $this->assertSame('2026-10-25', JournalEntry::where('reference', 'REV-INV-2026-001')->firstOrFail()->date->toDateString());
+        $this->assertSame('2026-10-25', $invoice->journalEntry->date->toDateString());
+        $this->assertSame('2026-03-16', $invoice->issue_date->toDateString());
+        // The filed quarter still holds what was filed.
+        $this->assertEqualsWithDelta(121.50, (float) VatEntry::whereHas('journalEntry', fn ($q) => $q->whereBetween('date', ['2026-01-01', '2026-03-31']))->sum('vat_amount'), 0.001);
     }
 
     private function receivableBalance(): float

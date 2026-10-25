@@ -113,9 +113,12 @@ class InvoiceAccountingService
             }
 
             $docType = $isCreditNote ? 'Credit Note' : 'Invoice';
+            $reference = $this->resolveReference($invoice);
+            $issueDate = $invoice->issue_date->toDateString();
             $journalEntry = $this->ledgerService->postEntry($orgId, new JournalEntryData(
-                date: $invoice->issue_date->toDateString(),
-                reference: $this->resolveReference($invoice),
+                // Finalized again after a correction: see correctionDate().
+                date: $reference === $invoice->number ? $issueDate : $this->correctionDate($orgId, $issueDate),
+                reference: $reference,
                 description: "{$docType} {$invoice->number} — ".($invoice->customer->name ?? 'N/A'),
                 lines: $lines,
             ));
@@ -150,6 +153,22 @@ class InvoiceAccountingService
 
             return $invoice->fresh(['lines', 'customer', 'journalEntry.lines']);
         });
+    }
+
+    /**
+     * The date a correction of an issued invoice is posted on. While the
+     * VAT period and fiscal year of $date are open, the correction stays
+     * there and the period shows the corrected invoice only. Once the
+     * period is settled (VAT settlement posted) it is left as filed and the
+     * correction goes to today.
+     */
+    public function correctionDate(string $orgId, string $date): string
+    {
+        if ($this->vatPeriodLocks->isLocked($orgId, $date) || $this->ledgerService->isFiscalYearClosedOn($orgId, $date)) {
+            return now()->toDateString();
+        }
+
+        return $date;
     }
 
     /**
