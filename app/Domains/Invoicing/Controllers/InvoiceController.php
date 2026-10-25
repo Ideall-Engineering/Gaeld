@@ -11,6 +11,7 @@ use App\Domains\Invoicing\Actions\FinalizeInvoiceAction;
 use App\Domains\Invoicing\Actions\UpdateInvoiceAction;
 use App\Domains\Invoicing\DTOs\CreateInvoiceData;
 use App\Domains\Invoicing\DTOs\UpdateInvoiceData;
+use App\Domains\Invoicing\Enums\InvoiceListState;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
@@ -52,13 +53,28 @@ class InvoiceController extends Controller
     {
         $this->authorize('viewAny', Invoice::class);
 
+        // A first visit lists invoices without the cancelled ones, as the type
+        // and status column show it. A link with filter[status] (dashboard)
+        // keeps its exact status instead of the column's default.
+        $filter = (array) $request->input('filter', ['type' => 'invoice']);
+        if (! array_key_exists('state', $filter) && ! filled($filter['status'] ?? null)) {
+            $filter['state'] = collect(InvoiceListState::defaults())->pluck('value')->implode(',');
+        }
+        $request->merge(['filter' => $filter]);
+        $counts = InvoiceQuery::stateCounts($request);
+
         return Inertia::render('Invoices/Index', [
             'invoices' => InvoiceQuery::list($request),
+            'states' => collect(InvoiceListState::cases())->map(fn (InvoiceListState $s) => [
+                'value' => $s->value,
+                'label' => $s->label(),
+                'count' => $counts[$s->value],
+            ])->all(),
             'query' => [
                 'sort' => $request->input('sort', 'issue_date'),
                 'direction' => $request->input('direction', 'desc'),
                 'search' => $request->input('search', ''),
-                'filter' => $request->input('filter', ['type' => 'invoice']),
+                'filter' => $filter,
             ],
         ]);
     }

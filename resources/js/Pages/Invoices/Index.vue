@@ -14,6 +14,8 @@ import { ref, computed } from 'vue'
 import { usePermissions } from '@/lib/usePermissions'
 import StatusMenu from '@/Components/Invoices/StatusMenu.vue'
 import InlineDate from '@/Components/Invoices/InlineDate.vue'
+import InvoiceTabs from '@/Components/Invoices/InvoiceTabs.vue'
+import StatusColumn from '@/Components/UI/StatusColumn.vue'
 
 const { t } = useTranslations()
 const { formatCurrency, formatDate } = useFormatters()
@@ -31,6 +33,7 @@ function isInvoiceOverdue(row) {
 
 const props = defineProps({
   invoices: Object,
+  states: { type: Array, default: () => [] },
   query: {
     type: Object,
     default: () => ({ sort: 'issue_date', direction: 'desc', search: '', filter: { type: 'invoice' } }),
@@ -139,7 +142,7 @@ function runStep() {
 }
 
 const columns = computed(() => [
-  { key: 'number', label: t('number'), sortable: true },
+  { key: 'number', label: t('number'), class: 'whitespace-nowrap', sortable: true },
   { key: 'customer', label: t('client'), format: (v) => v?.name ?? '—' },
   { key: 'issue_date', label: t('date'), format: (v) => formatDate(v), sortable: true },
   { key: 'due_date', label: t('due'), format: (v) => formatDate(v), sortable: true },
@@ -158,18 +161,6 @@ const statusVariant = {
 
 const statusFilters = computed(() => [
   {
-    key: 'status',
-    label: t('all_statuses'),
-    value: props.query.filter?.status ?? '',
-    options: [
-      { value: 'draft', label: t('invoice_status_draft') },
-      { value: 'sent', label: t('invoice_status_sent') },
-      { value: 'paid', label: t('invoice_status_paid') },
-      { value: 'overdue', label: t('invoice_status_overdue') },
-      { value: 'cancelled', label: t('invoice_status_cancelled') },
-    ],
-  },
-  {
     key: 'type',
     label: t('all_types'),
     value: props.query.filter?.type ?? '',
@@ -179,6 +170,9 @@ const statusFilters = computed(() => [
     ],
   },
 ])
+
+// Documents exist, only the chosen statuses or the search hide them.
+const hiddenByStatus = computed(() => props.states.some(s => s.count > 0))
 </script>
 
 <template>
@@ -187,149 +181,155 @@ const statusFilters = computed(() => [
       <p>{{ t('help_invoices_text') }}</p>
     </HelpText>
 
+    <InvoiceTabs current="invoices" />
+
     <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <p class="text-sm text-[hsl(var(--muted-foreground))]">
         {{ t('manage_invoices') }}
       </p>
-      <div class="flex flex-wrap gap-2">
-        <Button as="a" href="/invoices/recurring" variant="outline">
-          {{ t('recurring_invoices') }}
-        </Button>
-        <Button as="a" href="/invoices/create">
-          <Plus class="mr-2 h-4 w-4" />
-          {{ t('new_invoice') }}
-        </Button>
-      </div>
+      <Button as="a" href="/invoices/create">
+        <Plus class="mr-2 h-4 w-4" />
+        {{ t('new_invoice') }}
+      </Button>
     </div>
 
-    <DataTable
-      :columns="columns"
-      :rows="invoices?.data ?? []"
-      :pagination="invoices"
-      :row-link="(row) => `/invoices/${row.id}`"
-      :sort="query.sort"
-      :direction="query.direction"
-      searchable
-      :search-value="query.search"
-      :filters="statusFilters"
-      @sort="handleSort"
-      @search="handleSearch"
-      @filter="handleFilter"
-    >
-      <template #cell-number="{ value, row, mobile }">
-        <span class="flex items-center gap-1.5">
-          <span v-if="mobile">{{ value }}</span>
-          <Link v-else :href="`/invoices/${row.id}`" class="font-medium hover:underline">{{ value }}</Link>
-          <Badge v-if="row.type === 'credit_note'" variant="destructive" class="text-xs">
-            {{ t('credit_note') }}
-          </Badge>
-        </span>
-      </template>
-      <template #cell-customer="{ value, mobile }">
-        <Link v-if="value?.uuid && !mobile" :href="`/contacts/${value.uuid}`" class="hover:underline" :title="t('open_contact')">{{ value.name }}</Link>
-        <span v-else>{{ value?.name ?? '—' }}</span>
-      </template>
-      <template #cell-issue_date="{ value, row, mobile }">
-        <InlineDate :model-value="value" :editable="!mobile && isDraftEditable(row)" :label="t('issue_date')" @change="date => setDate(row, 'issue_date', date)" />
-      </template>
-      <template #cell-due_date="{ value, row, mobile }">
-        <span class="flex flex-wrap items-center gap-1.5">
-          <InlineDate :model-value="value" :editable="!mobile && isDraftEditable(row)" :label="t('due_date')" @change="date => setDate(row, 'due_date', date)" />
-          <Badge v-if="isInvoiceOverdue(row)" variant="destructive" class="text-xs">
-            {{ t('overdue_days', { days: daysOverdue(value) }) }}
-          </Badge>
-        </span>
-      </template>
-      <template #cell-total="{ value, row, mobile }">
-        <span v-if="mobile">{{ formatCurrency(value) }}</span>
-        <Link v-else :href="totalLink(row)" class="tabular-nums hover:underline" :title="isDraftEditable(row) ? t('edit_lines') : t('view')">{{ formatCurrency(value) }}</Link>
-      </template>
-      <template #cell-status="{ value, row, mobile }">
-        <Badge v-if="mobile" :variant="statusVariant[value] ?? 'secondary'">{{ t(`invoice_status_${value}`) }}</Badge>
-        <StatusMenu
-          v-else
-          :label="t(`invoice_status_${value}`)"
-          :variant="statusVariant[value] ?? 'secondary'"
-          :options="statusOptions(row)"
-          :aria-label="t('change_status')"
-          @select="option => chooseStep(row, option)"
-        />
-      </template>
-      <template #cell-actions="{ row }">
-        <div class="flex justify-end gap-1">
-          <Button
-            as="a"
-            :href="`/invoices/${row.id}`"
-            variant="ghost"
-            size="icon"
-            :aria-label="t('view') + ' ' + row.number"
-            :title="t('view')"
-            @click.stop
-          >
-            <Eye class="h-4 w-4" />
-          </Button>
-          <Button
-            v-if="row.status === 'draft'"
-            as="a"
-            :href="`/invoices/${row.id}/pdf-preview`"
-            target="_blank"
-            variant="ghost"
-            size="icon"
-            :aria-label="t('preview_draft')"
-            :title="t('preview_draft')"
-            @click.stop
-          >
-            <FileText class="h-4 w-4" />
-          </Button>
-          <Button
-            v-if="row.status !== 'draft' && row.status !== 'cancelled'"
-            as="a"
-            :href="`/invoices/${row.id}/qr-pdf`"
-            variant="ghost"
-            size="icon"
-            :aria-label="t('download_qr_invoice') + ' ' + row.number"
-            :title="t('download_qr_invoice')"
-            @click.stop
-          >
-            <Download class="h-4 w-4" />
-          </Button>
-          <Button
-            v-if="row.status === 'draft'"
-            as="a"
-            :href="`/invoices/${row.id}/edit`"
-            variant="ghost"
-            size="icon"
-            :aria-label="t('edit') + ' ' + row.number"
-            :title="t('edit')"
-            @click.stop
-          >
-            <Pencil class="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            :aria-label="t('duplicate') + ' ' + row.number"
-            :title="t('duplicate')"
-            @click.stop="duplicate(row)"
-          >
-            <Copy class="h-4 w-4" />
-          </Button>
-          <Button
-            v-if="row.status === 'draft'"
-            variant="ghost"
-            size="icon"
-            :aria-label="t('delete') + ' ' + row.number"
-            :title="t('delete')"
-            @click.stop="confirmDelete(row)"
-          >
-            <Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" />
-          </Button>
-        </div>
-      </template>
-      <template #empty>
-        <EmptyState :icon="FileText" :title="t('no_invoices_yet')" :description="t('no_invoices_yet_desc')" :action-label="t('new_invoice')" action-href="/invoices/create" />
-      </template>
-    </DataTable>
+    <div class="flex flex-col gap-4 2xl:flex-row">
+      <StatusColumn
+        :states="states"
+        :selected="query.filter?.state ?? ''"
+        @change="state => handleFilter({ key: 'state', value: state })"
+      />
+      <DataTable
+        class="min-w-0 flex-1"
+        :columns="columns"
+        :rows="invoices?.data ?? []"
+        :pagination="invoices"
+        :row-link="(row) => `/invoices/${row.id}`"
+        :sort="query.sort"
+        :direction="query.direction"
+        searchable
+        :search-value="query.search"
+        :filters="statusFilters"
+        @sort="handleSort"
+        @search="handleSearch"
+        @filter="handleFilter"
+      >
+        <template #cell-number="{ value, row, mobile }">
+          <span class="flex items-center gap-1.5">
+            <span v-if="mobile">{{ value }}</span>
+            <Link v-else :href="`/invoices/${row.id}`" class="font-medium hover:underline">{{ value }}</Link>
+            <Badge v-if="row.type === 'credit_note'" variant="destructive" class="text-xs">
+              {{ t('credit_note') }}
+            </Badge>
+          </span>
+        </template>
+        <template #cell-customer="{ value, mobile }">
+          <Link v-if="value?.uuid && !mobile" :href="`/contacts/${value.uuid}`" class="hover:underline" :title="t('open_contact')">{{ value.name }}</Link>
+          <span v-else>{{ value?.name ?? '—' }}</span>
+        </template>
+        <template #cell-issue_date="{ value, row, mobile }">
+          <InlineDate :model-value="value" :editable="!mobile && isDraftEditable(row)" :label="t('issue_date')" @change="date => setDate(row, 'issue_date', date)" />
+        </template>
+        <template #cell-due_date="{ value, row, mobile }">
+          <span class="flex flex-wrap items-center gap-1.5">
+            <InlineDate :model-value="value" :editable="!mobile && isDraftEditable(row)" :label="t('due_date')" @change="date => setDate(row, 'due_date', date)" />
+            <Badge v-if="isInvoiceOverdue(row)" variant="destructive" class="text-xs">
+              {{ t('overdue_days', { days: daysOverdue(value) }) }}
+            </Badge>
+          </span>
+        </template>
+        <template #cell-total="{ value, row, mobile }">
+          <span v-if="mobile">{{ formatCurrency(value) }}</span>
+          <Link v-else :href="totalLink(row)" class="tabular-nums hover:underline" :title="isDraftEditable(row) ? t('edit_lines') : t('view')">{{ formatCurrency(value) }}</Link>
+        </template>
+        <template #cell-status="{ value, row, mobile }">
+          <Badge v-if="mobile" :variant="statusVariant[value] ?? 'secondary'">{{ t(`invoice_status_${value}`) }}</Badge>
+          <StatusMenu
+            v-else
+            :label="t(`invoice_status_${value}`)"
+            :variant="statusVariant[value] ?? 'secondary'"
+            :options="statusOptions(row)"
+            :aria-label="t('change_status')"
+            @select="option => chooseStep(row, option)"
+          />
+        </template>
+        <template #cell-actions="{ row }">
+          <div class="flex justify-end gap-1">
+            <Button
+              as="a"
+              :href="`/invoices/${row.id}`"
+              variant="ghost"
+              size="icon"
+              :aria-label="t('view') + ' ' + row.number"
+              :title="t('view')"
+              @click.stop
+            >
+              <Eye class="h-4 w-4" />
+            </Button>
+            <Button
+              v-if="row.status === 'draft'"
+              as="a"
+              :href="`/invoices/${row.id}/pdf-preview`"
+              target="_blank"
+              variant="ghost"
+              size="icon"
+              :aria-label="t('preview_draft')"
+              :title="t('preview_draft')"
+              @click.stop
+            >
+              <FileText class="h-4 w-4" />
+            </Button>
+            <Button
+              v-if="row.status !== 'draft' && row.status !== 'cancelled'"
+              as="a"
+              :href="`/invoices/${row.id}/qr-pdf`"
+              variant="ghost"
+              size="icon"
+              :aria-label="t('download_qr_invoice') + ' ' + row.number"
+              :title="t('download_qr_invoice')"
+              @click.stop
+            >
+              <Download class="h-4 w-4" />
+            </Button>
+            <Button
+              v-if="row.status === 'draft'"
+              as="a"
+              :href="`/invoices/${row.id}/edit`"
+              variant="ghost"
+              size="icon"
+              :aria-label="t('edit') + ' ' + row.number"
+              :title="t('edit')"
+              @click.stop
+            >
+              <Pencil class="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              :aria-label="t('duplicate') + ' ' + row.number"
+              :title="t('duplicate')"
+              @click.stop="duplicate(row)"
+            >
+              <Copy class="h-4 w-4" />
+            </Button>
+            <Button
+              v-if="row.status === 'draft'"
+              variant="ghost"
+              size="icon"
+              :aria-label="t('delete') + ' ' + row.number"
+              :title="t('delete')"
+              @click.stop="confirmDelete(row)"
+            >
+              <Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" />
+            </Button>
+          </div>
+        </template>
+        <template #empty>
+          <EmptyState v-if="hiddenByStatus" :icon="FileText" :title="t('list_state_empty')" :description="t('list_state_empty_desc')" />
+          <EmptyState v-else :icon="FileText" :title="t('no_invoices_yet')" :description="t('no_invoices_yet_desc')" :action-label="t('new_invoice')" action-href="/invoices/create" />
+        </template>
+      </DataTable>
+    </div>
 
     <ConfirmDialog
       :open="!!deleteTarget"

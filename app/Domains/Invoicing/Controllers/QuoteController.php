@@ -11,6 +11,7 @@ use App\Domains\Invoicing\Actions\GenerateQuotePdfAction;
 use App\Domains\Invoicing\Actions\SaveQuoteAction;
 use App\Domains\Invoicing\DTOs\QuoteData;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
+use App\Domains\Invoicing\Enums\QuoteListState;
 use App\Domains\Invoicing\Enums\QuoteStatus;
 use App\Domains\Invoicing\Models\Quote;
 use App\Domains\Invoicing\Queries\QuoteQuery;
@@ -43,14 +44,26 @@ class QuoteController extends Controller
     {
         $this->authorize('viewAny', Quote::class);
 
+        // A first visit lists the open work: drafts, sent and accepted quotes.
+        $filter = (array) $request->input('filter', []);
+        if (! array_key_exists('state', $filter) && ! filled($filter['status'] ?? null)) {
+            $filter['state'] = collect(QuoteListState::defaults())->pluck('value')->implode(',');
+        }
+        $request->merge(['filter' => $filter]);
+        $counts = QuoteQuery::stateCounts();
+
         return Inertia::render('Quotes/Index', [
             'quotes' => QuoteQuery::list($request),
-            'statuses' => QuoteStatus::options(),
+            'states' => collect(QuoteListState::cases())->map(fn (QuoteListState $s) => [
+                'value' => $s->value,
+                'label' => $s->label(),
+                'count' => $counts[$s->value],
+            ])->all(),
             'query' => [
                 'sort' => $request->input('sort', 'issue_date'),
                 'direction' => $request->input('direction', 'desc'),
                 'search' => $request->input('search', ''),
-                'filter' => $request->input('filter', []),
+                'filter' => $filter,
             ],
             'can' => ['create' => $request->user()->can('create', Quote::class)],
         ]);

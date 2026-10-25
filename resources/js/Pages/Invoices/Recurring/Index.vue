@@ -13,6 +13,7 @@ import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 import { Plus, Pencil, Trash2, Pause, Play, RefreshCw } from 'lucide-vue-next'
 import EmptyState from '@/Components/UI/EmptyState.vue'
+import InvoiceTabs from '@/Components/Invoices/InvoiceTabs.vue'
 import { ref, computed } from 'vue'
 
 const { t } = useTranslations()
@@ -64,6 +65,8 @@ const columns = computed(() => [
 
 <template>
   <AppLayout :title="t('recurring_invoices')">
+    <InvoiceTabs current="recurring" />
+
     <div class="mb-6 flex items-center justify-between">
       <p class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('recurring_invoices') }}</p>
       <Button as="a" href="/invoices/recurring/create">

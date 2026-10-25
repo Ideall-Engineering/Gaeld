@@ -2,6 +2,7 @@
 
 namespace App\Domains\Invoicing\Queries;
 
+use App\Domains\Invoicing\Enums\QuoteListState;
 use App\Domains\Invoicing\Models\Quote;
 use App\Support\QueryBuilder;
 use Illuminate\Http\Request;
@@ -16,13 +17,27 @@ class QuoteQuery
     /** @return LengthAwarePaginator<int, Quote> */
     public static function list(Request $request, int $perPage = 20): LengthAwarePaginator
     {
-        return QueryBuilder::for(Quote::with(['customer', 'invoice:id,number']), $request)
+        $query = QueryBuilder::for(Quote::with(['customer', 'invoice:id,number']), $request)
             ->allowedSorts(['issue_date', 'valid_until', 'total', 'number', 'status'], 'issue_date', 'desc')
             ->allowedFilters(['status'])
             ->searchable(['number', 'title', 'customer.name'])
-            ->apply()
-            ->paginate($perPage)
-            ->withQueryString();
+            ->apply();
+
+        if ($request->has('filter.state')) {
+            QuoteListState::apply($query, QuoteListState::parse($request->input('filter.state')));
+        }
+
+        return $query->paginate($perPage)->withQueryString();
+    }
+
+    /**
+     * Quotes per group of the status column.
+     *
+     * @return array<string, int>
+     */
+    public static function stateCounts(): array
+    {
+        return QuoteListState::counts(Quote::query());
     }
 
     public static function fileName(Quote $quote): string
