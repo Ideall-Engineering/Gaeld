@@ -19,6 +19,7 @@ use App\Domains\Expenses\Enums\ExpenseTaxTreatment;
 use App\Domains\Expenses\Models\Expense;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
@@ -142,6 +143,23 @@ class AutomationHandlersTest extends TestCase
         $this->assertSame(1, $result->summary['matched']);
         $this->assertTrue($second->fresh()->is_reconciled);
         $this->assertSame(InvoiceStatus::Paid, $invoice->fresh()->status);
+    }
+
+    public function test_a_payment_with_a_rate_reference_is_booked(): void
+    {
+        $invoice = $this->invoice('210000000003139471430009017', '1621.50');
+        $rateReference = '210000000003139471430009301';
+        foreach ([['2026-01-31', '600.00', null], ['2026-02-28', '600.00', null], ['2026-03-31', '421.50', $rateReference]] as $index => [$date, $amount, $reference]) {
+            $invoice->installments()->create(['organization_id' => $this->org->id, 'position' => $index + 1, 'due_date' => $date, 'amount' => $amount, 'qr_reference' => $reference]);
+        }
+        // Rate 3 paid first: it is booked and fills rate 1, as every payment does.
+        $transaction = $this->incoming($rateReference, '421.50');
+
+        $result = app(QrPaymentMatchingHandler::class)->run($this->context());
+
+        $this->assertSame(1, $result->summary['matched']);
+        $this->assertTrue($transaction->fresh()->is_reconciled);
+        $this->assertSame('421.50', app(InstallmentPlanService::class)->states($invoice->fresh())[0]['paid']);
     }
 
     public function test_more_than_is_open_is_left_for_a_person(): void

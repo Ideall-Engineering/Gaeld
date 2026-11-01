@@ -63,7 +63,7 @@ class InvoiceReportingQuery
     public function hasMatchingQrReference(string $organizationId, string $reference): bool
     {
         return Invoice::where('organization_id', $organizationId)
-            ->where('qr_reference', $reference)
+            ->withQrReference($reference)
             ->whereIn('status', [InvoiceStatus::Sent, InvoiceStatus::Overdue])
             ->exists();
     }

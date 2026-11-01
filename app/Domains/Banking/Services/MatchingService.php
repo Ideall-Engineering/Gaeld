@@ -85,7 +85,7 @@ class MatchingService
         }
 
         $invoice = Invoice::where('organization_id', $orgId)
-            ->where('qr_reference', $ref)
+            ->withQrReference($ref)
             ->open()
             ->first();
 

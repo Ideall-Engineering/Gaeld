@@ -71,10 +71,10 @@ class QrPaymentMatchingHandler implements AutomationHandler
         foreach ($transactions as $transaction) {
             $reference = (string) $transaction->structured_reference;
 
-            // invoices carries a unique index on (organization_id, qr_reference),
-            // so a reference resolves to one invoice or to none.
+            // References are unique per organization, on invoices and on the
+            // rates of payment plans, so one resolves to one invoice or none.
             $invoice = Invoice::where('organization_id', $context->organization->id)
-                ->where('qr_reference', $reference)
+                ->withQrReference($reference)
                 ->open()
                 ->first();
 

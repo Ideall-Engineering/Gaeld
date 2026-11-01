@@ -258,10 +258,29 @@ class Invoice extends Model
      */
     public function scopeByOpenAmountRange(Builder $query, string $amount, string $tolerance): Builder
     {
-        return $query->whereRaw(
-            '(invoices.total - (SELECT COALESCE(SUM(invoice_payments.amount), 0) FROM invoice_payments WHERE invoice_payments.invoice_id = invoices.id)) BETWEEN ? AND ?',
-            [Money::subtract($amount, $tolerance), Money::add($amount, $tolerance)],
-        );
+        $range = [Money::subtract($amount, $tolerance), Money::add($amount, $tolerance)];
+
+        // Spec 013: the amount of one rate of a payment plan counts too.
+        return $query->where(fn (Builder $inner) => $inner
+            ->whereRaw(
+                '(invoices.total - (SELECT COALESCE(SUM(invoice_payments.amount), 0) FROM invoice_payments WHERE invoice_payments.invoice_id = invoices.id)) BETWEEN ? AND ?',
+                $range,
+            )
+            ->orWhereHas('installments', fn (Builder $rates) => $rates->whereBetween('amount', $range)));
+    }
+
+    /**
+     * The invoice a QR reference stands for: its own, or that of one of its
+     * rates (spec 013).
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeWithQrReference(Builder $query, string $reference): Builder
+    {
+        return $query->where(fn (Builder $inner) => $inner
+            ->where('qr_reference', $reference)
+            ->orWhereHas('installments', fn (Builder $rates) => $rates->where('qr_reference', $reference)));
     }
 
     /**

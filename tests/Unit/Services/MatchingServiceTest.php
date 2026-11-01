@@ -190,6 +190,39 @@ class MatchingServiceTest extends TestCase
         $this->assertSame(MatchConfidence::AmountAndCustomer->value, $matches->first()->confidence);
     }
 
+    public function test_a_rate_amount_is_suggested(): void
+    {
+        $service = app(MatchingService::class);
+        $customer = $this->createCustomer('Rates AG');
+        $invoice = Invoice::create([
+            'organization_id' => $this->organization->id,
+            'customer_id' => $customer->id,
+            'number' => 'INV-2026-021',
+            'status' => InvoiceStatus::Sent,
+            'issue_date' => '2026-03-01',
+            'due_date' => '2026-03-31',
+            'subtotal' => 1500.00,
+            'vat_amount' => 121.50,
+            'total' => 1621.50,
+            'currency' => 'CHF',
+        ]);
+        foreach ([['2026-03-31', '600.00'], ['2026-04-30', '600.00'], ['2026-05-31', '421.50']] as $index => [$date, $amount]) {
+            $invoice->installments()->create(['organization_id' => $this->organization->id, 'position' => $index + 1, 'due_date' => $date, 'amount' => $amount]);
+        }
+
+        $transaction = $this->createTransaction([
+            'amount' => 600.00,
+            'debtor_name' => 'Rates AG',
+            'reference' => null,
+        ]);
+
+        $matches = $service->findAndStoreMatches($transaction);
+
+        $this->assertCount(1, $matches);
+        $this->assertSame($invoice->id, $matches->first()->invoice_id);
+        $this->assertSame(MatchConfidence::AmountAndCustomer->value, $matches->first()->confidence);
+    }
+
     public function test_debit_transactions_do_not_create_matches(): void
     {
         $service = app(MatchingService::class);
