@@ -18,8 +18,9 @@ use Illuminate\Support\Facades\DB;
  * Each posted revenue and expense line of the year falls into one category:
  *
  * - assigned: allocated to a job (an internal one counts as general);
- * - acquisition: a cost of an acquisition, on its receipt or as the
- *             write-off of a fixed asset; the acquisition list charges it;
+ * - acquisition: a cost on the receipt of an acquisition, or the
+ *             write-off of a fixed asset on an account outside every cost
+ *             block; the acquisition list charges it;
  * - person:   a cost allocated to a person without a job, charged to them;
  * - general:  its account belongs to a cost block of the year, so the block
  *             says who bears it;
@@ -227,10 +228,12 @@ class AllocationCoverageService
 
             $line->category = match (true) {
                 $projects->isNotEmpty() && ! $onlyInternal => self::ASSIGNED,
-                $isCost && ! $payroll && (isset($acquisitionEntries[$line->journal_entry_id]) || isset($assetEntries[$line->journal_entry_id])) => self::ACQUISITION,
+                $isCost && ! $payroll && isset($acquisitionEntries[$line->journal_entry_id]) => self::ACQUISITION,
                 $isCost && ! $payroll && $own->whereNotNull('employee_id')->isNotEmpty() => self::PERSON,
                 $projects->isNotEmpty() => self::GENERAL,
                 isset($blocks[(int) $line->account_id]) => self::GENERAL,
+                // A write-off outside every block: the acquisition list bears it.
+                $isCost && ! $payroll && isset($assetEntries[$line->journal_entry_id]) => self::ACQUISITION,
                 $payroll => self::PAYROLL,
                 default => self::OPEN,
             };

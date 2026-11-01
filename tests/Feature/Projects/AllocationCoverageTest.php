@@ -101,12 +101,19 @@ class AllocationCoverageTest extends TestCase
             new JournalLineData(accountId: (string) $this->bank->id, debit: '0', credit: '60.00'),
         ]));
 
+        // A write-off on an account of a cost block is borne by the block.
+        $laptop = $this->makeAccount('6800', 'Depreciation laptop', AccountType::Expense);
+        $this->entry('ABS-2', $laptop, $assets, '500.00');
+        $block = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'IT', 'kind' => 'running']);
+        $block->accounts()->sync([$laptop->id]);
+
         $coverage = $this->coverage();
 
+        $this->assertSame(['count' => 1, 'amount' => '500.00'], $coverage['expense']['general']);
         $this->assertSame(['count' => 3, 'amount' => '640.00'], $coverage['expense']['acquisition']);
         $this->assertSame(['count' => 1, 'amount' => '60.00'], $coverage['expense']['person']);
         $this->assertSame(0, $coverage['open']);
-        $this->assertSame(4, $coverage['done']);
+        $this->assertSame(5, $coverage['done']);
     }
 
     public function test_a_cost_block_of_another_year_does_not_count(): void
