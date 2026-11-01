@@ -7,7 +7,9 @@ use App\Domains\Invoicing\DTOs\UpdateInvoiceData;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Invoicing\Support\DocumentContactPerson;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Updates a draft invoice and re-syncs its line items.
@@ -16,6 +18,7 @@ class UpdateInvoiceAction
 {
     public function __construct(
         private SyncInvoiceLinesAction $syncInvoiceLines,
+        private InstallmentPlanService $installmentPlans,
     ) {}
 
     public function execute(Invoice $invoice, UpdateInvoiceData $data): Invoice
@@ -55,16 +58,29 @@ class UpdateInvoiceAction
             $invoiceData['contact_person_id'] = $person?->id;
         }
 
-        $invoice->update($invoiceData);
+        // One transaction, so a plan the new lines no longer fit leaves the
+        // draft as it was (spec 013).
+        return DB::transaction(function () use ($invoice, $invoiceData, $data): Invoice {
+            $invoice->update($invoiceData);
 
-        if ($data->taxTreatment->appliesSwissVat()) {
-            $this->syncInvoiceLines->replace($invoice, $data->lines);
-        } else {
-            $this->syncInvoiceLines->replace($invoice, $data->lines, false);
-        }
+            if ($data->taxTreatment->appliesSwissVat()) {
+                $this->syncInvoiceLines->replace($invoice, $data->lines);
+            } else {
+                $this->syncInvoiceLines->replace($invoice, $data->lines, false);
+            }
 
-        $invoice->recalculate();
+            $invoice->recalculate();
 
-        return $invoice->load('lines');
+            // Without a new plan the stored one is laid over the new total
+            // again, so its last rate keeps carrying the rest.
+            $rates = $data->installments ?? $invoice->installments()->get()
+                ->map(fn ($rate) => ['due_date' => $rate->due_date->toDateString(), 'amount' => (string) $rate->amount])
+                ->all();
+            if ($rates !== [] || $invoice->installments()->exists()) {
+                $this->installmentPlans->sync($invoice, $rates);
+            }
+
+            return $invoice->load('lines');
+        });
     }
 }

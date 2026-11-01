@@ -455,6 +455,7 @@ class InvoiceApiController extends Controller
                 ->mapWithKeys(fn (string $field) => [$field => array_key_exists($field, $validated) ? $validated[$field] : $invoice->{$field}])
                 ->all(),
             'lines' => $validated['lines'] ?? $this->serializeExistingLines($invoice),
+            ...(array_key_exists('installments', $validated) ? ['installments' => $validated['installments'] ?? []] : []),
         ];
     }
 

@@ -15,7 +15,7 @@ class InvoiceQuery
      */
     public static function list(Request $request, int $perPage = 20): LengthAwarePaginator
     {
-        $query = QueryBuilder::for(Invoice::with(['customer', 'lines.vatRate', 'payments'])->withSum('payments', 'amount'), $request)
+        $query = QueryBuilder::for(Invoice::with(['customer', 'lines.vatRate', 'payments', 'installments'])->withSum('payments', 'amount'), $request)
             ->allowedSorts(['issue_date', 'due_date', 'total', 'number', 'status'], 'issue_date', 'desc')
             ->allowedFilters(['status', 'type'])
             ->searchable(['number', 'customer.name'])

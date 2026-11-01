@@ -133,6 +133,10 @@ class InvoiceController extends Controller
 
         $validated = $request->validated();
         $validated['organization_id'] = $orgId;
+        unset($validated['payment_plan'], $validated['installments']);
+        if (($installments = $request->installmentsInput()) !== null) {
+            $validated['installments'] = $installments;
+        }
         $newJustificatifPath = null;
         // Spec 009: checked before anything is written.
         $projectId = InvoiceProjectInput::fromRequest($request);
@@ -280,6 +284,10 @@ class InvoiceController extends Controller
     {
         $validated = $request->validated();
         $validated['organization_id'] = $invoice->organization_id;
+        unset($validated['payment_plan'], $validated['installments']);
+        if (($installments = $request->installmentsInput()) !== null) {
+            $validated['installments'] = $installments;
+        }
         $oldJustificatifPath = null;
         $projectId = InvoiceProjectInput::fromRequest($request, $invoice);
         $newJustificatifPath = null;

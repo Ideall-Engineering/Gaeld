@@ -8,6 +8,9 @@ use App\Domains\Invoicing\DTOs\UpdateInvoiceData;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Mockery;
 use Tests\TestCase;
 
@@ -22,7 +25,7 @@ class UpdateInvoiceActionTest extends TestCase
         parent::setUp();
 
         $this->syncInvoiceLines = Mockery::mock(SyncInvoiceLinesAction::class);
-        $this->action = new UpdateInvoiceAction($this->syncInvoiceLines);
+        $this->action = new UpdateInvoiceAction($this->syncInvoiceLines, Mockery::mock(InstallmentPlanService::class));
     }
 
     public function test_rejects_sent_invoice(): void
@@ -74,6 +77,10 @@ class UpdateInvoiceActionTest extends TestCase
             'intro_text' => null,
         ]);
         $invoice->shouldReceive('recalculate')->once();
+        $noPlan = Mockery::mock(HasMany::class);
+        $noPlan->shouldReceive('get')->andReturn(new Collection);
+        $noPlan->shouldReceive('exists')->andReturnFalse();
+        $invoice->shouldReceive('installments')->andReturn($noPlan);
         $invoice->shouldReceive('load')->once()->with('lines')->andReturnSelf();
 
         $this->syncInvoiceLines

@@ -6,6 +6,7 @@ use App\Domains\Contacts\Models\Contact;
 use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Support\DocumentFieldRules;
+use App\Domains\Invoicing\Support\InstallmentRules;
 use App\Support\Money;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Validation\Rule;
@@ -27,7 +28,9 @@ trait InvoiceValidationRules
                     ->when($ignoreInvoiceId !== null, fn ($rule) => $rule->ignore($ignoreInvoiceId)),
             ],
             'issue_date' => 'required|date',
-            'due_date' => [$finalize ? 'required' : 'nullable', 'date', 'after_or_equal:issue_date'],
+            'due_date' => [$finalize && ! $this->boolean('payment_plan') ? 'required' : 'nullable', 'date', 'after_or_equal:issue_date'],
+            'payment_plan' => 'sometimes|boolean',
+            ...InstallmentRules::rules(),
             'currency' => 'string|size:3',
             'tax_treatment' => [
                 'nullable',
@@ -71,6 +74,22 @@ trait InvoiceValidationRules
                 ->where('organization_id', $orgId)->whereKey($this->input('customer_id'))->first()),
             'justificatif' => 'nullable|file|mimes:'.config('uploads.allowed_mimes.document').'|max:'.config('uploads.max_size.document'),
         ];
+    }
+
+    /**
+     * The plan as the action takes it: the form sends `payment_plan` with
+     * the rates, because an empty list does not survive multipart data.
+     * Null when the request says nothing about the plan.
+     *
+     * @return list<array{due_date: string, amount?: string|null}>|null
+     */
+    public function installmentsInput(): ?array
+    {
+        if (! $this->has('payment_plan')) {
+            return $this->has('installments') ? array_values((array) $this->input('installments', [])) : null;
+        }
+
+        return $this->boolean('payment_plan') ? array_values((array) $this->input('installments', [])) : [];
     }
 
     /** @return array<int, \Closure(Validator): void> */

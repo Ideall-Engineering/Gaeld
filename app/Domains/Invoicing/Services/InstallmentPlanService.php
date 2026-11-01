@@ -119,7 +119,9 @@ class InstallmentPlanService
         $today = now()->startOfDay();
         $states = [];
 
-        foreach ($invoice->installments()->get() as $installment) {
+        $installments = $invoice->relationLoaded('installments') ? $invoice->installments : $invoice->installments()->get();
+
+        foreach ($installments as $installment) {
             $amount = Money::of((string) $installment->amount);
             $paid = Money::compare($remaining, $amount) >= 0
                 ? $amount

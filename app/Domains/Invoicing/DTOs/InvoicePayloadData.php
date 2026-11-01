@@ -16,6 +16,7 @@ abstract readonly class InvoicePayloadData
 
     /**
      * @param  array<int, InvoiceLineData>  $lines
+     * @param  list<array{due_date: string, amount?: string|int|float|null}>|null  $installments  the payment plan (spec 013); null leaves it as it is, [] removes it
      */
     public function __construct(
         public string $organizationId,
@@ -32,6 +33,7 @@ abstract readonly class InvoicePayloadData
         public ?string $deliveryNote = null,
         public ?string $introText = null,
         public bool $contactPersonNamed = true,
+        public ?array $installments = null,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -55,6 +57,9 @@ abstract readonly class InvoicePayloadData
             deliveryNote: blank($data['delivery_note'] ?? null) ? null : $data['delivery_note'],
             introText: blank($data['intro_text'] ?? null) ? null : $data['intro_text'],
             contactPersonNamed: array_key_exists('contact_person_id', $data),
+            installments: array_key_exists('installments', $data)
+                ? array_values((array) ($data['installments'] ?? []))
+                : null,
         );
     }
 

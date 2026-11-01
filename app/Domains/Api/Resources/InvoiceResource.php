@@ -3,7 +3,9 @@
 namespace App\Domains\Api\Resources;
 
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Projects\Support\InvoiceProjectInput;
+use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -40,6 +42,15 @@ class InvoiceResource extends JsonResource
             'amount_due' => $this->amountDue(),
             'lines' => InvoiceLineResource::collection($this->whenLoaded('lines')),
             'payments' => InvoicePaymentResource::collection($this->whenLoaded('payments')),
+            // Spec 013: the rates of the payment plan, payments filling them in order.
+            'installments' => array_map(fn (array $state) => [
+                'position' => $state['installment']->position,
+                'due_date' => $state['installment']->due_date->toDateString(),
+                'amount' => Money::of((string) $state['installment']->amount),
+                'amount_paid' => $state['paid'],
+                'amount_open' => $state['open'],
+                'qr_reference' => $state['installment']->qr_reference,
+            ], app(InstallmentPlanService::class)->states($this->resource)),
             'journal_entry' => new JournalEntryResource($this->whenLoaded('journalEntry')),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),

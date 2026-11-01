@@ -7,6 +7,7 @@ use App\Domains\Invoicing\DTOs\CreateInvoiceData;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
 use App\Domains\Invoicing\Support\DocumentContactPerson;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -26,6 +27,7 @@ class CreateInvoiceAction
     public function __construct(
         private SyncInvoiceLinesAction $syncInvoiceLines,
         private InvoiceNumberGenerator $numberGenerator,
+        private InstallmentPlanService $installmentPlans,
     ) {}
 
     public function execute(CreateInvoiceData $data): Invoice
@@ -90,6 +92,10 @@ class CreateInvoiceAction
             $this->syncInvoiceLines->create($invoice, $data->lines, $data->taxTreatment->appliesSwissVat());
 
             $invoice->recalculate();
+
+            if ($data->installments !== null && $data->installments !== []) {
+                $this->installmentPlans->sync($invoice, $data->installments);
+            }
 
             return $invoice->load('lines');
         });
