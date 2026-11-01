@@ -254,7 +254,7 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
             <div class="font-medium">{{ t('coverage_all_done', { year }) }}</div>
             <div class="text-sm text-[hsl(var(--muted-foreground))]">
               {{ t('coverage_revenue', { assigned: coverage.revenue.assigned.count, general: coverage.revenue.general.count, open: 0 }) }} ·
-              {{ t('coverage_expense', { assigned: coverage.expense.assigned.count, general: coverage.expense.general.count, open: 0 }) }}
+              {{ t('coverage_expense', { assigned: coverage.expense.assigned.count, general: coverage.expense.general.count, person: coverage.expense.person.count, acquisition: coverage.expense.acquisition.count, open: 0 }) }}
             </div>
           </div>
         </div>
@@ -269,7 +269,7 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
               <div class="text-sm text-[hsl(var(--muted-foreground))]">
                 {{ t('coverage_progress', { done: coverage.done, total: coverage.total }) }} ·
                 {{ t('coverage_revenue', { assigned: coverage.revenue.assigned.count, general: coverage.revenue.general.count, open: coverage.revenue.open.count }) }} ·
-                {{ t('coverage_expense', { assigned: coverage.expense.assigned.count, general: coverage.expense.general.count, open: coverage.expense.open.count }) }}
+                {{ t('coverage_expense', { assigned: coverage.expense.assigned.count, general: coverage.expense.general.count, person: coverage.expense.person.count, acquisition: coverage.expense.acquisition.count, open: coverage.expense.open.count }) }}
               </div>
             </div>
           </div>

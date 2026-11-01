@@ -5,6 +5,7 @@ namespace App\Domains\Projects\Services;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
+use App\Domains\Projects\Models\Acquisition;
 use App\Domains\Projects\Models\Project;
 use App\Support\Money;
 use Illuminate\Database\Query\Builder;
@@ -17,6 +18,9 @@ use Illuminate\Support\Facades\DB;
  * Each posted revenue and expense line of the year falls into one category:
  *
  * - assigned: allocated to a job (an internal one counts as general);
+ * - acquisition: a cost of an acquisition, on its receipt or as the
+ *             write-off of a fixed asset; the acquisition list charges it;
+ * - person:   a cost allocated to a person without a job, charged to them;
  * - general:  its account belongs to a cost block of the year, so the block
  *             says who bears it;
  * - payroll:  personnel expense (account class 5) without a cost block,
@@ -47,6 +51,13 @@ class AllocationCoverageService
 
     public const OPEN = 'open';
 
+    public const ACQUISITION = 'acquisition';
+
+    public const PERSON = 'person';
+
+    /** Fixed assets: an expense against them is a write-off. */
+    private const ASSET_PREFIXES = ['15', '16', '17'];
+
     /**
      * Counts and amounts per side and category, plus how many lines were
      * left out as reversals or corrections.
@@ -66,7 +77,7 @@ class AllocationCoverageService
         $lines = $this->lines($organizationId, $year);
         $summary = [];
         foreach (['revenue' => AccountType::Revenue->value, 'expense' => AccountType::Expense->value] as $side => $type) {
-            foreach ([self::ASSIGNED, self::GENERAL, self::PAYROLL, self::OPEN] as $category) {
+            foreach ([self::ASSIGNED, self::GENERAL, self::ACQUISITION, self::PERSON, self::PAYROLL, self::OPEN] as $category) {
                 $matching = $lines->filter(fn (\stdClass $line) => $line->type === $type && $line->category === $category);
                 $summary[$side][$category] = [
                     'count' => $matching->count(),
@@ -75,11 +86,8 @@ class AllocationCoverageService
             }
         }
 
-        $open = $summary['revenue'][self::OPEN]['count'] + $summary['expense'][self::OPEN]['count'];
-        $done = 0;
-        foreach (['revenue', 'expense'] as $side) {
-            $done += $summary[$side][self::ASSIGNED]['count'] + $summary[$side][self::GENERAL]['count'];
-        }
+        $open = $lines->filter(fn (\stdClass $line) => $line->category === self::OPEN)->count();
+        $done = $lines->filter(fn (\stdClass $line) => in_array($line->category, [self::ASSIGNED, self::GENERAL, self::ACQUISITION, self::PERSON], true))->count();
 
         $corrections = $this->base($organizationId, $year)->count() - $lines->count();
 
@@ -192,20 +200,38 @@ class AllocationCoverageService
     {
         $blocks = $this->blockAccounts($organizationId, $year);
 
-        $allocated = DB::table('line_allocations')
+        $allocations = DB::table('line_allocations')
             ->whereIn('transaction_line_id', $lines->pluck('id'))
-            ->whereNotNull('cost_center_id')
-            ->get(['transaction_line_id', 'cost_center_id'])
+            ->get(['transaction_line_id', 'cost_center_id', 'employee_id'])
             ->groupBy('transaction_line_id');
 
-        return $lines->map(function ($line) use ($blocks, $allocated, $internal) {
-            $projects = $allocated->get($line->id, collect())->pluck('cost_center_id')->map(fn ($id) => (int) $id);
+        // Receipts of acquisitions, and entries writing off a fixed asset.
+        $acquisitionEntries = Acquisition::withoutGlobalScopes()
+            ->where('organization_id', $organizationId)
+            ->whereNotNull('journal_entry_id')
+            ->pluck('journal_entry_id')
+            ->flip();
+        $assetEntries = DB::table('transaction_lines')
+            ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
+            ->whereIn('transaction_lines.journal_entry_id', $lines->pluck('journal_entry_id')->unique()->values())
+            ->where(fn (Builder $q) => collect(self::ASSET_PREFIXES)->each(fn (string $prefix) => $q->orWhere('accounts.code', 'like', $prefix.'%')))
+            ->pluck('transaction_lines.journal_entry_id')
+            ->flip();
+
+        return $lines->map(function ($line) use ($blocks, $allocations, $internal, $acquisitionEntries, $assetEntries) {
+            $own = $allocations->get($line->id, collect());
+            $projects = $own->whereNotNull('cost_center_id')->pluck('cost_center_id')->map(fn ($id) => (int) $id);
+            $isCost = $line->type === AccountType::Expense->value;
+            $onlyInternal = $projects->every(fn (int $id) => in_array($id, $internal, true));
+            $payroll = str_starts_with((string) $line->code, self::PAYROLL_CLASS);
 
             $line->category = match (true) {
-                $projects->isNotEmpty() && $projects->every(fn (int $id) => in_array($id, $internal, true)) => self::GENERAL,
-                $projects->isNotEmpty() => self::ASSIGNED,
+                $projects->isNotEmpty() && ! $onlyInternal => self::ASSIGNED,
+                $isCost && ! $payroll && (isset($acquisitionEntries[$line->journal_entry_id]) || isset($assetEntries[$line->journal_entry_id])) => self::ACQUISITION,
+                $isCost && ! $payroll && $own->whereNotNull('employee_id')->isNotEmpty() => self::PERSON,
+                $projects->isNotEmpty() => self::GENERAL,
                 isset($blocks[(int) $line->account_id]) => self::GENERAL,
-                str_starts_with((string) $line->code, self::PAYROLL_CLASS) => self::PAYROLL,
+                $payroll => self::PAYROLL,
                 default => self::OPEN,
             };
 

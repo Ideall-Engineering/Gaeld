@@ -9,7 +9,10 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Organizations\Models\Organization;
+use App\Domains\Payroll\Models\Employee;
+use App\Domains\Projects\DTOs\LineAllocationData;
 use App\Domains\Projects\Enums\ProjectKind;
+use App\Domains\Projects\Models\Acquisition;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Services\AllocationCoverageService;
@@ -78,6 +81,32 @@ class AllocationCoverageTest extends TestCase
         $this->assertSame(2, $coverage['open']);
         $this->assertSame(2, $coverage['done']);
         $this->assertSame(4, $coverage['total']);
+    }
+
+    public function test_acquisitions_and_costs_of_a_person_have_their_own_kind(): void
+    {
+        $assets = $this->makeAccount('1500', 'Machines', AccountType::Asset);
+        $depreciation = $this->makeAccount('6820', 'Depreciation', AccountType::Expense);
+        $person = Employee::factory()->for($this->organization)->create();
+
+        // A small article booked straight to expenses, listed as an acquisition.
+        $receipt = $this->entry('E-ACQ', $this->otherExpense, $this->bank, '40.00');
+        Acquisition::create(['organization_id' => $this->organization->id, 'item' => 'Cable', 'purchased_on' => '2026-05-04', 'quantity' => '1', 'unit_price' => '40.00', 'gross_amount' => '40.00', 'net_amount' => '40.00', 'status' => 'delivered', 'journal_entry_id' => $receipt->id]);
+        // The write-off of a fixed asset at year end, and its correction.
+        $this->entry('ABS-1', $depreciation, $assets, '900.00');
+        $this->entry('CORR-ABS-1', $assets, $depreciation, '300.00');
+        // A phone for one person.
+        app(LedgerService::class)->postEntry($this->organization->id, new JournalEntryData('2026-05-04', 'E-PERSON', 'Phone', [
+            new JournalLineData(accountId: (string) $this->otherExpense->id, debit: '60.00', credit: '0', allocations: [new LineAllocationData(projectId: null, employeeId: $person->id)]),
+            new JournalLineData(accountId: (string) $this->bank->id, debit: '0', credit: '60.00'),
+        ]));
+
+        $coverage = $this->coverage();
+
+        $this->assertSame(['count' => 3, 'amount' => '640.00'], $coverage['expense']['acquisition']);
+        $this->assertSame(['count' => 1, 'amount' => '60.00'], $coverage['expense']['person']);
+        $this->assertSame(0, $coverage['open']);
+        $this->assertSame(4, $coverage['done']);
     }
 
     public function test_a_cost_block_of_another_year_does_not_count(): void

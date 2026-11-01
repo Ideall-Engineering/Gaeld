@@ -78,6 +78,7 @@ const view = computed(() => props.rows.map((row) => {
     projectKey: group ? String(group.id) : (isGeneral ? 'general' : (jobs.length ? 'none' : row.category)),
     projectLabel: group ? group.name : (isGeneral ? t('general_project_name') : (jobs.length ? t('project_no_area') : (row.category === 'payroll' ? t('journal_payroll') : ''))),
     projectHint: isGeneral && !jobs.length ? row.block : null,
+    kind: row.category === 'assigned' ? (jobs.every(j => j.project?.kind === 'area') ? 'project' : 'job') : row.category,
     people: [...people.entries()].map(([employee_id, share]) => ({ employee_id, share })),
   }
 }))
@@ -98,13 +99,14 @@ const accountFilter = ref(list(saved.accounts))
 const projectFilter = ref(list(saved.projects))
 const jobFilter = ref(list(saved.jobs))
 const personFilter = ref(list(saved.people))
+const kindFilter = ref(list(saved.kinds))
 const descriptionFilter = ref(typeof saved.description === 'string' ? saved.description : '')
 const amountFilter = ref(typeof saved.amount === 'string' ? saved.amount : '')
 const defaultSort = { key: 'date', dir: 'asc' }
 const sort = ref(saved.sort && typeof saved.sort === 'object' ? saved.sort : { ...defaultSort })
-watch([accountFilter, projectFilter, jobFilter, personFilter, descriptionFilter, amountFilter, sort], () => {
+watch([accountFilter, projectFilter, jobFilter, personFilter, kindFilter, descriptionFilter, amountFilter, sort], () => {
   try {
-    localStorage.setItem(FILTER_KEY, JSON.stringify({ accounts: accountFilter.value, projects: projectFilter.value, jobs: jobFilter.value, people: personFilter.value, description: descriptionFilter.value, amount: amountFilter.value, sort: sort.value }))
+    localStorage.setItem(FILTER_KEY, JSON.stringify({ accounts: accountFilter.value, projects: projectFilter.value, jobs: jobFilter.value, people: personFilter.value, kinds: kindFilter.value, description: descriptionFilter.value, amount: amountFilter.value, sort: sort.value }))
   } catch {
     // Remembering the filter is a convenience only.
   }
@@ -126,14 +128,19 @@ const jobOptions = computed(() => props.projects
   .filter(p => p.kind !== 'area' && props.rows.some(r => r.allocations.some(a => a.project_id === p.id)))
   .map(p => ({ value: p.id, label: `${p.code} ${p.name}` })))
 const personOptions = computed(() => props.employees.map(e => ({ value: e.id, label: e.name })))
+// Every line has exactly one kind; "open" is what is still to do.
+const KINDS = ['open', 'job', 'project', 'general', 'person', 'acquisition', 'payroll']
+const kindOptions = KINDS.map(value => ({ value, label: t('journal_kind_' + value) }))
+const kindVariant = { open: 'warning', payroll: 'secondary' }
 const labelOf = (options, value) => options.find(o => o.value === value)?.label ?? value
 
-const columnLabel = { date: 'date', reference: 'reference', description: 'description', amount: 'amount', project: 'project_area', job: 'project' }
+const columnLabel = { date: 'date', reference: 'reference', description: 'description', amount: 'amount', kind: 'journal_kind', project: 'project_area', job: 'project' }
 const sortValue = {
   date: r => r.date,
   reference: r => r.reference ?? '',
   description: r => r.description ?? '',
   amount: r => Number(r.net),
+  kind: r => KINDS.indexOf(r.kind),
   project: r => r.projectLabel || '~',
   job: r => r.jobs[0]?.project?.name ?? '~',
 }
@@ -178,6 +185,7 @@ const filtered = computed(() => {
     .filter(r => !projectFilter.value.length || projectFilter.value.includes(r.projectKey))
     .filter(r => !jobFilter.value.length || r.jobs.some(j => jobFilter.value.includes(j.project_id)))
     .filter(r => !personFilter.value.length || r.people.some(p => personFilter.value.includes(p.employee_id)))
+    .filter(r => !kindFilter.value.length || kindFilter.value.includes(r.kind))
     .filter(r => !words.length || words.every(w => (r.description ?? '').toLowerCase().includes(w)))
     .filter(r => !amountOk || amountOk(r.net))
     .filter(r => !q || [r.reference, r.description, r.account.code, r.account.name, r.debit_account, r.credit_account, r.projectLabel, r.block, ...r.jobs.map(j => `${j.project?.code} ${j.project?.name}`)]
@@ -194,13 +202,14 @@ const shown = ref(PAGE)
 watch(filtered, () => { shown.value = PAGE })
 const visible = computed(() => filtered.value.slice(0, shown.value))
 
-const hasFilter = computed(() => [accountFilter, projectFilter, jobFilter, personFilter, descriptionFilter, amountFilter].some(f => f.value.length > 0) || search.value !== '')
+const hasFilter = computed(() => [accountFilter, projectFilter, jobFilter, personFilter, kindFilter, descriptionFilter, amountFilter].some(f => f.value.length > 0) || search.value !== '')
 const sorted = computed(() => sort.value.key !== defaultSort.key || sort.value.dir !== defaultSort.dir)
 function clearFilters() {
   accountFilter.value = []
   projectFilter.value = []
   jobFilter.value = []
   personFilter.value = []
+  kindFilter.value = []
   descriptionFilter.value = ''
   amountFilter.value = ''
   search.value = ''
@@ -346,7 +355,6 @@ function openSplit(row) {
   }
 }
 
-const categoryVariant = { open: 'warning', payroll: 'secondary' }
 </script>
 
 <template>
@@ -381,6 +389,10 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
           {{ t('account') }}: {{ accountFilter.join(', ') }}
           <button type="button" :aria-label="t('column_filter_clear')" @click="accountFilter = []"><X class="h-3 w-3" /></button>
         </span>
+        <span v-if="kindFilter.length" class="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-3 py-1">
+          {{ t('journal_kind') }}: {{ kindFilter.map(v => labelOf(kindOptions, v)).join(', ') }}
+          <button type="button" :aria-label="t('column_filter_clear')" @click="kindFilter = []"><X class="h-3 w-3" /></button>
+        </span>
         <span v-if="projectFilter.length" class="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-3 py-1">
           {{ t('project_area') }}: {{ projectFilter.map(v => labelOf(projectOptions, v)).join(', ') }}
           <button type="button" :aria-label="t('column_filter_clear')" @click="projectFilter = []"><X class="h-3 w-3" /></button>
@@ -411,6 +423,7 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
                 <th class="hidden px-2 py-2 font-medium lg:table-cell"><ColumnMenu v-model:selected="accountFilter" :label="t('debit')" column="debit" :sortable="false" :options="accountOptions" /></th>
                 <th class="hidden px-2 py-2 font-medium lg:table-cell"><ColumnMenu v-model:selected="accountFilter" :label="t('credit')" column="credit" :sortable="false" :options="accountOptions" /></th>
                 <th class="px-2 py-2 text-right font-medium"><ColumnMenu v-model:text="amountFilter" :label="t('amount')" column="amount" align="right" :sort="sort" :text-placeholder="t('journal_amount_filter')" :text-hint="t('journal_amount_filter_hint')" @sort="dir => sort = { key: 'amount', dir }" /></th>
+                <th class="px-2 py-2 font-medium"><ColumnMenu v-model:selected="kindFilter" :label="t('journal_kind')" column="kind" :sort="sort" :options="kindOptions" @sort="dir => sort = { key: 'kind', dir }" /></th>
                 <th class="hidden px-2 py-2 font-medium sm:table-cell"><ColumnMenu v-model:selected="projectFilter" :label="t('project_area')" column="project" :sort="sort" :options="projectOptions" @sort="dir => sort = { key: 'project', dir }" /></th>
                 <th class="px-2 py-2 font-medium"><ColumnMenu v-model:selected="jobFilter" :label="t('project')" column="job" :sort="sort" :options="jobOptions" @sort="dir => sort = { key: 'job', dir }" /></th>
                 <th v-if="can.steer" class="hidden whitespace-nowrap px-2 py-2 text-right font-medium md:table-cell"><ColumnMenu v-model:selected="personFilter" :label="t('project_shares')" column="people" :sortable="false" :options="personOptions" align="right" /></th>
@@ -436,6 +449,7 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
                 <td class="hidden px-2 py-1.5 font-mono text-xs lg:table-cell" :title="row.debit_account === row.account.code ? row.account.name : ''">{{ row.debit_account }}</td>
                 <td class="hidden px-2 py-1.5 font-mono text-xs lg:table-cell" :title="row.credit_account === row.account.code ? row.account.name : ''">{{ row.credit_account }}</td>
                 <td class="px-2 py-1.5 text-right tabular-nums whitespace-nowrap" :class="Number(row.net) > 0 ? 'text-green-700 dark:text-green-400' : ''">{{ formatCurrency(row.net) }}</td>
+                <td class="px-2 py-1.5"><Badge :variant="kindVariant[row.kind] ?? 'outline'" class="whitespace-nowrap">{{ t('journal_kind_' + row.kind) }}</Badge></td>
                 <td class="hidden max-w-[10rem] px-2 py-1 sm:table-cell">
                   <SearchableSelect
                     v-if="editingArea === row.line_id"
@@ -457,7 +471,7 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
                     @click="editArea(row)"
                   >
                     <span class="min-w-0 flex-1">
-                      <Badge v-if="row.category === 'open'" :variant="categoryVariant.open">{{ t('journal_open') }}</Badge>
+                      <span v-if="row.category === 'open'" class="text-[hsl(var(--muted-foreground))]">{{ mayChangeArea(row) ? t('journal_pick_project') : '·' }}</span>
                       <template v-else>
                         <span class="block truncate" :class="row.category === 'payroll' ? 'text-[hsl(var(--muted-foreground))]' : ''" :title="row.projectLabel">{{ row.projectLabel }}</span>
                         <span v-if="row.projectHint" :title="row.projectHint" class="block truncate text-xs text-[hsl(var(--muted-foreground))]">{{ row.projectHint }}</span>
@@ -505,7 +519,7 @@ const categoryVariant = { open: 'warning', payroll: 'secondary' }
                 </td>
               </tr>
               <tr v-if="filtered.length === 0">
-                <td colspan="9" class="py-6 text-center text-[hsl(var(--muted-foreground))]">{{ t('journal_none_match') }}</td>
+                <td colspan="10" class="py-6 text-center text-[hsl(var(--muted-foreground))]">{{ t('journal_none_match') }}</td>
               </tr>
             </tbody>
           </table>
