@@ -168,6 +168,29 @@ class InstallmentPlanService
     }
 
     /**
+     * The rates a payment slip is printed for: on an open invoice those not
+     * yet covered, each with what of it is open; otherwise every rate as
+     * issued.
+     *
+     * @return list<array{installment: InvoiceInstallment, amount: string}>
+     */
+    public function slips(Invoice $invoice): array
+    {
+        $open = in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue], true);
+        $slips = [];
+
+        foreach ($this->states($invoice) as $state) {
+            if (! $open) {
+                $slips[] = ['installment' => $state['installment'], 'amount' => Money::of((string) $state['installment']->amount)];
+            } elseif (Money::isPositive($state['open'])) {
+                $slips[] = ['installment' => $state['installment'], 'amount' => $state['open']];
+            }
+        }
+
+        return $slips;
+    }
+
+    /**
      * Refuses to finalize a plan that no longer fits the total, for example
      * after a rate was changed outside the form.
      *

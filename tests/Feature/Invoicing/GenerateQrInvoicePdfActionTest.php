@@ -11,6 +11,7 @@ use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Exceptions\QrBillValidationException;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Models\InvoiceLine;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Invoicing\Services\InvoicePdfRenderer;
 use App\Domains\Invoicing\Services\SwissQrInvoiceService;
 use App\Domains\Organizations\Models\Organization;
@@ -121,6 +122,61 @@ class GenerateQrInvoicePdfActionTest extends TestCase
         $invoice->update(['status' => 'paid']);
         $qrBill = app(SwissQrInvoiceService::class)->buildQrBill($invoice->fresh(), $this->org);
         $this->assertSame(162.15, $qrBill->getPaymentAmountInformation()->getAmount());
+    }
+
+    private function withPlan(string $number): Invoice
+    {
+        $invoice = $this->makeInvoice($number, unitPrice: '1500.00');
+        foreach ([['2026-02-15', '600.00'], ['2026-03-15', '600.00'], ['2026-04-15', '421.50']] as $index => [$date, $amount]) {
+            $invoice->installments()->create(['organization_id' => $this->org->id, 'position' => $index + 1, 'due_date' => $date, 'amount' => $amount]);
+        }
+        app(SwissQrInvoiceService::class)->ensureInstallmentReferences($invoice, $this->org);
+
+        return $invoice->fresh();
+    }
+
+    private function pageCount(string $pdf): int
+    {
+        return preg_match_all('/\/Type\s*\/Page[^s]/', $pdf);
+    }
+
+    public function test_each_open_rate_gets_its_slip(): void
+    {
+        $invoice = $this->withPlan('INV-PDF-PLAN-1');
+        $invoice->payments()->create(['organization_id' => $this->org->id, 'amount' => '900.00', 'payment_date' => '2026-02-10', 'payment_method' => 'bank']);
+        $invoice = $invoice->fresh();
+
+        $slips = app(InstallmentPlanService::class)->slips($invoice);
+        $this->assertSame([2, 3], array_map(fn (array $slip) => $slip['installment']->position, $slips));
+        $this->assertSame(['300.00', '421.50'], array_column($slips, 'amount'));
+
+        $qrBill = app(SwissQrInvoiceService::class)->buildQrBill($invoice, $this->org, $slips[0]['installment'], $slips[0]['amount']);
+        $this->assertSame(300.0, $qrBill->getPaymentAmountInformation()->getAmount());
+        $this->assertSame($slips[0]['installment']->qr_reference, $qrBill->getPaymentReference()->getReference());
+        $this->assertNotSame($invoice->qr_reference, $qrBill->getPaymentReference()->getReference());
+
+        $pdf = app(GenerateQrInvoicePdfAction::class)->execute($invoice, $this->org, 'de');
+        $this->assertStringStartsWith('%PDF-', $pdf);
+        $this->assertSame(3, $this->pageCount($pdf));
+    }
+
+    public function test_a_paid_plan_prints_every_rate(): void
+    {
+        $invoice = $this->withPlan('INV-PDF-PLAN-2');
+        $invoice->update(['status' => 'paid']);
+
+        $slips = app(InstallmentPlanService::class)->slips($invoice->fresh());
+
+        $this->assertSame(['600.00', '600.00', '421.50'], array_column($slips, 'amount'));
+        $pdf = app(GenerateQrInvoicePdfAction::class)->execute($invoice->fresh(), $this->org, 'de');
+        $this->assertSame(4, $this->pageCount($pdf));
+    }
+
+    public function test_an_invoice_without_a_plan_keeps_one_slip(): void
+    {
+        $pdf = app(GenerateQrInvoicePdfAction::class)->execute($this->makeInvoice('INV-PDF-ONE'), $this->org, 'de');
+
+        $this->assertSame(2, $this->pageCount($pdf));
     }
 
     public function test_missing_due_date_does_not_cause_a_renderer_error(): void

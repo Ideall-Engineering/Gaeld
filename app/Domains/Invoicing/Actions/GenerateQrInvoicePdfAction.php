@@ -4,6 +4,7 @@ namespace App\Domains\Invoicing\Actions;
 
 use App\Domains\Invoicing\Exceptions\QrBillValidationException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Invoicing\Services\InvoicePdfRenderer;
 use App\Domains\Invoicing\Services\SwissQrInvoiceService;
 use App\Domains\Invoicing\Support\InvoicePdfStyle;
@@ -17,6 +18,7 @@ class GenerateQrInvoicePdfAction
     public function __construct(
         private SwissQrInvoiceService $qrService,
         private InvoicePdfRenderer $pdfRenderer,
+        private InstallmentPlanService $installmentPlans,
     ) {}
 
     /**
@@ -70,20 +72,27 @@ class GenerateQrInvoicePdfAction
             throw new QrBillValidationException($violations);
         }
 
-        $qrBill = $this->qrService->buildQrBill($invoice, $organization);
         $langMap = ['en' => 'en', 'de' => 'de', 'fr' => 'fr', 'it' => 'it', 'rm' => 'de'];
         $qrLang = $langMap[$language] ?? 'en';
 
-        // Place the QR payment slip + receipt on a dedicated second page.
-        $tcpdf->AddPage();
-        $tcpdf->SetFillColor(255, 255, 255);
-        $tcpdf->Rect(0, 0, $tcpdf->getPageWidth(), $tcpdf->getPageHeight(), 'F');
-        // The payment page repeats sender, recipient and invoice data above the slip.
-        $this->pdfRenderer->renderLetterhead($tcpdf, $invoice, $organization);
+        // Spec 013: a payment plan gets one slip per rate still to pay.
+        $slips = $this->installmentPlans->slips($invoice);
+        $qrBills = $slips === []
+            ? [$this->qrService->buildQrBill($invoice, $organization)]
+            : array_map(fn (array $slip) => $this->qrService->buildQrBill($invoice, $organization, $slip['installment'], $slip['amount']), $slips);
 
-        $output = new TcPdfOutput($qrBill, $qrLang, $tcpdf);
-        $displayOptions = (new DisplayOptions)->setPrintable(false);
-        $output->setDisplayOptions($displayOptions)->getPaymentPart();
+        foreach ($qrBills as $qrBill) {
+            // Each QR payment slip + receipt on a page of its own.
+            $tcpdf->AddPage();
+            $tcpdf->SetFillColor(255, 255, 255);
+            $tcpdf->Rect(0, 0, $tcpdf->getPageWidth(), $tcpdf->getPageHeight(), 'F');
+            // The payment page repeats sender, recipient and invoice data above the slip.
+            $this->pdfRenderer->renderLetterhead($tcpdf, $invoice, $organization);
+
+            $output = new TcPdfOutput($qrBill, $qrLang, $tcpdf);
+            $displayOptions = (new DisplayOptions)->setPrintable(false);
+            $output->setDisplayOptions($displayOptions)->getPaymentPart();
+        }
 
         return $tcpdf->Output('', 'S');
     }

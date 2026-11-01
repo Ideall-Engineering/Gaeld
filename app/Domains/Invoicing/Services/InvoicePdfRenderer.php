@@ -221,7 +221,13 @@ class InvoicePdfRenderer
         }
         $tcpdf->SetY(max($tcpdf->GetY(), $top + 15));
 
-        if ($isInvoice && filled($invoice->payment_terms)) {
+        $hasPlan = $isInvoice && $invoice->hasPaymentPlan();
+        if ($hasPlan) {
+            $this->renderInstallments($tcpdf, $invoice);
+        }
+
+        // A payment plan sets its own dates; general terms would contradict them.
+        if ($isInvoice && ! $hasPlan && filled($invoice->payment_terms)) {
             $terms = is_numeric($invoice->payment_terms)
                 ? trans('app.pdf_payable_within_days', ['days' => (int) $invoice->payment_terms], $this->locale)
                 : (string) $invoice->payment_terms;
@@ -239,6 +245,30 @@ class InvoicePdfRenderer
             $this->paragraph($tcpdf, $this->text((string) $organization->invoice_footer_text), 6);
             $tcpdf->SetTextColor(0, 0, 0);
             $tcpdf->SetFont('Helvetica', '', InvoicePdfStyle::FONT_BODY);
+        }
+    }
+
+    /**
+     * The rates of a payment plan below the totals (spec 013): rate, due
+     * date and amount as issued.
+     */
+    public function renderInstallments(TCPDF $tcpdf, Invoice $invoice): void
+    {
+        $rates = $invoice->installments()->get();
+        $currency = $invoice->currency ?? 'CHF';
+
+        $this->ensureSpace($tcpdf, 10 + $rates->count() * 5.5);
+        $tcpdf->Ln(4);
+        $tcpdf->SetFont('Helvetica', 'B', InvoicePdfStyle::FONT_BODY);
+        $this->totalsRow($tcpdf, $this->t('pdf_payment_plan'), '');
+        $tcpdf->SetFont('Helvetica', '', InvoicePdfStyle::FONT_BODY);
+        foreach ($rates as $rate) {
+            $label = trans('app.pdf_installment', [
+                'position' => $rate->position,
+                'count' => $rates->count(),
+                'date' => $rate->due_date->format('d.m.Y'),
+            ], $this->locale);
+            $this->totalsRow($tcpdf, $label, $currency.' '.$this->money((string) $rate->amount));
         }
     }
 
@@ -363,13 +393,16 @@ class InvoicePdfRenderer
             if ($invoice->valid_until !== null) {
                 $rows[] = [$this->t('pdf_valid_until'), $invoice->valid_until->format('d.m.Y')];
             }
+        } elseif ($invoice->hasPaymentPlan()) {
+            // Spec 013: each rate has its own due date and reference.
+            $rows[] = [$this->t('pdf_payable'), $this->t('pdf_as_per_payment_plan')];
         } elseif ($invoice->due_date !== null) {
             $rows[] = [$this->t('pdf_due_on'), $invoice->due_date->format('d.m.Y')];
         }
         if (filled($invoice->delivery_note)) {
             $rows[] = [$this->t('pdf_delivery_note'), (string) $invoice->delivery_note];
         }
-        if ($invoice instanceof Invoice && filled($invoice->qr_reference)) {
+        if ($invoice instanceof Invoice && filled($invoice->qr_reference) && ! $invoice->hasPaymentPlan()) {
             $rows[] = [$this->t('pdf_reference'), (string) $invoice->qr_reference];
         }
 

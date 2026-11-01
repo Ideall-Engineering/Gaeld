@@ -52,9 +52,11 @@ class SwissQrInvoiceService
     }
 
     /**
-     * Build a QrBill object from invoice + organization data.
+     * Build a QrBill object from invoice + organization data. For a rate of
+     * a payment plan (spec 013) the slip carries that rate's reference and
+     * the given amount.
      */
-    public function buildQrBill(Invoice $invoice, Organization $organization): QrBill
+    public function buildQrBill(Invoice $invoice, Organization $organization, ?InvoiceInstallment $installment = null, ?string $amount = null): QrBill
     {
         $invoice->loadMissing(['customer']);
 
@@ -66,13 +68,16 @@ class SwissQrInvoiceService
 
         $this->setCreditorInfo($qrBill, $organization, $iban);
         $this->setDebtorInfo($qrBill, $invoice);
-        $this->setPaymentAmount($qrBill, $invoice);
+        $this->setPaymentAmount($qrBill, $invoice, $amount ?? ($installment !== null ? (string) $installment->amount : null));
 
-        $this->setPaymentReference($qrBill, $invoice, $iban);
+        $this->setPaymentReference($qrBill, $invoice, $iban, $installment);
 
-        $qrBill->setAdditionalInformation(
-            AdditionalInformation::create($invoice->number ?? ''),
-        );
+        $information = $invoice->number ?? '';
+        if ($installment !== null) {
+            $count = $invoice->installments()->count();
+            $information = trim($information.' '.trans('app.qr_installment', ['position' => $installment->position, 'count' => $count]));
+        }
+        $qrBill->setAdditionalInformation(AdditionalInformation::create($information));
 
         return $qrBill;
     }
@@ -236,7 +241,7 @@ class SwissQrInvoiceService
         $qrBill->setUltimateDebtor($debtorAddress);
     }
 
-    private function setPaymentAmount(QrBill $qrBill, Invoice $invoice): void
+    private function setPaymentAmount(QrBill $qrBill, Invoice $invoice, ?string $amount = null): void
     {
         $currency = $invoice->currency ?? self::DEFAULT_CURRENCY;
         if (! in_array($currency, self::ALLOWED_CURRENCIES, true)) {
@@ -244,7 +249,7 @@ class SwissQrInvoiceService
         }
 
         $qrBill->setPaymentAmountInformation(
-            PaymentAmountInformation::create($currency, (float) $this->amountToPay($invoice)),
+            PaymentAmountInformation::create($currency, (float) ($amount ?? $this->amountToPay($invoice))),
         );
     }
 
@@ -264,20 +269,21 @@ class SwissQrInvoiceService
         return Money::isPositive($due) ? $due : (string) $invoice->total;
     }
 
-    private function setPaymentReference(QrBill $qrBill, Invoice $invoice, string $iban): void
+    private function setPaymentReference(QrBill $qrBill, Invoice $invoice, string $iban, ?InvoiceInstallment $installment = null): void
     {
         $qrType = $invoice->qr_type ?? 'QRR';
+        $reference = $installment !== null ? $installment->qr_reference : $invoice->qr_reference;
 
-        if ($this->isQrIban($iban) && $qrType === 'QRR' && $invoice->qr_reference) {
+        if ($this->isQrIban($iban) && $qrType === 'QRR' && $reference) {
             $refType = PaymentReference::TYPE_QR;
-        } elseif ($qrType === 'SCOR' && $invoice->qr_reference) {
+        } elseif ($installment === null && $qrType === 'SCOR' && $reference) {
             $refType = PaymentReference::TYPE_SCOR;
         } else {
             $refType = PaymentReference::TYPE_NON;
         }
 
         $qrBill->setPaymentReference(
-            PaymentReference::create($refType, $refType === PaymentReference::TYPE_NON ? null : $invoice->qr_reference),
+            PaymentReference::create($refType, $refType === PaymentReference::TYPE_NON ? null : $reference),
         );
     }
 
