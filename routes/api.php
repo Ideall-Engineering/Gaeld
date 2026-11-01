@@ -111,6 +111,8 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
     Route::post('/invoices/{invoice}/revert-to-draft', [InvoiceDocumentApiController::class, 'revertToDraft'])->name('api.invoices.revert-to-draft');
     Route::post('/invoices/{invoice}/duplicate', [InvoiceDocumentApiController::class, 'duplicate'])->name('api.invoices.duplicate');
     Route::patch('/invoices/{invoice}/payments/{payment}', [InvoiceDocumentApiController::class, 'updatePaymentDate'])->name('api.invoices.payments.update');
+    Route::delete('/invoices/{invoice}/payments/{payment}', [InvoiceDocumentApiController::class, 'removePayment'])->name('api.invoices.payments.destroy');
+    Route::post('/invoices/{invoice}/write-off', [InvoiceDocumentApiController::class, 'writeOff'])->name('api.invoices.write-off');
     Route::post('/invoices/{invoice}/refresh-customer', [InvoiceDocumentApiController::class, 'refreshCustomerSnapshot'])->name('api.invoices.refresh-customer');
     Route::put('/invoices/{invoice}/project', [InvoiceDocumentApiController::class, 'project'])->middleware(EnsureProjectsModule::class)->name('api.invoices.project');
     Route::post('/invoices/{invoice}/justificatif', [InvoiceDocumentApiController::class, 'storeJustificatif'])->name('api.invoices.justificatif.store');

@@ -6,11 +6,14 @@ use App\Domains\Api\Resources\InvoiceResource;
 use App\Domains\Invoicing\Actions\DuplicateInvoiceAction;
 use App\Domains\Invoicing\Actions\PurgeInvoiceAction;
 use App\Domains\Invoicing\Actions\RefreshInvoiceCustomerSnapshotAction;
+use App\Domains\Invoicing\Actions\RemoveInvoicePaymentAction;
 use App\Domains\Invoicing\Actions\RevertInvoiceToDraftAction;
 use App\Domains\Invoicing\Actions\UpdatePaymentDateAction;
+use App\Domains\Invoicing\Actions\WriteOffInvoiceRemainderAction;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Models\InvoicePayment;
+use App\Domains\Invoicing\Services\InvoiceAccountingService;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Organizations\Services\OrganizationDocumentStorageService;
 use App\Domains\Projects\Exceptions\InvalidAllocationException;
@@ -97,6 +100,72 @@ class InvoiceDocumentApiController extends Controller
 
         try {
             $action->execute($invoice, $payment, $validated['payment_date']);
+        } catch (DomainException $e) {
+            return $this->apiError($e->getMessage(), 'invalid_payment', 422);
+        }
+
+        return new InvoiceResource($invoice->fresh(['customer', 'lines.vatRate', 'payments']));
+    }
+
+    /**
+     * Remove payment
+     *
+     * Takes back a payment or write-off entered by mistake with a reversing
+     * entry; the invoice is open again. A payment that came from the bank
+     * reconciliation is refused (`payment_from_bank`): undo the match there.
+     *
+     * @urlParam invoice string required The invoice UUID.
+     * @urlParam payment string required The payment UUID.
+     */
+    public function removePayment(Invoice $invoice, InvoicePayment $payment, RemoveInvoicePaymentAction $action, InvoiceAccountingService $accounting, CurrentOrganization $currentOrg): InvoiceResource|JsonResponse
+    {
+        $this->ensureOrganization($invoice, $currentOrg);
+        $this->authorize('updatePayment', $invoice);
+        abort_unless((string) $payment->invoice_id === (string) $invoice->id, 404);
+
+        if ($accounting->isFromBankReconciliation($payment)) {
+            return $this->apiError(__('app.payment_remove_bank_linked'), 'payment_from_bank', 422);
+        }
+
+        try {
+            $action->execute($invoice, $payment);
+        } catch (DomainException $e) {
+            return $this->apiError($e->getMessage(), 'invalid_payment', 422);
+        }
+
+        return new InvoiceResource($invoice->fresh(['customer', 'lines.vatRate', 'payments']));
+    }
+
+    /**
+     * Write off rest
+     *
+     * Settles the open rest of a sent or overdue invoice that will not be
+     * paid (cash discount, rounding, bad debt): booked on 3900 with the VAT
+     * share per rate taken off the output tax in the period of `date`. It
+     * appears among the payments with `payment_method` `write_off` and the
+     * reason as `reference`; the invoice is paid. An invoice that is not
+     * open (draft, paid, cancelled) is refused with 403, as for a payment.
+     *
+     * @urlParam invoice string required The invoice UUID.
+     *
+     * @bodyParam date string required Date of the write-off. Example: 2026-11-01
+     * @bodyParam reason string required Why the rest is not paid, at most 100 characters. Example: Skonto 2 %
+     */
+    public function writeOff(Request $request, Invoice $invoice, WriteOffInvoiceRemainderAction $action, CurrentOrganization $currentOrg): InvoiceResource|JsonResponse
+    {
+        $this->ensureOrganization($invoice, $currentOrg);
+        $this->authorize('recordPayment', $invoice);
+        $validated = $request->validate([
+            'date' => ['required', 'date'],
+            'reason' => ['required', 'string', 'max:100'],
+        ]);
+
+        try {
+            $action->execute($invoice, $validated['date'], $validated['reason']);
+        } catch (InvalidInvoiceStateException $e) {
+            return $this->apiError($e->getMessage(), 'invalid_invoice_state', 422);
+        } catch (ModelNotFoundException) {
+            return $this->apiError(__('app.account_not_found', ['code' => '3900']), 'account_not_found', 422);
         } catch (DomainException $e) {
             return $this->apiError($e->getMessage(), 'invalid_payment', 422);
         }

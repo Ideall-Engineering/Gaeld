@@ -238,6 +238,26 @@ class InvoicePartPaymentTest extends TestCase
         ]);
     }
 
+    public function test_a_payment_after_a_removed_one_gets_a_reference_of_its_own(): void
+    {
+        $invoice = $this->finalizedInvoice('INV-RM-REF');
+        $first = $this->pay($invoice, '500.00');
+        $second = $this->pay($invoice->fresh(), '500.00');
+        app(RemoveInvoicePaymentAction::class)->execute($invoice->fresh(), $first);
+
+        $third = $this->pay($invoice->fresh(), '500.00');
+
+        $this->assertNotSame($second->reference, $third->reference);
+        $this->assertSame('1000.00', $invoice->fresh()->amountPaid());
+
+        $writeOff = app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Verlust');
+        app(RemoveInvoicePaymentAction::class)->execute($invoice->fresh(), $writeOff);
+        $again = app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Verlust');
+
+        $this->assertNotSame($writeOff->journal_entry_id, $again->journal_entry_id);
+        $this->assertSame(InvoiceStatus::Paid, $invoice->fresh()->status);
+    }
+
     public function test_removing_a_write_off_takes_its_vat_correction_back(): void
     {
         $invoice = $this->finalizedInvoice('INV-RM-WO');

@@ -2,10 +2,12 @@
 
 namespace App\Http\Middleware\Api;
 
+use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Api\Exceptions\ApiIdempotencyConflictException;
 use App\Domains\Api\Models\PersonalAccessToken;
 use App\Domains\Api\Services\ApiIdempotencyService;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Models\InvoicePayment;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -120,6 +122,19 @@ class HandleApiIdempotency
             return 'round'.$reversals;
         }
 
+        // Written off, taken back and written off again with the same reason
+        // is a second write-off; its entries (WO-, REV-WO-) tell them apart.
+        // A plain retry then meets a settled invoice and is refused.
+        if ($request->route()?->getName() === 'api.invoices.write-off') {
+            $writeOffs = JournalEntry::query()
+                ->where('organization_id', $invoice->organization_id)
+                ->where(fn ($q) => $q->where('reference', 'like', 'WO-'.addcslashes((string) $invoice->number, '%_\\').'-%')
+                    ->orWhere('reference', 'like', 'REV-WO-'.addcslashes((string) $invoice->number, '%_\\').'-%'))
+                ->count();
+
+            return 'round'.($invoice->ledgerEntries()->count() - $reversals).':wo'.$writeOffs;
+        }
+
         return 'round'.($invoice->ledgerEntries()->count() - $reversals);
     }
 
@@ -147,6 +162,13 @@ class HandleApiIdempotency
 
                 break;
             }
+        }
+
+        // A payment of the invoice belongs to the key too: removing or
+        // redating two payments the same way are two changes, not a retry.
+        $payment = collect($request->route()?->parameters() ?? [])->first(fn ($p) => $p instanceof InvoicePayment);
+        if ($payment instanceof InvoicePayment) {
+            $content = $payment->id.':'.$content;
         }
 
         foreach ($request->route()?->parameters() ?? [] as $parameter) {

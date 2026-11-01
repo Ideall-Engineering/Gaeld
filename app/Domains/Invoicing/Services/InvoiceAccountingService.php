@@ -248,7 +248,7 @@ class InvoiceAccountingService
             $bankAccount = $this->ledgerQuery->resolveAccount($orgId, $bankAccountCode);
             $accountsReceivable = $this->ledgerQuery->resolveAccount($orgId, AccountCode::ACCOUNTS_RECEIVABLE);
 
-            $paymentRef = $data->reference ?? 'PAY-'.$invoice->number.'-'.($invoice->payments()->count() + 1);
+            $paymentRef = $data->reference ?? $this->freeReference($invoice, 'PAY-');
 
             $journalEntry = $this->ledgerService->postEntry($orgId, new JournalEntryData(
                 date: $data->paymentDate,
@@ -328,7 +328,7 @@ class InvoiceAccountingService
 
             $lines[] = new JournalLineData(accountId: (string) $receivable->id, debit: '0', credit: $rest, description: 'Clear receivable');
 
-            $reference = 'WO-'.$invoice->number.'-'.($invoice->payments()->count() + 1);
+            $reference = $this->freeReference($invoice, 'WO-');
             $entry = $this->ledgerService->postEntry($orgId, new JournalEntryData(
                 date: $date,
                 reference: $reference,
@@ -364,6 +364,20 @@ class InvoiceAccountingService
 
             return $payment->load('journalEntry');
         });
+    }
+
+    /**
+     * {prefix}{number}-{n} for the next settlement of an invoice. A removed
+     * payment keeps its reversed entry, so its number stays taken.
+     */
+    private function freeReference(Invoice $invoice, string $prefix): string
+    {
+        $n = $invoice->payments()->count() + 1;
+        while ($this->ledgerQuery->isDuplicateReferenceAny($invoice->organization_id, "{$prefix}{$invoice->number}-{$n}")) {
+            $n++;
+        }
+
+        return "{$prefix}{$invoice->number}-{$n}";
     }
 
     /**
