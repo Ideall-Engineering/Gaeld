@@ -1107,6 +1107,7 @@ return [
     'payment_plan_amounts' => "Every rate but the last needs an amount above 0.",
     'payment_plan_no_rest' => "Nothing is left for the last rate. Please lower the other rates.",
     'payment_plan_invalid' => "The payment plan no longer adds up. Please check the rates on the draft.",
+    'payment_plan_reference_taken' => "The QR reference of a rate is already in use. Please check the invoice number.",
     'payment_plan' => "Payment plan",
     'payment_plan_hint' => "The invoice is paid in rates, each with its own due date and payment slip. The last rate is the rest.",
     'payment_plan_rate_count' => "Number of rates",

@@ -5,6 +5,7 @@ namespace App\Domains\Invoicing\Actions;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Invoicing\Services\InvoiceAccountingService;
 use App\Domains\Invoicing\Services\SwissQrInvoiceService;
 use App\Support\Money;
@@ -18,6 +19,7 @@ class FinalizeInvoiceAction
     public function __construct(
         private InvoiceAccountingService $accountingService,
         private SwissQrInvoiceService $qrService,
+        private InstallmentPlanService $installmentPlans,
     ) {}
 
     public function execute(Invoice $invoice): Invoice
@@ -25,6 +27,9 @@ class FinalizeInvoiceAction
         if (! $invoice->status->canTransitionTo(InvoiceStatus::Sent)) {
             throw new InvalidInvoiceStateException("Only draft invoices can be finalized (current status: {$invoice->status->value}).");
         }
+
+        // Spec 013: a plan must still add up to the total.
+        $this->installmentPlans->assertReadyToFinalize($invoice);
 
         if ($invoice->due_date === null) {
             throw new InvalidInvoiceStateException('Cannot finalize an invoice without a due date.');
@@ -42,6 +47,7 @@ class FinalizeInvoiceAction
         $invoice->freezeCustomerDetails();
 
         $this->qrService->ensureQrReference($invoice, $invoice->organization);
+        $this->qrService->ensureInstallmentReferences($invoice, $invoice->organization);
 
         $result = $this->accountingService->postToLedger($invoice);
 

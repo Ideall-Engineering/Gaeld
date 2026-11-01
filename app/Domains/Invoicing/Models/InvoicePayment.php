@@ -4,6 +4,7 @@ namespace App\Domains\Invoicing\Models;
 
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Invoicing\Enums\PaymentMethod;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Support\Traits\Auditable;
 use App\Support\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -41,6 +42,24 @@ class InvoicePayment extends Model
         'payment_method',
         'reference',
     ];
+
+    /**
+     * Spec 013: wherever a payment comes from or goes (form, API, bank
+     * reconciliation and its undo), a payment plan moves the invoice's due
+     * date to the next open rate.
+     */
+    protected static function booted(): void
+    {
+        $follow = function (self $payment): void {
+            $invoice = Invoice::withoutGlobalScopes()->find($payment->invoice_id);
+            if ($invoice !== null) {
+                app(InstallmentPlanService::class)->refresh($invoice);
+            }
+        };
+
+        static::created($follow);
+        static::deleted($follow);
+    }
 
     protected function casts(): array
     {

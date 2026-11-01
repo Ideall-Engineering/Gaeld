@@ -1017,6 +1017,7 @@ return [
     'payment_plan_amounts' => "Ogni rata tranne l'ultima richiede un importo superiore a 0.",
     'payment_plan_no_rest' => "Per l'ultima rata non resta nulla. Ridurre le altre rate.",
     'payment_plan_invalid' => "Il piano di pagamento non corrisponde più al totale. Controllare le rate nella bozza.",
+    'payment_plan_reference_taken' => "Il riferimento QR di una rata è già in uso. Controllare il numero della fattura.",
     'payment_plan' => "Piano di pagamento",
     'payment_plan_hint' => "La fattura viene pagata a rate, ognuna con la propria scadenza e la propria polizza di versamento. L'ultima rata è il saldo.",
     'payment_plan_rate_count' => "Numero di rate",

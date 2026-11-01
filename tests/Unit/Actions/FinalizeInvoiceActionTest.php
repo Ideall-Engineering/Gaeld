@@ -6,6 +6,7 @@ use App\Domains\Invoicing\Actions\FinalizeInvoiceAction;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Invoicing\Services\InvoiceAccountingService;
 use App\Domains\Invoicing\Services\SwissQrInvoiceService;
 use App\Domains\Organizations\Models\Organization;
@@ -28,7 +29,10 @@ class FinalizeInvoiceActionTest extends TestCase
         $this->accountingService = Mockery::mock(InvoiceAccountingService::class);
         $this->qrService = Mockery::mock(SwissQrInvoiceService::class);
         $this->qrService->shouldReceive('ensureQrReference')->byDefault();
-        $this->action = new FinalizeInvoiceAction($this->accountingService, $this->qrService);
+        $this->qrService->shouldReceive('ensureInstallmentReferences')->byDefault();
+        $plans = Mockery::mock(InstallmentPlanService::class);
+        $plans->shouldReceive('assertReadyToFinalize')->byDefault();
+        $this->action = new FinalizeInvoiceAction($this->accountingService, $this->qrService, $plans);
     }
 
     public function test_rejects_sent_invoice(): void

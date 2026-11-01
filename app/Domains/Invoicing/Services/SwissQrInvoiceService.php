@@ -3,7 +3,9 @@
 namespace App\Domains\Invoicing\Services;
 
 use App\Domains\Invoicing\Enums\InvoiceStatus;
+use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Models\InvoiceInstallment;
 use App\Domains\Organizations\Models\Organization;
 use App\Support\Money;
 use Sprain\SwissQrBill\DataGroup\Element\AdditionalInformation;
@@ -118,6 +120,50 @@ class SwissQrInvoiceService
             'qr_reference' => $qrReference,
             'qr_type' => 'QRR',
         ]);
+    }
+
+    /**
+     * Gives each rate of a payment plan its own QR reference (spec 013): the
+     * digits of the invoice number on 18 places and the rate on two, with
+     * the customer part of the invoice's own reference.
+     *
+     * @throws InvalidInvoiceStateException when a reference is already taken
+     */
+    public function ensureInstallmentReferences(Invoice $invoice, Organization $organization): void
+    {
+        $iban = $invoice->qr_iban ?? $organization->qr_iban ?? '';
+        if (! $this->isQrIban($iban) || blank($invoice->number)) {
+            return;
+        }
+
+        $digits = substr((string) preg_replace('/[^0-9]/', '', $invoice->number), -18);
+        $customerIdentification = str_pad(
+            (string) ($invoice->customer_id ? crc32((string) $invoice->customer_id) % 100000 : 0),
+            5,
+            '0',
+            STR_PAD_LEFT,
+        );
+
+        foreach ($invoice->installments()->whereNull('qr_reference')->get() as $installment) {
+            $reference = QrPaymentReferenceGenerator::generate(
+                $customerIdentification,
+                str_pad($digits, 18, '0', STR_PAD_LEFT).str_pad((string) $installment->position, 2, '0', STR_PAD_LEFT),
+            );
+
+            $taken = Invoice::withoutGlobalScopes()
+                ->where('organization_id', $invoice->organization_id)
+                ->where('qr_reference', $reference)
+                ->exists()
+                || InvoiceInstallment::withoutGlobalScopes()
+                    ->where('organization_id', $invoice->organization_id)
+                    ->where('qr_reference', $reference)
+                    ->exists();
+            if ($taken) {
+                throw new InvalidInvoiceStateException(__('app.payment_plan_reference_taken'));
+            }
+
+            $installment->updateQuietly(['qr_reference' => $reference]);
+        }
     }
 
     /**

@@ -1054,6 +1054,7 @@ return [
     'payment_plan_amounts' => "Jede Rate ausser der letzten braucht einen Betrag über 0.",
     'payment_plan_no_rest' => "Für die letzte Rate bleibt nichts übrig. Bitte die übrigen Raten verkleinern.",
     'payment_plan_invalid' => "Der Zahlungsplan geht nicht mehr auf. Bitte die Raten im Entwurf prüfen.",
+    'payment_plan_reference_taken' => "Die QR-Referenz einer Rate ist schon vergeben. Bitte die Rechnungsnummer prüfen.",
     'payment_plan' => "Zahlungsplan",
     'payment_plan_hint' => "Die Rechnung wird in Raten bezahlt, jede mit eigener Fälligkeit und eigenem Einzahlungsschein. Die letzte Rate ist der Rest.",
     'payment_plan_rate_count' => "Anzahl Raten",

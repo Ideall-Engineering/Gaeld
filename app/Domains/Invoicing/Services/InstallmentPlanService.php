@@ -167,6 +167,68 @@ class InstallmentPlanService
         $invoice->update($changes);
     }
 
+    /**
+     * Refuses to finalize a plan that no longer fits the total, for example
+     * after a rate was changed outside the form.
+     *
+     * @throws InvalidInvoiceStateException
+     */
+    public function assertReadyToFinalize(Invoice $invoice): void
+    {
+        $rates = $invoice->installments()->get();
+        if ($rates->isEmpty()) {
+            return;
+        }
+
+        try {
+            $planned = $this->plannedRates($invoice, $this->asInput($rates->all()));
+        } catch (ValidationException) {
+            throw new InvalidInvoiceStateException(__('app.payment_plan_invalid'));
+        }
+
+        if (Money::compare($planned[count($planned) - 1]['amount'], Money::of((string) $rates->last()->amount)) !== 0) {
+            throw new InvalidInvoiceStateException(__('app.payment_plan_invalid'));
+        }
+    }
+
+    /**
+     * Gives a duplicate the plan of its original: the same distance in days
+     * from the new invoice date and the same amounts, the last rate again
+     * carrying the rest. A plan that does not fit the copy is left out.
+     */
+    public function copy(Invoice $from, Invoice $to): void
+    {
+        $rates = $from->installments()->get();
+        if ($rates->isEmpty()) {
+            return;
+        }
+
+        $start = $from->issue_date->copy()->startOfDay();
+        $newStart = $to->issue_date->copy()->startOfDay();
+        $copied = $rates->map(fn (InvoiceInstallment $rate) => [
+            'due_date' => $newStart->copy()->addDays((int) $start->diffInDays($rate->due_date->copy()->startOfDay()))->toDateString(),
+            'amount' => Money::of((string) $rate->amount),
+        ])->all();
+
+        try {
+            $this->sync($to, $copied);
+        } catch (ValidationException) {
+            // The copy keeps its plain due date.
+        }
+    }
+
+    /**
+     * @param  array<int, InvoiceInstallment>  $rates
+     * @return list<array{due_date: string, amount: string}>
+     */
+    private function asInput(array $rates): array
+    {
+        return array_values(array_map(fn (InvoiceInstallment $rate) => [
+            'due_date' => $rate->due_date->toDateString(),
+            'amount' => Money::of((string) $rate->amount),
+        ], $rates));
+    }
+
     private function refuse(string $message): never
     {
         throw ValidationException::withMessages(['installments' => $message]);

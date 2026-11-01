@@ -457,8 +457,10 @@ class InvoiceAccountingService
             }
 
             $payment->delete();
+            // A payment plan has moved the due date along (spec 013).
+            $invoice->refresh();
 
-            if ($invoice->status === InvoiceStatus::Paid && ! $invoice->fresh()->isFullyPaid()) {
+            if ($invoice->status === InvoiceStatus::Paid && ! $invoice->isFullyPaid()) {
                 $isOverdue = $invoice->due_date?->isBefore(now()->startOfDay()) ?? false;
                 $invoice->update(['status' => $isOverdue ? InvoiceStatus::Overdue : InvoiceStatus::Sent]);
             }

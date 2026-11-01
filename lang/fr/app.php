@@ -1050,6 +1050,7 @@ return [
     'payment_plan_amounts' => "Chaque échéance sauf la dernière doit avoir un montant supérieur à 0.",
     'payment_plan_no_rest' => "Il ne reste rien pour la dernière échéance. Veuillez réduire les autres.",
     'payment_plan_invalid' => "Le plan de paiement ne correspond plus au total. Veuillez vérifier les échéances sur le brouillon.",
+    'payment_plan_reference_taken' => "La référence QR d'une échéance est déjà utilisée. Veuillez vérifier le numéro de facture.",
     'payment_plan' => "Plan de paiement",
     'payment_plan_hint' => "La facture est payée en échéances, chacune avec sa date et son bulletin de versement. La dernière échéance est le solde.",
     'payment_plan_rate_count' => "Nombre d'échéances",

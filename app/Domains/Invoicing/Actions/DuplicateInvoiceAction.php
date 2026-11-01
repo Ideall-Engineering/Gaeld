@@ -6,6 +6,7 @@ use App\Domains\Invoicing\DTOs\InvoiceLineData;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
 use App\Domains\Invoicing\Support\DocumentContactPerson;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,7 @@ class DuplicateInvoiceAction
     public function __construct(
         private SyncInvoiceLinesAction $syncInvoiceLines,
         private InvoiceNumberGenerator $numberGenerator,
+        private InstallmentPlanService $installmentPlans,
     ) {}
 
     public function execute(Invoice $invoice): Invoice
@@ -63,6 +65,7 @@ class DuplicateInvoiceAction
             )->all(), ($invoice->tax_treatment ?? InvoiceTaxTreatment::Standard)->appliesSwissVat());
 
             $newInvoice->recalculate();
+            $this->installmentPlans->copy($invoice, $newInvoice);
 
             return $newInvoice->load('lines');
         });
