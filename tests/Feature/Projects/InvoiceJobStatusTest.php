@@ -184,6 +184,33 @@ class InvoiceJobStatusTest extends TestCase
         $this->assertNull(app(InvoiceProjectService::class)->suggestionForCustomer($this->organization->id, $this->customer->id));
     }
 
+    public function test_existing_jobs_are_tidied_from_their_invoices(): void
+    {
+        $open = $this->job;
+        $this->book($this->onJob('INV-1', '1000.00'));
+        $paid = $this->makeProject('P26-40');
+        $this->job = $paid;
+        $this->pay($this->book($this->onJob('INV-2', '500.00')), '500.00');
+        $none = $this->makeProject('P26-41');
+        $quoted = $this->makeProject('P26-42');
+        $lost = $this->makeProject('P26-43');
+        // As they stood before the status existed.
+        Project::query()->whereIn('id', [$open->id, $paid->id, $none->id])->update(['status' => ProjectStatus::Done->value]);
+        $quoted->update(['status' => ProjectStatus::Possible]);
+        $lost->update(['status' => ProjectStatus::Lost]);
+
+        $this->artisan('gaeld:auftraege-nach-rechnungen')->assertSuccessful();
+        $this->assertSame(ProjectStatus::Done, $open->fresh()->status, 'Without --apply nothing changes.');
+
+        $this->artisan('gaeld:auftraege-nach-rechnungen', ['--apply' => true])->assertSuccessful();
+
+        $this->assertSame(ProjectStatus::Invoiced, $open->fresh()->status);
+        $this->assertSame(ProjectStatus::Done, $paid->fresh()->status);
+        $this->assertSame(ProjectStatus::InProgress, $none->fresh()->status);
+        $this->assertSame(ProjectStatus::Possible, $quoted->fresh()->status);
+        $this->assertSame(ProjectStatus::Lost, $lost->fresh()->status);
+    }
+
     private function onJob(string $number, string $amount): Invoice
     {
         $invoice = $this->draft($number, $amount);

@@ -60,6 +60,20 @@ class InvoiceJobStatusService
             return;
         }
 
+        $status = $this->fromInvoices($job);
+
+        if ($status !== null && $status !== $job->status) {
+            $job->update(['status' => $status]);
+        }
+    }
+
+    /**
+     * What a job's invoices say about it: invoice sent while one is open,
+     * done once all are paid, back in progress when an invoiced or done
+     * job has none. Null leaves it as it is.
+     */
+    public function fromInvoices(Project $job): ?ProjectStatus
+    {
         $invoiceIds = InvoiceProject::withoutGlobalScopes()->where('cost_center_id', $job->id)->pluck('invoice_id');
         $statuses = Invoice::withoutGlobalScopes()
             ->whereIn('id', $invoiceIds)
@@ -67,14 +81,10 @@ class InvoiceJobStatusService
             ->whereIn('status', array_map(fn (InvoiceStatus $s) => $s->value, self::LIVE))
             ->pluck('status');
 
-        $status = match (true) {
+        return match (true) {
             $statuses->isEmpty() => $job->status->isBilled() ? ProjectStatus::InProgress : null,
             $statuses->contains(fn (InvoiceStatus $s) => in_array($s, self::OPEN, true)) => ProjectStatus::Invoiced,
             default => ProjectStatus::Done,
         };
-
-        if ($status !== null && $status !== $job->status) {
-            $job->update(['status' => $status]);
-        }
     }
 }
