@@ -10,6 +10,7 @@ use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Concerns\AddressesCustomer;
 use App\Domains\Organizations\Models\Organization;
+use App\Domains\Projects\Services\InvoiceJobStatusService;
 use App\Support\Money;
 use App\Support\Traits\Auditable;
 use App\Support\Traits\BelongsToOrganization;
@@ -111,6 +112,19 @@ class Invoice extends Model
         'last_reminded_at',
         'archived_at',
     ];
+
+    /**
+     * The job of an invoice follows it as it is sent, paid or reopened
+     * (see InvoiceJobStatusService).
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (self $invoice): void {
+            if ($invoice->wasChanged('status')) {
+                app(InvoiceJobStatusService::class)->statusChanged($invoice, $invoice->getOriginal('status'));
+            }
+        });
+    }
 
     protected function casts(): array
     {

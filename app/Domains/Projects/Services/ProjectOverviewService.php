@@ -199,7 +199,7 @@ class ProjectOverviewService
     /** done, none, overdue, critical or on_track, as the spreadsheet had it. */
     private function deadline(Project $project, Carbon $today): string
     {
-        if (in_array($project->status, [ProjectStatus::Done, ProjectStatus::Lost], true)) {
+        if ($project->status->isBilled() || $project->status === ProjectStatus::Lost) {
             return 'done';
         }
 

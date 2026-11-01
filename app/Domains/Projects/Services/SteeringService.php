@@ -44,7 +44,7 @@ use Illuminate\Support\Facades\DB;
 class SteeringService
 {
     /** Job statuses whose value is planned with. */
-    private const COUNTED = [ProjectStatus::InProgress, ProjectStatus::Done];
+    private const COUNTED = [ProjectStatus::InProgress, ProjectStatus::Invoiced, ProjectStatus::Done];
 
     public function __construct(
         private ProjectReportService $reports,
@@ -559,7 +559,7 @@ class SteeringService
      */
     private function doneWithoutRevenue(string $organizationId, Collection $projects, Collection $byId): array
     {
-        $done = $projects->filter(fn (Project $p) => $p->kind === ProjectKind::Project && $p->status === ProjectStatus::Done);
+        $done = $projects->filter(fn (Project $p) => $p->kind === ProjectKind::Project && $p->status->isBilled());
         if ($done->isEmpty()) {
             return [];
         }

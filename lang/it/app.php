@@ -2907,6 +2907,7 @@ return [
     'project_status_pipeline' => 'Aperto',
     'project_status_possible' => 'Offerta inviata',
     'project_status_in_progress' => 'In corso',
+    'project_status_invoiced' => 'Fattura inviata',
     'project_status_done' => 'Concluso',
     'project_status_lost' => 'Perso',
     'project_customer' => 'Cliente',

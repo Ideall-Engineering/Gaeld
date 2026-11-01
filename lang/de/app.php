@@ -2903,6 +2903,7 @@ return [
     'project_status_pipeline' => 'Offen',
     'project_status_possible' => 'Offerte gesendet',
     'project_status_in_progress' => 'In Arbeit',
+    'project_status_invoiced' => 'Rechnung gesendet',
     'project_status_done' => 'Erledigt',
     'project_status_lost' => 'Verloren',
     'project_customer' => 'Kunde',

@@ -33,6 +33,7 @@ class InvoiceProjectService
 {
     public function __construct(
         private LineAllocationService $allocations,
+        private InvoiceJobStatusService $jobStatus,
     ) {}
 
     /**
@@ -84,7 +85,9 @@ class InvoiceProjectService
             return;
         }
 
-        DB::transaction(function () use ($invoice, $projectId, $current, $userId): void {
+        $previousJobId = $current?->cost_center_id;
+
+        DB::transaction(function () use ($invoice, $projectId, $current, $previousJobId, $userId): void {
             // The job Gäld made for this invoice goes when the invoice moves
             // to another one; it would only wait for money that is not coming.
             $own = $projectId !== null && $current !== null && $current->cost_center_id !== $projectId ? $this->ownJob($invoice) : null;
@@ -124,6 +127,13 @@ class InvoiceProjectService
 
             if ($own !== null && ! LineAllocation::withoutGlobalScopes()->where('cost_center_id', $own->id)->exists()) {
                 $own->delete();
+            }
+
+            // Both jobs follow a sent or paid invoice moving between them.
+            if ($live) {
+                foreach (array_unique(array_filter([$previousJobId, $projectId])) as $jobId) {
+                    $this->jobStatus->follow($invoice, (int) $jobId);
+                }
             }
         });
     }
@@ -175,8 +185,9 @@ class InvoiceProjectService
     }
 
     /**
-     * A new job for an invoice that has none: done, expecting the invoice's
-     * net, for its customer and without a project above it yet.
+     * A new job for an invoice that has none: invoice sent (done once it is
+     * paid), expecting the invoice's net, for its customer and without a
+     * project above it yet.
      */
     public function createJobFor(Invoice $invoice): Project
     {
@@ -192,7 +203,7 @@ class InvoiceProjectService
             'name' => $this->jobNameFor($invoice),
             'is_active' => true,
             'kind' => ProjectKind::Project,
-            'status' => ProjectStatus::Done,
+            'status' => ProjectStatus::Invoiced,
             'contact_id' => $invoice->customer_id,
             'expected_amount' => $invoice->subtotal,
         ]);
@@ -202,8 +213,9 @@ class InvoiceProjectService
             'invoice_id' => $invoice->id,
             'cost_center_id' => $job->id,
         ]);
+        $this->jobStatus->follow($invoice, $job->id);
 
-        return $job;
+        return $job->refresh();
     }
 
     /**
@@ -275,7 +287,7 @@ class InvoiceProjectService
             ->where('contact_id', $contactId)
             ->where('is_active', true)
             ->where('kind', '<>', ProjectKind::Area->value)
-            ->whereNotIn('status', [ProjectStatus::Done->value, ProjectStatus::Lost->value])
+            ->whereNotIn('status', [ProjectStatus::Invoiced->value, ProjectStatus::Done->value, ProjectStatus::Lost->value])
             ->pluck('id');
 
         return $open->count() === 1 ? (int) $open->first() : null;

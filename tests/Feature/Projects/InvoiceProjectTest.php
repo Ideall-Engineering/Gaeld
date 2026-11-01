@@ -233,13 +233,13 @@ class InvoiceProjectTest extends TestCase
         $this->assertSame('500.00', $web['received']);
         $this->assertSame(Money::subtract((string) $invoice->total, '500.00'), $web['open']);
         $this->assertSame('partial', $web['payment']);
-        $this->assertSame('critical', $web['deadline']);
+        $this->assertSame('done', $web['deadline'], 'Its invoice is out.');
         $this->assertSame('AREA Project AREA', $web['area']);
 
         $this->assertSame('1300.00', $rows['AREA']['net'], 'An area shows the sum of its projects.');
         $this->assertSame('1300.00', $overview['totals']['net'], 'Areas are not counted twice in the totals.');
         $byStatus = array_column($overview['by_status'], null, 'key');
-        $this->assertSame('2000.00', $byStatus['in_progress']['expected']);
+        $this->assertSame('2000.00', $byStatus['invoiced']['expected']);
         $this->assertSame('1300.00', array_column($overview['by_area'], null, 'key')['AREA Project AREA']['net']);
     }
 
@@ -252,6 +252,7 @@ class InvoiceProjectTest extends TestCase
             ['2026-06-16', ProjectStatus::Possible, 'on_track'],
             [null, ProjectStatus::Possible, 'none'],
             ['2026-01-01', ProjectStatus::Done, 'done'],
+            ['2026-01-01', ProjectStatus::Invoiced, 'done'],
             ['2026-01-01', ProjectStatus::Lost, 'done'],
         ];
 

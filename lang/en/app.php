@@ -2965,6 +2965,7 @@ return [
     'project_status_pipeline' => 'Open',
     'project_status_possible' => 'Quote sent',
     'project_status_in_progress' => 'In progress',
+    'project_status_invoiced' => 'Invoice sent',
     'project_status_done' => 'Done',
     'project_status_lost' => 'Lost',
     'project_customer' => 'Customer',

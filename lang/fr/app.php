@@ -2911,6 +2911,7 @@ return [
     'project_status_pipeline' => 'Ouvert',
     'project_status_possible' => 'Offre envoyée',
     'project_status_in_progress' => 'En cours',
+    'project_status_invoiced' => 'Facture envoyée',
     'project_status_done' => 'Terminé',
     'project_status_lost' => 'Perdu',
     'project_customer' => 'Client',

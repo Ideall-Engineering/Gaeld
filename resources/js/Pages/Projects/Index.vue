@@ -32,7 +32,7 @@ const props = defineProps({
 
 const { t } = useTranslations()
 
-const statusVariant = { pipeline: 'secondary', possible: 'info', in_progress: 'warning', done: 'success', lost: 'destructive' }
+const statusVariant = { pipeline: 'secondary', possible: 'info', in_progress: 'warning', invoiced: 'outline', done: 'success', lost: 'destructive' }
 const statusLabel = value => props.statuses.find(s => s.value === value)?.label ?? value
 
 const yearOptions = computed(() => {
@@ -176,7 +176,7 @@ const groups = computed(() => {
         expenses: s.expenses + Number(j.expenses || 0),
         net: s.net + Number(j.net || 0),
         // Still to come: what open jobs without any revenue yet expect.
-        expected: s.expected + (!Number(j.revenue) && !['done', 'lost'].includes(j.status) ? Number(j.expected || 0) : 0),
+        expected: s.expected + (!Number(j.revenue) && !['invoiced', 'done', 'lost'].includes(j.status) ? Number(j.expected || 0) : 0),
       }), { revenue: 0, expenses: 0, net: 0, expected: 0 })
       return { ...g, sum }
     })

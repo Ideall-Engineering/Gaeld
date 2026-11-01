@@ -127,6 +127,19 @@ class SteeringTest extends TestCase
         $this->assertSame('-1000.00', $ben['settlements']);
     }
 
+    public function test_an_invoiced_job_counts_and_still_expects_what_is_not_invoiced(): void
+    {
+        Project::query()->where('code', 'A')->update(['status' => ProjectStatus::Invoiced->value]);
+
+        $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
+        $anna = collect($data['people'])->keyBy('name')['Anna A'];
+
+        // Booked 800 plus the 4000 of 5000 not invoiced yet, half each.
+        $this->assertSame('2400.00', $anna['by_status']['invoiced']);
+        $this->assertSame('2700.00', $anna['contribution']);
+        $this->assertContains('A', array_column($data['open_payments'], 'code'), 'Invoiced in part, the rest is still expected.');
+    }
+
     public function test_a_block_without_a_key_is_borne_equally_and_credits_nobody(): void
     {
         $software = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Software', 'kind' => 'running', 'plan_amount' => '200.00']);

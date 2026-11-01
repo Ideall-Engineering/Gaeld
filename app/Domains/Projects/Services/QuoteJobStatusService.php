@@ -11,7 +11,7 @@ use App\Domains\Projects\Support\ProjectsModule;
 
 /**
  * A job follows its quotes: a sent quote makes an open job "quote sent", an accepted
- * one "in progress", a declined one "lost". Done jobs are left alone, and a
+ * one "in progress", a declined one "lost". Invoiced and done jobs are left alone, and a
  * job already in progress does not fall back because a further quote goes
  * out or is declined. A job without an expected amount takes the quote's net
  * total.
@@ -29,7 +29,7 @@ class QuoteJobStatusService
             ->whereKey($quote->cost_center_id)
             ->first();
 
-        if ($job === null || $job->kind !== ProjectKind::Project || $job->status === ProjectStatus::Done) {
+        if ($job === null || $job->kind !== ProjectKind::Project || $job->status->isBilled()) {
             return;
         }
 

@@ -90,7 +90,7 @@ final class InvoiceProjectInput
             'parent_id' => $row['parent_id'] ?? null,
             'is_open' => $row['is_active']
                 && $row['kind'] !== ProjectKind::Area->value
-                && ! in_array($row['status'], [ProjectStatus::Done->value, ProjectStatus::Lost->value], true),
+                && ! in_array($row['status'], [ProjectStatus::Invoiced->value, ProjectStatus::Done->value, ProjectStatus::Lost->value], true),
         ], ProjectQuery::tree());
     }
 

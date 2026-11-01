@@ -57,7 +57,7 @@ class InvoiceJobTest extends TestCase
         $invoice = $this->book($this->draft('INV-1', '1770.00'));
 
         $job = $this->jobOf($invoice);
-        $this->assertSame(['P26-08', 'Inglin AG (INV-1)', ProjectStatus::Done, '1770.00', $this->customer->id, null],
+        $this->assertSame(['P26-08', 'Inglin AG (INV-1)', ProjectStatus::Invoiced, '1770.00', $this->customer->id, null],
             [$job->code, $job->name, $job->status, (string) $job->expected_amount, $job->contact_id, $job->parent_id]);
         $this->assertTrue(LineAllocation::query()->where('cost_center_id', $job->id)->exists(), 'The revenue goes to the new job.');
 
