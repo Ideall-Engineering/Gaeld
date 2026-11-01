@@ -206,7 +206,7 @@ class InvoiceJobStatusTest extends TestCase
 
         $this->assertSame(ProjectStatus::Invoiced, $open->fresh()->status);
         $this->assertSame(ProjectStatus::Done, $paid->fresh()->status);
-        $this->assertSame(ProjectStatus::InProgress, $none->fresh()->status);
+        $this->assertSame(ProjectStatus::Done, $none->fresh()->status, 'A job without an invoice in Gäld was billed elsewhere.');
         $this->assertSame(ProjectStatus::Possible, $quoted->fresh()->status);
         $this->assertSame(ProjectStatus::Lost, $lost->fresh()->status);
     }

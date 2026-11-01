@@ -10,9 +10,10 @@ use Illuminate\Console\Command;
 
 /**
  * Once, for jobs from before the status "invoice sent": set every job
- * from its invoices as InvoiceJobStatusService would. Lost jobs stay lost,
- * open and quoted jobs without an invoice stay as they are. Shows the
- * changes and writes them only with --apply.
+ * that has invoices in Gäld from them as InvoiceJobStatusService would.
+ * A job without any was billed elsewhere (imported from the spreadsheet)
+ * and keeps its status, lost jobs stay lost. Shows the changes and writes
+ * them only with --apply.
  */
 class TidyJobStatusCommand extends Command
 {
@@ -31,7 +32,7 @@ class TidyJobStatusCommand extends Command
 
         foreach ($jobs as $job) {
             $status = $jobStatus->fromInvoices($job);
-            if ($status === null || $status === $job->status) {
+            if ($status === null || $status === ProjectStatus::InProgress || $status === $job->status) {
                 continue;
             }
             $rows[] = [$job->code, $job->name, $job->status->label(), $status->label()];
