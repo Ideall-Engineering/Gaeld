@@ -10,7 +10,8 @@ use App\Domains\Projects\Services\InvoiceProjectService;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Cancels a sent or overdue invoice and reverses its journal entry.
+ * Cancels a sent or overdue invoice without payments and reverses its
+ * journal entry.
  */
 class CancelInvoiceAction
 {
@@ -23,6 +24,12 @@ class CancelInvoiceAction
     {
         if (! $invoice->status->canTransitionTo(InvoiceStatus::Cancelled)) {
             throw new InvalidInvoiceStateException("Cannot cancel an invoice with status: {$invoice->status->value}.");
+        }
+
+        // Money already received would be left on the receivable account of
+        // a cancelled invoice. A credit note settles such an invoice instead.
+        if ($invoice->payments()->exists()) {
+            throw new InvalidInvoiceStateException(__('app.invoice_cancel_has_payments'));
         }
 
         return DB::transaction(function () use ($invoice) {

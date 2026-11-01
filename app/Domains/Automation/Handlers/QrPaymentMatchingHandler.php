@@ -82,12 +82,15 @@ class QrPaymentMatchingHandler implements AutomationHandler
                 continue;
             }
 
-            // The reference identifies the invoice; the amount confirms the
-            // payment is complete. A short payment must stay with a person.
-            if (Money::compare((string) $transaction->amount, (string) $invoice->total) !== 0) {
+            // The reference identifies the invoice beyond doubt, so a part
+            // payment is booked as such and the invoice stays open for the
+            // rest. Only more than is open needs a person: the surplus has
+            // to go somewhere.
+            $open = $invoice->amountDue();
+            if (Money::compare((string) $transaction->amount, $open) > 0) {
                 $needsReview[] = __('app.automation_qr_amount_mismatch', [
                     'invoice' => $invoice->number,
-                    'expected' => (string) $invoice->total,
+                    'expected' => $open,
                     'received' => (string) $transaction->amount,
                 ]);
 

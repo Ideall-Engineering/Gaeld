@@ -10,10 +10,12 @@ use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Accounting\Services\VatPeriodLockService;
+use App\Domains\Banking\Models\BankTransaction;
 use App\Domains\Invoicing\DTOs\RecordPaymentData;
 use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceType;
+use App\Domains\Invoicing\Enums\PaymentMethod;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Models\InvoiceLine;
 use App\Domains\Invoicing\Models\InvoicePayment;
@@ -278,6 +280,184 @@ class InvoiceAccountingService
     }
 
     /**
+     * Settle the open rest of an invoice nobody will pay: cash discount,
+     * rounding, bad debt. The rest is split over the invoice's VAT rates in
+     * proportion to their gross amounts and booked as a revenue correction:
+     *   Debit 3900 Revenue corrections (net share per rate)
+     *   Debit 2200 VAT output (VAT share per rate)
+     *   Credit 1100 Accounts receivable (the rest)
+     * The VAT share leaves the output tax of the period it is booked in, as
+     * a reduction of the consideration does. Recorded as a payment of the
+     * kind "write-off", so the invoice counts as settled everywhere.
+     */
+    public function writeOffRemainder(Invoice $invoice, string $date, string $reason): InvoicePayment
+    {
+        return DB::transaction(function () use ($invoice, $date, $reason): InvoicePayment {
+            $orgId = $invoice->organization_id;
+            $invoice->load('lines.vatRate');
+            $rest = $invoice->amountDue();
+
+            $receivable = $this->ledgerQuery->resolveAccount($orgId, AccountCode::ACCOUNTS_RECEIVABLE);
+            $corrections = $this->ledgerQuery->resolveAccount($orgId, AccountCode::ROUNDING_DIFFERENCE);
+
+            $shares = $this->writeOffShares($invoice, $rest);
+            $lines = [];
+            $vatEntries = [];
+            foreach ($shares as $share) {
+                if (Money::isPositive($share['net'])) {
+                    $lines[] = new JournalLineData(
+                        accountId: (string) $corrections->id,
+                        debit: $share['net'],
+                        credit: '0',
+                        description: 'Write-off'.($share['name'] !== null ? " ({$share['name']})" : ''),
+                    );
+                }
+
+                if (Money::isPositive($share['vat'])) {
+                    $this->vatPeriodLocks->assertPeriodUnlocked($orgId, $date, $date);
+                    $vatOutput = $this->ledgerQuery->resolveAccount($orgId, AccountCode::VAT_OUTPUT);
+                    $lines[] = new JournalLineData(
+                        accountId: (string) $vatOutput->id,
+                        debit: $share['vat'],
+                        credit: '0',
+                        description: "VAT Output — {$share['name']}",
+                    );
+                    $vatEntries[] = $share;
+                }
+            }
+
+            $lines[] = new JournalLineData(accountId: (string) $receivable->id, debit: '0', credit: $rest, description: 'Clear receivable');
+
+            $reference = 'WO-'.$invoice->number.'-'.($invoice->payments()->count() + 1);
+            $entry = $this->ledgerService->postEntry($orgId, new JournalEntryData(
+                date: $date,
+                reference: $reference,
+                description: "Write-off of the rest of {$invoice->number}: {$reason}",
+                lines: $lines,
+            ));
+
+            // Module VAT rows like the invoice's own; a reversal mirrors them.
+            foreach ($vatEntries as $share) {
+                VatEntry::create([
+                    'journal_entry_id' => $entry->id,
+                    'vat_rate_id' => $share['vat_rate_id'],
+                    'base_amount' => Money::negate($share['net']),
+                    'vat_amount' => Money::negate($share['vat']),
+                    'type' => VatEntryType::Output,
+                ]);
+            }
+
+            // The correction lowers the revenue of the invoice's project.
+            $this->invoiceProjects->allocateEntry($invoice, $entry);
+
+            $payment = InvoicePayment::create([
+                'organization_id' => $orgId,
+                'invoice_id' => $invoice->id,
+                'journal_entry_id' => $entry->id,
+                'amount' => $rest,
+                'payment_date' => $date,
+                'payment_method' => PaymentMethod::WriteOff->value,
+                'reference' => Str::limit($reason, 100, ''),
+            ]);
+
+            $invoice->update(['status' => InvoiceStatus::Paid]);
+
+            return $payment->load('journalEntry');
+        });
+    }
+
+    /**
+     * The rest of an invoice split over its VAT rates by their gross amount;
+     * the last rate takes what rounding leaves, so the shares add up.
+     *
+     * @return list<array{vat_rate_id: string|null, name: string|null, net: numeric-string, vat: numeric-string}>
+     */
+    private function writeOffShares(Invoice $invoice, string $rest): array
+    {
+        $groups = [];
+        foreach ($invoice->lines->groupBy(fn ($line) => $line->vat_rate_id ?? 'none') as $vatRateId => $invoiceLines) {
+            ['netAmount' => $net, 'vatAmount' => $vat] = $this->calculateGroupTotals($invoiceLines);
+            $gross = Money::add($net, $vat);
+            if (Money::isPositive($gross)) {
+                $groups[] = [
+                    'vat_rate_id' => $vatRateId === 'none' ? null : (string) $vatRateId,
+                    'name' => $vatRateId === 'none' ? null : ($invoiceLines->first()->vatRate->name ?? 'VAT'),
+                    'gross' => $gross,
+                    'vat' => Money::isPositive($vat) ? $vat : '0.00',
+                ];
+            }
+        }
+
+        if ($groups === []) {
+            return [['vat_rate_id' => null, 'name' => null, 'net' => Money::of($rest), 'vat' => Money::of('0')]];
+        }
+
+        $grossTotal = array_reduce($groups, fn (string $sum, array $group) => Money::add($sum, $group['gross']), '0.00');
+        $left = $rest;
+        $shares = [];
+        foreach ($groups as $index => $group) {
+            $share = $index === array_key_last($groups)
+                ? $left
+                : Money::divideRounded(Money::multiply($rest, $group['gross']), $grossTotal);
+            $left = Money::subtract($left, $share);
+            $vat = Money::divideRounded(Money::multiply($share, $group['vat']), $group['gross']);
+            $shares[] = [
+                'vat_rate_id' => $group['vat_rate_id'],
+                'name' => $group['name'],
+                'net' => Money::subtract($share, $vat),
+                'vat' => $vat,
+            ];
+        }
+
+        return $shares;
+    }
+
+    /**
+     * Take back a payment or write-off entered by mistake: its entry is
+     * reversed (on its own date while that period is open, else today) and
+     * the invoice is open again. A payment that came from the bank
+     * reconciliation is taken back there, so the bank line stays in step.
+     */
+    public function removePayment(Invoice $invoice, InvoicePayment $payment): void
+    {
+        if ($payment->invoice_id !== $invoice->id || $payment->organization_id !== $invoice->organization_id) {
+            throw new \DomainException('The payment does not belong to this invoice.');
+        }
+
+        if ($this->isFromBankReconciliation($payment)) {
+            throw new \DomainException(__('app.payment_remove_bank_linked'));
+        }
+
+        DB::transaction(function () use ($invoice, $payment): void {
+            $payment->loadMissing('journalEntry.lines');
+
+            if ($payment->journalEntry !== null) {
+                $date = $this->correctionDate($payment->organization_id, $payment->payment_date->toDateString());
+                $reversal = $this->ledgerService->reverseEntry(
+                    $payment->journalEntry,
+                    "Removal of a payment for {$invoice->number}",
+                    'payment_removal',
+                    $date,
+                );
+                $this->ledgerService->postDraft($reversal);
+            }
+
+            $payment->delete();
+
+            if ($invoice->status === InvoiceStatus::Paid && ! $invoice->fresh()->isFullyPaid()) {
+                $isOverdue = $invoice->due_date?->isBefore(now()->startOfDay()) ?? false;
+                $invoice->update(['status' => $isOverdue ? InvoiceStatus::Overdue : InvoiceStatus::Sent]);
+            }
+        });
+    }
+
+    public function isFromBankReconciliation(InvoicePayment $payment): bool
+    {
+        return $payment->journal_entry_id !== null
+            && BankTransaction::query()->where('journal_entry_id', $payment->journal_entry_id)->exists();
+    }
+
+    /**
      * Correct a payment date by reversing and reposting its ledger entry.
      */
     public function updatePaymentDate(Invoice $invoice, InvoicePayment $payment, string $paymentDate): InvoicePayment
@@ -290,6 +470,12 @@ class InvoiceAccountingService
 
         if ($payment->journalEntry === null) {
             throw new \DomainException('Cannot correct a payment without a journal entry.');
+        }
+
+        // Reposting would drop the VAT rows of a write-off; it is removed
+        // and written off again instead.
+        if ($payment->payment_method === PaymentMethod::WriteOff) {
+            throw new \DomainException('A write-off cannot be redated; remove it and write the rest off again.');
         }
 
         $oldDate = $payment->payment_date->toDateString();
@@ -333,6 +519,12 @@ class InvoiceAccountingService
                     ))->all(),
                 ),
             );
+
+            // A bank line reconciled with this payment follows it, so taking
+            // the reconciliation back later reverses the live entry.
+            BankTransaction::query()
+                ->where('journal_entry_id', $original->id)
+                ->update(['journal_entry_id' => $replacement->id]);
 
             $payment->update([
                 'journal_entry_id' => $replacement->id,

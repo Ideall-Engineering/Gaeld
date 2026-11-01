@@ -4,6 +4,7 @@ namespace App\Domains\Projects\Services;
 
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceType;
+use App\Domains\Invoicing\Enums\PaymentMethod;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\Project;
@@ -154,11 +155,13 @@ class ProjectOverviewService
             ->whereBetween('invoices.issue_date', [$from, $to])
             ->get(['invoice_projects.cost_center_id', 'invoices.id', 'invoices.type', 'invoices.total', 'invoices.related_invoice_id']);
 
-        $paid = DB::table('invoice_payments')
+        // A write-off settles an invoice, but no money came in.
+        $settlements = DB::table('invoice_payments')
             ->whereIn('invoice_id', $invoices->pluck('id'))
             ->groupBy('invoice_id')
-            ->selectRaw('invoice_id, SUM(amount) AS paid')
-            ->pluck('paid', 'invoice_id');
+            ->selectRaw('invoice_id, SUM(amount) AS settled, SUM(CASE WHEN payment_method = ? THEN 0 ELSE amount END) AS received', [PaymentMethod::WriteOff->value])
+            ->get()
+            ->keyBy('invoice_id');
 
         $credited = $invoices
             ->where('type', InvoiceType::CreditNote->value)
@@ -177,9 +180,10 @@ class ProjectOverviewService
                 continue;
             }
 
-            $received = Money::of((string) ($paid[$invoice->id] ?? '0'));
+            $received = Money::of((string) ($settlements[$invoice->id]->received ?? '0'));
+            $settled = Money::of((string) ($settlements[$invoice->id]->settled ?? '0'));
             $open = Money::subtract(
-                Money::subtract((string) $invoice->total, $received),
+                Money::subtract((string) $invoice->total, $settled),
                 (string) ($credited[$invoice->id] ?? '0.00'),
             );
 

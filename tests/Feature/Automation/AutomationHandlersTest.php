@@ -122,11 +122,33 @@ class AutomationHandlersTest extends TestCase
         $this->assertFalse($result->hasFindings());
     }
 
-    public function test_a_short_payment_is_left_for_a_person(): void
+    public function test_a_part_payment_is_booked_and_the_rest_stays_open(): void
+    {
+        $reference = '210000000003139471430009017';
+        $invoice = $this->invoice($reference, '1200.00');
+        $first = $this->incoming($reference, '900.00');
+
+        $result = app(QrPaymentMatchingHandler::class)->run($this->context());
+
+        $this->assertSame(1, $result->summary['matched']);
+        $this->assertTrue($first->fresh()->is_reconciled);
+        $this->assertSame('300.00', $invoice->fresh()->amountDue());
+        $this->assertSame(InvoiceStatus::Sent, $invoice->fresh()->status);
+
+        // The second instalment pays exactly the rest and settles the invoice.
+        $second = $this->incoming($reference, '300.00', '2026-02-20');
+        $result = app(QrPaymentMatchingHandler::class)->run($this->context());
+
+        $this->assertSame(1, $result->summary['matched']);
+        $this->assertTrue($second->fresh()->is_reconciled);
+        $this->assertSame(InvoiceStatus::Paid, $invoice->fresh()->status);
+    }
+
+    public function test_more_than_is_open_is_left_for_a_person(): void
     {
         $reference = '210000000003139471430009017';
         $this->invoice($reference, '1200.00');
-        $transaction = $this->incoming($reference, '900.00');
+        $transaction = $this->incoming($reference, '1250.00');
 
         $result = app(QrPaymentMatchingHandler::class)->run($this->context());
 

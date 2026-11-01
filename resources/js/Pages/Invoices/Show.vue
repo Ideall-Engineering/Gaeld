@@ -28,6 +28,8 @@ const props = defineProps({
   canDelete: { type: Boolean, default: false },
   canRecordPayment: { type: Boolean, default: false },
   canUpdatePayment: { type: Boolean, default: false },
+  canCancel: { type: Boolean, default: false },
+  bankLinkedPaymentIds: { type: Array, default: () => [] },
   canSend: { type: Boolean, default: false },
   canSendReminder: { type: Boolean, default: false },
   canRevertToDraft: { type: Boolean, default: false },
@@ -49,6 +51,9 @@ const { formatCurrency, formatDate } = useFormatters()
 
 const showPaymentModal = ref(false)
 const paymentToEdit = ref(null)
+const paymentToRemove = ref(null)
+const removingPayment = ref(false)
+const showWriteOffModal = ref(false)
 const showDeleteDialog = ref(false)
 const showReminderDialog = ref(false)
 const showCancelDialog = ref(false)
@@ -109,6 +114,7 @@ const paymentForm = useForm({
   bank_account_code: '',
 })
 const paymentDateForm = useForm({ payment_date: '' })
+const writeOffForm = useForm({ date: '', reason: '' })
 
 const amountDue = computed(() => {
   return Math.max(0, parseFloat(props.invoice?.total || 0) - amountPaid.value)
@@ -117,6 +123,18 @@ const amountDue = computed(() => {
 const amountPaid = computed(() =>
   (props.invoice?.payments ?? []).reduce((sum, payment) => sum + parseFloat(payment.amount || 0), 0),
 )
+
+// A write-off settles the rest without money coming in.
+const amountWrittenOff = computed(() =>
+  (props.invoice?.payments ?? [])
+    .filter(payment => payment.payment_method === 'write_off')
+    .reduce((sum, payment) => sum + parseFloat(payment.amount || 0), 0),
+)
+
+const amountReceived = computed(() => amountPaid.value - amountWrittenOff.value)
+
+const isWriteOff = (payment) => payment.payment_method === 'write_off'
+const isBankLinked = (payment) => props.bankLinkedPaymentIds.includes(payment.id)
 
 const paymentProgress = computed(() => {
   const total = parseFloat(props.invoice?.total || 0)
@@ -178,6 +196,35 @@ function updatePaymentDate() {
     preserveScroll: true,
     onSuccess: () => {
       paymentToEdit.value = null
+    },
+  })
+}
+
+function openWriteOffModal() {
+  writeOffForm.date = new Date().toISOString().slice(0, 10)
+  writeOffForm.reason = ''
+  writeOffForm.clearErrors()
+  showWriteOffModal.value = true
+}
+
+function writeOff() {
+  writeOffForm.post(`/invoices/${props.invoice.id}/write-off`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showWriteOffModal.value = false
+    },
+  })
+}
+
+function executeRemovePayment() {
+  if (!paymentToRemove.value) return
+
+  removingPayment.value = true
+  router.delete(`/invoices/${props.invoice.id}/payments/${paymentToRemove.value.id}`, {
+    preserveScroll: true,
+    onFinish: () => {
+      removingPayment.value = false
+      paymentToRemove.value = null
     },
   })
 }
@@ -246,7 +293,7 @@ const lineColumns = computed(() => [
 const paymentColumns = computed(() => [
   { key: 'payment_date', label: t('date'), format: (v) => formatDate(v) },
   { key: 'amount', label: t('amount'), class: 'text-right', format: (v) => formatCurrency(v) },
-  { key: 'payment_method', label: t('payment_method'), format: (v) => paymentMethodOptions.find(o => o.value === v)?.label || v },
+  { key: 'payment_method', label: t('payment_method'), format: (v) => v === 'write_off' ? t('payment_method_write_off') : paymentMethodOptions.find(o => o.value === v)?.label || v },
   { key: 'reference', label: t('reference') },
   { key: 'actions', label: '', class: 'text-right w-auto' },
 ])
@@ -404,11 +451,11 @@ const bankAccountOptions = computed(() =>
                 {{ t('revert_to_draft') }}
               </button>
               <div
-                v-if="((invoice?.status !== 'paid' && invoice?.status !== 'cancelled') || invoice?.status === 'draft') && !invoice?.archived_at"
+                v-if="(canCancel || canDelete || canForceDelete) && !invoice?.archived_at"
                 class="my-1 border-t border-[hsl(var(--border))]"
               />
               <button
-                v-if="invoice?.status !== 'paid' && invoice?.status !== 'cancelled' && !invoice?.archived_at"
+                v-if="canCancel && !invoice?.archived_at"
                 class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive))]/10"
                 @click="showCancelDialog = true; close()"
               >
@@ -463,8 +510,12 @@ const bankAccountOptions = computed(() =>
               </div>
               <div v-if="invoice?.payments?.length" class="space-y-2 border-t pt-2">
                 <div class="flex justify-between text-[hsl(var(--muted-foreground))]">
-                  <span>{{ t('amount') }}</span>
-                  <span class="tabular-nums">{{ formatCurrency(amountPaid) }}</span>
+                  <span>{{ t('amount_received') }}</span>
+                  <span class="tabular-nums">{{ formatCurrency(amountReceived) }}</span>
+                </div>
+                <div v-if="amountWrittenOff > 0" class="flex justify-between text-[hsl(var(--muted-foreground))]">
+                  <span>{{ t('amount_written_off') }}</span>
+                  <span class="tabular-nums">{{ formatCurrency(amountWrittenOff) }}</span>
                 </div>
                 <div class="h-2 overflow-hidden rounded-full bg-[hsl(var(--muted))]" aria-hidden="true">
                   <div class="h-full rounded-full bg-[hsl(var(--primary))] transition-all" :style="{ width: `${paymentProgress}%` }" />
@@ -481,23 +532,51 @@ const bankAccountOptions = computed(() =>
       <!-- Payment History -->
       <Card v-if="invoice?.payments?.length || amountDue > 0">
         <CardHeader>
-          <CardTitle>{{ t('payment_history') }}</CardTitle>
-          <CardDescription v-if="invoice?.payments?.length">{{ invoice.payments.length }} {{ t('payments_recorded') }}</CardDescription>
-          <CardDescription v-else>{{ t('amount_due') }} {{ formatCurrency(amountDue) }}</CardDescription>
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>{{ t('payment_history') }}</CardTitle>
+              <CardDescription v-if="invoice?.payments?.length">{{ invoice.payments.length }} {{ t('payments_recorded') }}</CardDescription>
+              <CardDescription v-else>{{ t('amount_due') }} {{ formatCurrency(amountDue) }}</CardDescription>
+            </div>
+            <Button
+              v-if="canRecordPayment && amountDue > 0"
+              variant="outline"
+              size="sm"
+              @click="openWriteOffModal"
+            >
+              {{ t('write_off_rest') }}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <DataTable v-if="invoice?.payments?.length" :columns="paymentColumns" :rows="invoice.payments">
+            <template #cell-reference="{ row }">
+              <span>{{ row.reference }}</span>
+              <span v-if="isBankLinked(row)" class="ml-2 text-xs text-[hsl(var(--muted-foreground))]">{{ t('payment_bank_linked') }}</span>
+            </template>
             <template #cell-actions="{ row }">
-              <Button
-                v-if="canUpdatePayment"
-                variant="ghost"
-                size="icon"
-                :aria-label="t('edit_payment_date')"
-                :title="t('edit_payment_date')"
-                @click.stop="openPaymentDateModal(row)"
-              >
-                <Pencil class="h-4 w-4" />
-              </Button>
+              <div class="flex justify-end">
+                <Button
+                  v-if="canUpdatePayment && !isWriteOff(row)"
+                  variant="ghost"
+                  size="icon"
+                  :aria-label="t('edit_payment_date')"
+                  :title="t('edit_payment_date')"
+                  @click.stop="openPaymentDateModal(row)"
+                >
+                  <Pencil class="h-4 w-4" />
+                </Button>
+                <Button
+                  v-if="canUpdatePayment && !isBankLinked(row)"
+                  variant="ghost"
+                  size="icon"
+                  :aria-label="t('remove_payment')"
+                  :title="t('remove_payment')"
+                  @click.stop="paymentToRemove = row"
+                >
+                  <Trash2 class="h-4 w-4" />
+                </Button>
+              </div>
             </template>
           </DataTable>
           <p v-else class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('no_payments_recorded') }}</p>
@@ -678,6 +757,47 @@ const bankAccountOptions = computed(() =>
         </div>
       </form>
     </Modal>
+
+    <Modal :open="showWriteOffModal" :title="t('write_off_rest')" @close="showWriteOffModal = false">
+      <form class="space-y-6" @submit.prevent="writeOff">
+        <p class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('write_off_hint') }}</p>
+        <div class="flex justify-between text-sm">
+          <span>{{ t('write_off_amount') }}</span>
+          <span class="font-semibold tabular-nums">{{ formatCurrency(amountDue) }}</span>
+        </div>
+        <FormInput
+          id="write-off-date"
+          v-model="writeOffForm.date"
+          type="date"
+          :label="t('write_off_date')"
+          :error="writeOffForm.errors.date"
+          required
+        />
+        <FormInput
+          id="write-off-reason"
+          v-model="writeOffForm.reason"
+          :label="t('write_off_reason')"
+          :placeholder="t('write_off_reason_placeholder')"
+          maxlength="100"
+          :error="writeOffForm.errors.reason"
+          required
+        />
+        <div class="flex justify-end gap-3">
+          <Button type="button" variant="outline" @click="showWriteOffModal = false">{{ t('cancel') }}</Button>
+          <Button type="submit" :disabled="writeOffForm.processing">{{ t('write_off_rest') }}</Button>
+        </div>
+      </form>
+    </Modal>
+
+    <ConfirmDialog
+      :open="!!paymentToRemove"
+      :title="t('remove_payment')"
+      :message="t('remove_payment_confirm', { amount: formatCurrency(paymentToRemove?.amount), date: formatDate(paymentToRemove?.payment_date) })"
+      :confirm-label="t('remove_payment')"
+      :processing="removingPayment"
+      @confirm="executeRemovePayment"
+      @cancel="paymentToRemove = null"
+    />
 
     <ConfirmDialog
       :open="showRefreshCustomerSnapshotDialog"

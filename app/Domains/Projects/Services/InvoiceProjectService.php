@@ -7,7 +7,9 @@ use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceType;
+use App\Domains\Invoicing\Enums\PaymentMethod;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Models\InvoicePayment;
 use App\Domains\Invoicing\Models\Quote;
 use App\Domains\Projects\Enums\AllocationSource;
 use App\Domains\Projects\Enums\ProjectKind;
@@ -109,6 +111,15 @@ class InvoiceProjectService
 
             if ($entry !== null) {
                 $this->allocateEntry($invoice, $entry, $userId);
+
+                // A written-off rest lowers the revenue of the same project.
+                $writeOffs = InvoicePayment::withoutGlobalScopes()
+                    ->where('invoice_id', $invoice->id)
+                    ->where('payment_method', PaymentMethod::WriteOff->value)
+                    ->pluck('journal_entry_id');
+                foreach (JournalEntry::withoutGlobalScopes()->whereIn('id', $writeOffs)->get() as $writeOff) {
+                    $this->allocateEntry($invoice, $writeOff, $userId);
+                }
             }
 
             if ($own !== null && ! LineAllocation::withoutGlobalScopes()->where('cost_center_id', $own->id)->exists()) {

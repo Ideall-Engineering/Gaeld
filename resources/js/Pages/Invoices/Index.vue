@@ -99,8 +99,10 @@ function statusOptions(row) {
   }
   if (row.status === 'sent' || row.status === 'overdue') {
     if (can('invoicing.record-payment')) options.push({ key: 'payment', label: t('record_payment') })
-    if (can('invoicing.edit') && !Number(row.payments_sum_amount ?? 0)) options.push({ key: 'revert', label: t('revert_to_draft') })
-    if (can('invoicing.edit')) options.push({ key: 'cancel', label: t('cancel_invoice'), destructive: true })
+    // With payments an invoice neither goes back to draft nor is cancelled.
+    const unpaid = !Number(row.payments_sum_amount ?? 0)
+    if (can('invoicing.edit') && unpaid) options.push({ key: 'revert', label: t('revert_to_draft') })
+    if (can('invoicing.edit') && unpaid) options.push({ key: 'cancel', label: t('cancel_invoice'), destructive: true })
   }
   return options
 }

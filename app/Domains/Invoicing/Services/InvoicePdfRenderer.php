@@ -3,6 +3,7 @@
 namespace App\Domains\Invoicing\Services;
 
 use App\Domains\Invoicing\Enums\InvoiceLineType;
+use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Invoice;
@@ -171,8 +172,13 @@ class InvoicePdfRenderer
     {
         $currency = $invoice->currency ?? 'CHF';
         $rates = $this->vatByRate($invoice);
-        $rows = 2 + count($rates);
         $isInvoice = $invoice instanceof Invoice;
+        // Part of an open invoice is paid: the slip asks for the rest, so
+        // the totals say how it comes about.
+        $paid = $isInvoice && in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue], true)
+            ? $invoice->amountPaid()
+            : '0';
+        $rows = 2 + count($rates) + (Money::isPositive($paid) ? 2 : 0);
         $bank = $isInvoice ? $organization->defaultInvoicingBankAccount() : null;
 
         $this->ensureSpace($tcpdf, 8 + $rows * 6);
@@ -207,6 +213,12 @@ class InvoicePdfRenderer
         $tcpdf->SetFont('Helvetica', 'B', InvoicePdfStyle::FONT_BODY + 1);
         $this->totalsRow($tcpdf, $this->t('pdf_total'), $currency.' '.$this->money((string) $invoice->total));
         $tcpdf->SetFont('Helvetica', '', InvoicePdfStyle::FONT_BODY);
+        if ($isInvoice && Money::isPositive($paid)) {
+            $this->totalsRow($tcpdf, $this->t('pdf_already_paid'), $currency.' -'.$this->money($paid));
+            $tcpdf->SetFont('Helvetica', 'B', InvoicePdfStyle::FONT_BODY);
+            $this->totalsRow($tcpdf, $this->t('pdf_amount_open'), $currency.' '.$this->money($invoice->amountDue()));
+            $tcpdf->SetFont('Helvetica', '', InvoicePdfStyle::FONT_BODY);
+        }
         $tcpdf->SetY(max($tcpdf->GetY(), $top + 15));
 
         if ($isInvoice && filled($invoice->payment_terms)) {

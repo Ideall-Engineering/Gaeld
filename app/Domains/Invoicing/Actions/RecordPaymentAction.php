@@ -4,6 +4,7 @@ namespace App\Domains\Invoicing\Actions;
 
 use App\Domains\Invoicing\DTOs\RecordPaymentData;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
+use App\Domains\Invoicing\Enums\PaymentMethod;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Exceptions\InvalidPaymentException;
 use App\Domains\Invoicing\Models\Invoice;
@@ -25,6 +26,11 @@ class RecordPaymentAction
     {
         if (! $invoice->status->canTransitionTo(InvoiceStatus::Paid)) {
             throw new InvalidInvoiceStateException('Payments can only be recorded for sent or overdue invoices.');
+        }
+
+        // A write-off is no money received; it has its own action.
+        if ($data->paymentMethod === PaymentMethod::WriteOff) {
+            throw new InvalidPaymentException('A write-off is not a payment.');
         }
 
         $amount = $data->amount;
