@@ -63,6 +63,7 @@ use Laravel\Scout\Searchable;
  * @property-read Organization $organization
  * @property-read Collection<int, InvoiceLine> $lines
  * @property-read Collection<int, InvoicePayment> $payments
+ * @property-read Collection<int, InvoiceInstallment> $installments
  */
 class Invoice extends Model
 {
@@ -191,6 +192,19 @@ class Invoice extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(InvoicePayment::class);
+    }
+
+    /** @return HasMany<InvoiceInstallment, $this> */
+    public function installments(): HasMany
+    {
+        return $this->hasMany(InvoiceInstallment::class)->orderBy('position');
+    }
+
+    public function hasPaymentPlan(): bool
+    {
+        return $this->relationLoaded('installments')
+            ? $this->installments->isNotEmpty()
+            : $this->installments()->exists();
     }
 
     /** @return BelongsTo<self, $this> */
