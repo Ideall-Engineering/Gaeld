@@ -14,6 +14,7 @@ use App\Domains\Contacts\Models\Contact;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\Actions\DuplicateInvoiceAction;
 use App\Domains\Invoicing\Actions\FinalizeInvoiceAction;
+use App\Domains\Invoicing\Actions\GenerateQrInvoicePdfAction;
 use App\Domains\Invoicing\Actions\RemoveInvoicePaymentAction;
 use App\Domains\Invoicing\Actions\WriteOffInvoiceRemainderAction;
 use App\Domains\Invoicing\DTOs\CreateInvoiceData;
@@ -127,6 +128,21 @@ class InstallmentPlanLifecycleTest extends TestCase
             $this->assertMatchesRegularExpression('/^\d{27}$/', $reference);
             $this->assertNotSame($invoice->fresh()->qr_reference, $reference);
         }
+    }
+
+    public function test_rates_get_their_references_when_a_qr_iban_comes_later(): void
+    {
+        $this->org->update(['address' => 'Bahnhofstrasse 1', 'postal_code' => '8001', 'city' => 'Zürich', 'country' => 'CH']);
+        $this->customer->update(['address' => 'Lagerstrasse 5', 'postal_code' => '8004', 'city' => 'Zürich', 'country' => 'CH']);
+        $this->bank->update(['qr_iban' => null, 'iban' => 'CH9300762011623852957']);
+        $invoice = $this->finalized();
+        $this->assertSame([null, null, null], $invoice->installments()->pluck('qr_reference')->all());
+
+        $this->bank->update(['qr_iban' => 'CH4431999123000889012']);
+        $pdf = app(GenerateQrInvoicePdfAction::class)->execute($invoice->fresh(), $this->org->fresh(), 'de');
+
+        $this->assertStringStartsWith('%PDF-', $pdf);
+        $this->assertCount(3, array_filter($invoice->installments()->pluck('qr_reference')->all()));
     }
 
     public function test_a_plan_that_no_longer_adds_up_is_not_finalized(): void

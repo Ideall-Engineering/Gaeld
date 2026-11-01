@@ -165,6 +165,24 @@ class InstallmentPlanServiceTest extends TestCase
         }
     }
 
+    public function test_amounts_beyond_centimes_or_in_exponent_form_are_refused(): void
+    {
+        $invoice = $this->draft();
+
+        foreach (['100.005', '1e3'] as $amount) {
+            try {
+                $this->plans->sync($invoice, [
+                    ['due_date' => '2026-11-30', 'amount' => $amount],
+                    ['due_date' => '2026-12-31'],
+                ]);
+                $this->fail("Amount accepted: {$amount}");
+            } catch (ValidationException $e) {
+                $this->assertArrayHasKey('installments', $e->errors(), $amount);
+            }
+        }
+        $this->assertSame(0, $invoice->installments()->count());
+    }
+
     public function test_an_empty_plan_removes_it(): void
     {
         $invoice = $this->draft();

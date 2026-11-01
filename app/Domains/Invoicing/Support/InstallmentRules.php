@@ -16,7 +16,7 @@ final class InstallmentRules
         return [
             'installments' => 'nullable|array|max:'.InstallmentPlanService::MAX_RATES,
             'installments.*.due_date' => 'nullable|date',
-            'installments.*.amount' => 'nullable|numeric',
+            'installments.*.amount' => 'nullable|decimal:0,2',
         ];
     }
 }

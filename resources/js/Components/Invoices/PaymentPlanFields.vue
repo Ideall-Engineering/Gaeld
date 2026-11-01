@@ -110,8 +110,8 @@ function rateError(index, field) {
                   <input
                     v-model="rate.amount"
                     type="number"
-                    step="0.05"
-                    min="0.05"
+                    step="0.01"
+                    min="0.01"
                     :aria-label="`${t('amount')} ${index + 1}`"
                     class="h-9 w-24 sm:w-32 rounded-md border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-2 text-right tabular-nums"
                   />

@@ -91,10 +91,11 @@ class InstallmentPlanService
             $amount = null;
             if ($index < $count - 1) {
                 $given = $rate['amount'] ?? null;
-                if ($given === null || ! is_numeric($given) || ! Money::isPositive(Money::of($given))) {
+                // Francs and at most two decimals, as the ledger keeps them.
+                if ($given === null || ! preg_match('/^\d+(\.\d{1,2})?$/', trim((string) $given)) || ! Money::isPositive(Money::of(trim((string) $given)))) {
                     $this->refuse(__('app.payment_plan_amounts'));
                 }
-                $amount = Money::of($given);
+                $amount = Money::of(trim((string) $given));
                 $others = Money::add($others, $amount);
             }
 

@@ -61,6 +61,12 @@ class SwissQrInvoiceService
         $invoice->loadMissing(['customer']);
 
         $this->ensureQrReference($invoice, $organization);
+        if ($installment !== null && $installment->qr_reference === null) {
+            // A QR-IBAN set after finalizing: the rates get theirs now, as
+            // the invoice does above.
+            $this->ensureInstallmentReferences($invoice, $organization);
+            $installment->refresh();
+        }
 
         $qrBill = QrBill::create();
 
