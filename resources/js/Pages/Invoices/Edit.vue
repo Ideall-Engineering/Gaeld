@@ -23,6 +23,7 @@ import UnsavedChangesDialog from '@/Components/UI/UnsavedChangesDialog.vue'
 import { useFormValidation, z } from '@/lib/useFormValidation'
 import FileUpload from '@/Components/UI/FileUpload.vue'
 import InvoiceLineItems from '@/Components/Invoices/InvoiceLineItems.vue'
+import PaymentPlanFields from '@/Components/Invoices/PaymentPlanFields.vue'
 import InvoiceProjectField from '@/Components/Projects/InvoiceProjectField.vue'
 import ContactPersonField from '@/Components/Invoices/ContactPersonField.vue'
 import { Plus } from 'lucide-vue-next'
@@ -69,7 +70,14 @@ const form = useForm({
   })),
   justificatif: null,
   project_id: props.invoiceProjectId ? String(props.invoiceProjectId) : '',
+  payment_plan: (props.invoice.installments ?? []).length > 0,
+  installments: (props.invoice.installments ?? []).map(rate => ({
+    due_date: rate.due_date?.slice(0, 10) ?? '',
+    amount: rate.amount,
+  })),
 })
+
+const lineItems = ref(null)
 
 if (form.lines.length === 0) {
   form.lines.push({ type: 'item', discount_type: 'flat', description: '', quantity: 1, unit: '', unit_price: 0, vat_rate_id: props.defaultVatRateId ? String(props.defaultVatRateId) : '' })
@@ -198,6 +206,7 @@ onMounted(() => {
               required
             />
             <FormInput
+              v-if="!form.payment_plan"
               id="due_date"
               v-model="form.due_date"
               type="date"
@@ -232,6 +241,7 @@ onMounted(() => {
           <hr class="border-[hsl(var(--border))]" />
           <InvoiceLineItems
             id="lines"
+            ref="lineItems"
             class="scroll-mt-20"
             v-model="form.lines"
             :vat-rates="vatRates"
@@ -240,6 +250,15 @@ onMounted(() => {
             :currency="form.currency"
             :default-vat-rate-id="defaultVatRateId"
             :tax-treatment="form.tax_treatment"
+          />
+
+          <PaymentPlanFields
+            v-model="form.installments"
+            v-model:enabled="form.payment_plan"
+            :total="lineItems?.total ?? 0"
+            :issue-date="form.issue_date"
+            :currency="form.currency"
+            :errors="form.errors"
           />
 
           <!-- Notes & Terms -->

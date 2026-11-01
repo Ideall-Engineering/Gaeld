@@ -27,7 +27,7 @@ class InstallmentPlanService
      * Replaces the plan of a draft. An empty list removes it; the amount
      * given for the last rate is ignored.
      *
-     * @param  list<array{due_date: string, amount?: string|int|float|null}>  $rates
+     * @param  array<int, array{due_date?: string|null, amount?: string|int|float|null}>  $rates
      *
      * @throws ValidationException when the plan breaks a rule of the spec
      */
@@ -62,11 +62,12 @@ class InstallmentPlanService
     /**
      * The plan checked against the rules, with the rest on the last rate.
      *
-     * @param  list<array{due_date: string, amount?: string|int|float|null}>  $rates
+     * @param  array<int, array{due_date?: string|null, amount?: string|int|float|null}>  $rates
      * @return list<array{due_date: string, amount: string}>
      */
     public function plannedRates(Invoice $invoice, array $rates): array
     {
+        $rates = array_values($rates);
         $count = count($rates);
         if ($count < self::MIN_RATES || $count > self::MAX_RATES) {
             $this->refuse(__('app.payment_plan_count', ['min' => self::MIN_RATES, 'max' => self::MAX_RATES]));
@@ -77,6 +78,9 @@ class InstallmentPlanService
         $others = '0.00';
 
         foreach ($rates as $index => $rate) {
+            if (blank($rate['due_date'] ?? null)) {
+                $this->refuse(__('app.payment_plan_dates'));
+            }
             $date = Carbon::parse($rate['due_date'])->startOfDay();
             $first = $previous === null;
             if (($first && $date->lt($invoice->issue_date->copy()->startOfDay())) || (! $first && $date->lte($previous))) {

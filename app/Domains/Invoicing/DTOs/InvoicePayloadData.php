@@ -16,7 +16,7 @@ abstract readonly class InvoicePayloadData
 
     /**
      * @param  array<int, InvoiceLineData>  $lines
-     * @param  list<array{due_date: string, amount?: string|int|float|null}>|null  $installments  the payment plan (spec 013); null leaves it as it is, [] removes it
+     * @param  array<int, array{due_date?: string|null, amount?: string|int|float|null}>|null  $installments  the payment plan (spec 013); null leaves it as it is, [] removes it
      */
     public function __construct(
         public string $organizationId,

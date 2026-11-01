@@ -56,6 +56,26 @@ class InvoiceShowActionsTest extends TestCase
         ], $overrides));
     }
 
+    public function test_the_invoice_page_shows_the_rates_with_their_state(): void
+    {
+        $this->travelTo('2026-12-05 10:00:00');
+        $invoice = $this->invoice(['total' => '1621.50', 'subtotal' => '1500.00', 'vat_amount' => '121.50', 'issue_date' => '2026-11-02', 'due_date' => '2026-11-30']);
+        foreach ([['2026-11-30', '600.00'], ['2026-12-01', '600.00'], ['2027-01-31', '421.50']] as $index => [$date, $amount]) {
+            $invoice->installments()->create(['organization_id' => $this->org->id, 'position' => $index + 1, 'due_date' => $date, 'amount' => $amount]);
+        }
+        $invoice->payments()->create(['organization_id' => $this->org->id, 'amount' => '600.00', 'payment_date' => '2026-11-29', 'payment_method' => 'bank']);
+
+        $states = $this->actAsOrg()
+            ->get(route('invoices.show', $invoice))
+            ->assertOk()
+            ->viewData('page')['props']['installmentStates'];
+
+        $this->assertCount(3, $states);
+        $this->assertSame(['position' => 1, 'due_date' => '2026-11-30', 'amount' => '600.00', 'paid' => '600.00', 'open' => '0.00', 'overdue' => false], $states[0]);
+        $this->assertSame(['600.00', '421.50'], array_column(array_slice($states, 1), 'open'));
+        $this->assertSame([true, false], array_column(array_slice($states, 1), 'overdue'));
+    }
+
     public function test_issued_invoice_exposes_payment_and_send_actions(): void
     {
         $invoice = $this->invoice();

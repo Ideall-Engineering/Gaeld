@@ -24,6 +24,7 @@ import UnsavedChangesDialog from '@/Components/UI/UnsavedChangesDialog.vue'
 import { useFormValidation, z } from '@/lib/useFormValidation'
 import FileUpload from '@/Components/UI/FileUpload.vue'
 import InvoiceLineItems from '@/Components/Invoices/InvoiceLineItems.vue'
+import PaymentPlanFields from '@/Components/Invoices/PaymentPlanFields.vue'
 import InvoiceProjectField from '@/Components/Projects/InvoiceProjectField.vue'
 import ContactPersonField from '@/Components/Invoices/ContactPersonField.vue'
 import { Plus } from 'lucide-vue-next'
@@ -64,7 +65,11 @@ const form = useForm({
   justificatif: null,
   finalize: false,
   project_id: props.prefill?.project_id ?? '',
+  payment_plan: false,
+  installments: [],
 })
+
+const lineItems = ref(null)
 
 // Reload the suggested-number preview whenever the issue-date year changes so
 // that back-dated invoices display the correct year-scoped sequence number.
@@ -121,7 +126,8 @@ function submit() {
 }
 
 function submitAndFinalize() {
-  if (!validate(form.data())) return
+  // With a payment plan the rates set the due date.
+  if (!validate({ ...form.data(), due_date: form.payment_plan ? 'plan' : form.due_date })) return
   forceClear.value = true
   form.finalize = true
   form.post('/invoices', {
@@ -262,6 +268,7 @@ function onDueDateManualEdit() {
               @blur="validateField('issue_date', form.issue_date)"
             />
             <FormInput
+              v-if="!form.payment_plan"
               id="due_date"
               v-model="form.due_date"
               type="date"
@@ -298,6 +305,7 @@ function onDueDateManualEdit() {
 
           <!-- Line items -->
           <InvoiceLineItems
+            ref="lineItems"
             v-model="form.lines"
             :vat-rates="vatRates"
             :catalog-items="catalogItems"
@@ -305,6 +313,15 @@ function onDueDateManualEdit() {
             :currency="form.currency"
             :default-vat-rate-id="defaultVatRateId"
             :tax-treatment="form.tax_treatment"
+          />
+
+          <PaymentPlanFields
+            v-model="form.installments"
+            v-model:enabled="form.payment_plan"
+            :total="lineItems?.total ?? 0"
+            :issue-date="form.issue_date"
+            :currency="form.currency"
+            :errors="form.errors"
           />
 
           <!-- Notes & Terms -->

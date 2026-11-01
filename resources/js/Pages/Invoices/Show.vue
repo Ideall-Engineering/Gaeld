@@ -43,6 +43,7 @@ const props = defineProps({
   canChangeProject: { type: Boolean, default: false },
   reminderCount: { type: Number, default: 0 },
   lastRemindedAt: { type: String, default: null },
+  installmentStates: { type: Array, default: () => [] },
   hasQrIban: { type: Boolean, default: false },
 })
 
@@ -525,6 +526,42 @@ const bankAccountOptions = computed(() =>
                 </p>
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Payment plan (spec 013) -->
+      <Card v-if="installmentStates.length">
+        <CardHeader>
+          <CardTitle>{{ t('payment_plan') }}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs text-[hsl(var(--muted-foreground))]">
+                  <th class="py-1 pr-3 font-medium">{{ t('installment') }}</th>
+                  <th class="py-1 pr-3 font-medium">{{ t('due_date') }}</th>
+                  <th class="hidden sm:table-cell py-1 pr-3 text-right font-medium">{{ t('amount') }}</th>
+                  <th class="hidden sm:table-cell py-1 pr-3 text-right font-medium">{{ t('installment_paid') }}</th>
+                  <th class="py-1 pr-3 text-right font-medium">{{ t('installment_open') }}</th>
+                  <th class="py-1 font-medium"><span class="sr-only">{{ t('status') }}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="rate in installmentStates" :key="rate.position" class="border-t border-[hsl(var(--border))]">
+                  <td class="py-2 pr-3 tabular-nums">{{ rate.position }}/{{ installmentStates.length }}</td>
+                  <td class="py-2 pr-3 tabular-nums">{{ formatDate(rate.due_date) }}</td>
+                  <td class="hidden sm:table-cell py-2 pr-3 text-right tabular-nums">{{ formatCurrency(rate.amount) }}</td>
+                  <td class="hidden sm:table-cell py-2 pr-3 text-right tabular-nums">{{ formatCurrency(rate.paid) }}</td>
+                  <td class="py-2 pr-3 text-right tabular-nums">{{ formatCurrency(rate.open) }}</td>
+                  <td class="py-2 text-right">
+                    <Badge v-if="parseFloat(rate.open) <= 0" variant="success">{{ t('installment_paid') }}</Badge>
+                    <Badge v-else-if="rate.overdue" variant="destructive">{{ t('installment_overdue') }}</Badge>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>

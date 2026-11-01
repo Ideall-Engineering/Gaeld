@@ -150,6 +150,7 @@ class InstallmentPlanServiceTest extends TestCase
                 ['due_date' => '2026-12-31', 'amount' => '621.50'],
                 ['due_date' => '2027-01-31', 'amount' => null],
             ],
+            'a rate without a date' => [['due_date' => '', 'amount' => '10.00'], $month(2)],
             'a rate of zero' => [['due_date' => '2026-11-30', 'amount' => '0.00'], $month(2)],
         ];
 

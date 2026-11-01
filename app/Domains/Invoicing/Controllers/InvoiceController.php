@@ -19,6 +19,7 @@ use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Queries\InvoiceQuery;
 use App\Domains\Invoicing\Requests\StoreInvoiceRequest;
 use App\Domains\Invoicing\Requests\UpdateInvoiceRequest;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
 use App\Domains\Invoicing\Support\DocumentContactPerson;
 use App\Domains\Organizations\Services\CurrentOrganization;
@@ -28,6 +29,7 @@ use App\Domains\Projects\Support\InvoiceProjectInput;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
 use App\Support\Contracts\OrganizationQuotaResolver;
+use App\Support\Money;
 use App\Support\Services\FileUploadService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
@@ -48,6 +50,7 @@ class InvoiceController extends Controller
     public function __construct(
         private FileUploadService $uploadService,
         private OrganizationDocumentStorageService $documentStorage,
+        private InstallmentPlanService $installmentPlans,
     ) {}
 
     public function index(Request $request): Response
@@ -257,6 +260,15 @@ class InvoiceController extends Controller
             'canChangeProject' => $request->user()->can('allocate', Project::class),
             'reminderCount' => $invoice->reminder_count ?? 0,
             'lastRemindedAt' => $invoice->last_reminded_at?->toISOString(),
+            // Spec 013: the rates of the payment plan, payments filling them in order.
+            'installmentStates' => array_map(fn (array $state) => [
+                'position' => $state['installment']->position,
+                'due_date' => $state['installment']->due_date->toDateString(),
+                'amount' => Money::of((string) $state['installment']->amount),
+                'paid' => $state['paid'],
+                'open' => $state['open'],
+                'overdue' => $state['overdue'],
+            ], $this->installmentPlans->states($invoice)),
         ]);
     }
 
@@ -265,7 +277,7 @@ class InvoiceController extends Controller
         $this->authorize('update', $invoice);
 
         return Inertia::render('Invoices/Edit', [
-            'invoice' => $invoice->load('lines.vatRate'),
+            'invoice' => $invoice->load(['lines.vatRate', 'installments']),
             'projectOptions' => InvoiceProjectInput::options($request),
             'invoiceProjectId' => InvoiceProjectInput::currentFor($invoice),
             'customers' => ContactQuery::forSelect(),

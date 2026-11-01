@@ -7,6 +7,7 @@ use App\Domains\Invoicing\DTOs\UpdateInvoiceData;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Models\InvoiceInstallment;
 use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Invoicing\Support\DocumentContactPerson;
 use Illuminate\Support\Facades\DB;
@@ -74,7 +75,7 @@ class UpdateInvoiceAction
             // Without a new plan the stored one is laid over the new total
             // again, so its last rate keeps carrying the rest.
             $rates = $data->installments ?? $invoice->installments()->get()
-                ->map(fn ($rate) => ['due_date' => $rate->due_date->toDateString(), 'amount' => (string) $rate->amount])
+                ->map(fn (InvoiceInstallment $rate) => ['due_date' => $rate->due_date->toDateString(), 'amount' => (string) $rate->amount])
                 ->all();
             if ($rates !== [] || $invoice->installments()->exists()) {
                 $this->installmentPlans->sync($invoice, $rates);
