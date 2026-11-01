@@ -3,9 +3,13 @@
 namespace App\Domains\Projects\Controllers;
 
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Invoicing\Enums\InvoiceStatus;
+use App\Domains\Invoicing\Enums\InvoiceType;
+use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
+use App\Domains\Projects\Models\InvoiceProject;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Services\ProjectReportService;
@@ -46,6 +50,11 @@ class ProjectReportController extends Controller
             'report' => $report,
             'value' => $value,
             'split' => $canSteer && $project->kind !== ProjectKind::Area ? $steering->splitOf($project, $value) : [],
+            'invoices' => $this->invoicesOf($project),
+            'rest' => $project->kind === ProjectKind::Area ? '0.00' : $steering->restOf(
+                $project,
+                $reports->totalsByProject($project->organization_id, '1900-01-01', '2999-12-31')[$project->id]['revenue'] ?? '0.00',
+            ),
             'filters' => ['from' => $from, 'to' => $to],
             'options' => [
                 'projects' => ProjectQuery::tree(),
@@ -104,6 +113,31 @@ class ProjectReportController extends Controller
                 'report' => $report,
             ], "{$filename}.pdf"),
         );
+    }
+
+    /**
+     * The job's invoices in Gäld, newest first, with what is still open.
+     *
+     * @return array<int, array{id: string, number: string|null, status: string, total: string, open: string}>
+     */
+    private function invoicesOf(Project $project): array
+    {
+        $ids = InvoiceProject::query()->where('cost_center_id', $project->id)->pluck('invoice_id');
+
+        return Invoice::query()
+            ->whereIn('id', $ids)
+            ->where('type', InvoiceType::Invoice->value)
+            ->orderByDesc('issue_date')
+            ->get()
+            ->map(fn (Invoice $invoice) => [
+                'id' => $invoice->id,
+                'number' => $invoice->number,
+                'status' => $invoice->status->value,
+                'total' => (string) $invoice->total,
+                'open' => in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue], true) ? $invoice->amountDue() : '0.00',
+            ])
+            ->values()
+            ->all();
     }
 
     /** @return array{0: string, 1: string} */

@@ -24,6 +24,7 @@ use App\Domains\Projects\Services\InvoiceProjectService;
 use App\Domains\Projects\Services\QuoteJobStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 use Tests\Traits\BuildsPostedJournalEntries;
 use Tests\Traits\BuildsProjects;
@@ -209,6 +210,27 @@ class InvoiceJobStatusTest extends TestCase
         $this->assertSame(ProjectStatus::Done, $none->fresh()->status, 'A job without an invoice in Gäld was billed elsewhere.');
         $this->assertSame(ProjectStatus::Possible, $quoted->fresh()->status);
         $this->assertSame(ProjectStatus::Lost, $lost->fresh()->status);
+    }
+
+    public function test_the_job_page_shows_its_invoices_and_what_is_left_to_invoice(): void
+    {
+        $this->job->update(['expected_amount' => '1000.00']);
+        $invoice = $this->book($this->onJob('INV-1', '1000.00'));
+        $this->pay($invoice, '400.00');
+
+        $this->actAsOrg()->get("/projects/{$this->job->id}/report")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('invoices', 1)
+                ->where('invoices.0.id', $invoice->id)
+                ->where('invoices.0.number', 'INV-1')
+                ->where('invoices.0.status', 'sent')
+                ->where('invoices.0.open', '600.00')
+                ->where('rest', '0.00'));
+
+        $this->job->update(['expected_amount' => '1500.00']);
+        $this->actAsOrg()->get("/projects/{$this->job->id}/report")
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('rest', '500.00'));
     }
 
     private function onJob(string $number, string $amount): Invoice

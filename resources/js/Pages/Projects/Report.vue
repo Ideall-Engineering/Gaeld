@@ -25,6 +25,8 @@ const props = defineProps({
   report: Object,
   value: String,
   split: Array,
+  invoices: { type: Array, default: () => [] },
+  rest: { type: String, default: '0.00' },
   filters: Object,
   options: Object,
   can: Object,
@@ -77,6 +79,12 @@ function performDelete() {
   })
 }
 const showNewJob = ref(false)
+
+// A job with its invoice out offers that invoice; a new one only while
+// something is left to invoice.
+const invoiceStatusVariant = { sent: 'outline', overdue: 'destructive', paid: 'success', cancelled: 'secondary', draft: 'secondary' }
+const offersNewInvoice = computed(() => props.invoices.length === 0 || Number(props.rest) > 0)
+const onlyInvoice = computed(() => props.invoices.length === 1 && !offersNewInvoice.value ? props.invoices[0] : null)
 </script>
 
 <template>
@@ -104,7 +112,8 @@ const showNewJob = ref(false)
       <div class="flex flex-wrap items-end gap-2">
         <FormSelect id="year" :model-value="isWholeYear ? year : ''" :options="isWholeYear ? yearOptions : [{ value: '', label: `${formatDate(filters.from)} – ${formatDate(filters.to)}` }, ...yearOptions]" :aria-label="t('year')" class="w-40" @update:model-value="v => v && changeYear(v)" />
         <ExportDropdown :base-url="`/projects/${project.id}/report/export`" :params="exportParams" />
-        <Button v-if="!isGroup && can.allocate" as="a" variant="outline" :href="`/invoices/create?project_id=${project.id}`"><FileText class="mr-1 h-4 w-4" /> {{ t('job_create_invoice') }}</Button>
+        <Button v-if="!isGroup && onlyInvoice" as="a" variant="outline" :href="`/invoices/${onlyInvoice.id}`"><FileText class="mr-1 h-4 w-4" /> {{ t('job_view_invoice') }}</Button>
+        <Button v-else-if="!isGroup && can.allocate && offersNewInvoice" as="a" variant="outline" :href="`/invoices/create?project_id=${project.id}`"><FileText class="mr-1 h-4 w-4" /> {{ invoices.length ? t('job_further_invoice') : t('job_create_invoice') }}</Button>
         <Button v-if="can.manage" variant="outline" @click="showForm = true"><Pencil class="mr-1 h-4 w-4" /> {{ t('edit') }}</Button>
         <Button v-if="can.manage && jobs.length === 0" variant="ghost" size="icon" :aria-label="t('delete')" @click="deleteErrors = {}; showDelete = true">
           <Trash2 class="h-4 w-4 text-[hsl(var(--destructive))]" />
@@ -199,6 +208,22 @@ const showNewJob = ref(false)
       </div>
 
       <div class="space-y-4">
+        <Card v-if="!isGroup && invoices.length">
+          <CardHeader><CardTitle>{{ t('invoices') }}</CardTitle></CardHeader>
+          <CardContent>
+            <ul class="divide-y divide-[hsl(var(--border))] text-sm">
+              <li v-for="invoice in invoices" :key="invoice.id" class="flex flex-wrap items-center justify-between gap-2 py-2">
+                <Link :href="`/invoices/${invoice.id}`" class="font-medium hover:underline">{{ invoice.number }}</Link>
+                <span class="flex items-center gap-2">
+                  <span class="tabular-nums">{{ Number(invoice.open) > 0 ? t('job_invoice_open', { amount: formatCurrency(invoice.open) }) : formatCurrency(invoice.total) }}</span>
+                  <Badge :variant="invoiceStatusVariant[invoice.status] ?? 'default'">{{ t('invoice_status_' + invoice.status) }}</Badge>
+                </span>
+              </li>
+            </ul>
+            <p v-if="Number(rest) > 0" class="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{{ t('job_rest_to_invoice', { amount: formatCurrency(rest) }) }}</p>
+          </CardContent>
+        </Card>
+
         <Card v-if="!isGroup">
           <CardHeader><CardTitle>{{ t('project_shares') }}</CardTitle></CardHeader>
           <CardContent>
