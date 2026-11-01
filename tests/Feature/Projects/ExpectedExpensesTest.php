@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Projects;
 
+use App\Domains\Accounting\DTOs\JournalEntryData;
+use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Accounting\Services\VatReportService;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Expenses\Enums\ExpenseStatus;
@@ -12,6 +15,7 @@ use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Models\DeductionRate;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
+use App\Domains\Projects\DTOs\LineAllocationData;
 use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\BudgetGroup;
 use App\Domains\Projects\Models\PlannedExpense;
@@ -252,6 +256,36 @@ class ExpectedExpensesTest extends TestCase
         $this->assertSame([['Premises', '3000.00', null]], $blocks->map(fn (array $r) => [$r['label'], $r['amount'], $r['date']])->all());
         $this->assertSame('block', $data['rows'][array_key_last($data['rows'])]['source']);
         $this->assertSame('4000.00', $data['total']);
+    }
+
+    public function test_a_cost_block_plan_spent_at_jobs_is_not_expected_again(): void
+    {
+        $this->anna->update(['is_active' => false]);
+        $this->setUpPostedEntryFixtures();
+        $job = $this->makeProject('JOB');
+        // Two payments booked on jobs: they count there, not in the block,
+        // but they are spent, so the plan has nothing left to expect.
+        foreach (['2026-07-08', '2026-07-30'] as $i => $date) {
+            app(LedgerService::class)->postEntry($this->organization->id, new JournalEntryData($date, "JOB-{$i}", 'x', [
+                new JournalLineData(accountId: (string) $this->expense->id, debit: '140.00', credit: '0', allocations: $this->whole($job)),
+                new JournalLineData(accountId: (string) $this->bank->id, debit: '0', credit: '140.00'),
+            ]));
+        }
+        BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Partner', 'kind' => 'running', 'plan_amount' => '280.00'])
+            ->accounts()->sync([$this->expense->id]);
+        // Half of 300 at a job, half in the block: 400 - 300 = 100 left.
+        BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Mixed', 'kind' => 'running', 'plan_amount' => '400.00'])
+            ->accounts()->sync([$this->otherExpense->id]);
+        app(LedgerService::class)->postEntry($this->organization->id, new JournalEntryData('2026-04-01', 'MIX', 'x', [
+            new JournalLineData(accountId: (string) $this->otherExpense->id, debit: '300.00', credit: '0', allocations: [
+                new LineAllocationData(projectId: $job->id, employeeId: null, share: '50'),
+            ]),
+            new JournalLineData(accountId: (string) $this->bank->id, debit: '0', credit: '300.00'),
+        ]));
+
+        $blocks = collect($this->expected(2026)['rows'])->where('source', 'block')->values();
+
+        $this->assertSame([['Mixed', '100.00']], $blocks->map(fn (array $r) => [$r['label'], $r['amount']])->all());
     }
 
     public function test_vat_is_listed_by_due_date_but_kept_out_of_the_net_total(): void

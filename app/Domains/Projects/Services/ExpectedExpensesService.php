@@ -477,7 +477,9 @@ class ExpectedExpensesService
         $rests = [];
         foreach ($this->plans->forYear($organizationId, $year, $today)['groups'] as $group) {
             $covered = array_reduce($group['accounts'], fn (string $sum, array $a) => Money::add($sum, $expected[$a['code']] ?? '0.00'), '0.00');
-            $rest = Money::subtract((string) $group['rest'], $covered);
+            // Spent is spent: what counts at jobs, people or acquisitions is
+            // paid too, so it uses up the plan as well (2026-11-01).
+            $rest = Money::subtract(Money::subtract((string) $group['rest'], (string) $group['customer_projects']), $covered);
             if (Money::isPositive($rest)) {
                 $rests[] = $this->row(null, 'block', $group['name'], null, $rest, $rest, link: '/projects/plan?year='.$year);
             }
