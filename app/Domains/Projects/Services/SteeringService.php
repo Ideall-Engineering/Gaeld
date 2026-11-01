@@ -7,6 +7,7 @@ use App\Domains\Expenses\Services\RecurringExpensePlan;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Projects\Enums\ProjectKind;
@@ -52,6 +53,7 @@ class SteeringService
         private ExpectedExpensesService $expected,
         private PlanActualService $plans,
         private GeneralCostsService $generalCosts,
+        private InstallmentPlanService $installmentPlans,
     ) {}
 
     /**
@@ -695,7 +697,7 @@ class SteeringService
             ->where('type', InvoiceType::Invoice->value)
             ->whereIn('status', [InvoiceStatus::Sent->value, InvoiceStatus::Overdue->value])
             ->withSum('payments', 'amount')
-            ->with('customer:id,name')
+            ->with(['customer:id,name', 'installments'])
             ->orderBy('due_date')
             ->get();
         if ($invoices->isEmpty()) {
@@ -725,19 +727,67 @@ class SteeringService
                 : $gross;
             $jobId = isset($jobs[$invoice->id]) ? (int) $jobs[$invoice->id] : null;
             $job = $jobId !== null ? $byId->get($jobId) : null;
-            $open[] = [
+            $row = [
                 'id' => $invoice->id,
                 'number' => $invoice->number,
                 'customer' => $invoice->customer?->name,
-                'due_date' => $invoice->due_date?->toDateString(),
-                'gross' => $gross,
-                'net' => $net,
                 'job_id' => $jobId,
                 'job' => $job !== null ? "{$job->code} {$job->name}" : null,
             ];
+            foreach ($this->openParts($invoice, $gross, $net) as $part) {
+                $open[] = [...$row, ...$part];
+            }
         }
 
         return $open;
+    }
+
+    /**
+     * What an open invoice still owes, by due day: one part for a plain
+     * invoice, one per open rate of a payment plan (spec 013). Credit notes
+     * take from the last rates first; the net follows each part's share and
+     * the last part takes the rounding.
+     *
+     * @return list<array{due_date: string|null, gross: string, net: string, installment: string|null}>
+     */
+    private function openParts(Invoice $invoice, string $gross, string $net): array
+    {
+        $states = $this->installmentPlans->states($invoice);
+        if ($states === []) {
+            return [['due_date' => $invoice->due_date?->toDateString(), 'gross' => $gross, 'net' => $net, 'installment' => null]];
+        }
+
+        $credit = Money::subtract(array_reduce($states, fn (string $sum, array $state) => Money::add($sum, $state['open']), '0.00'), $gross);
+        $opens = [];
+        foreach (array_reverse($states, true) as $index => $state) {
+            $take = Money::compare($credit, $state['open']) >= 0 ? $state['open'] : (Money::isPositive($credit) ? $credit : '0.00');
+            $credit = Money::subtract($credit, $take);
+            $opens[$index] = Money::subtract($state['open'], $take);
+        }
+        ksort($opens);
+
+        $parts = [];
+        $netLeft = $net;
+        $owing = array_keys(array_filter($opens, fn (string $open) => Money::isPositive($open)));
+        if ($owing === []) {
+            return [];
+        }
+        $lastIndex = max($owing);
+        foreach ($opens as $index => $open) {
+            if (! Money::isPositive($open)) {
+                continue;
+            }
+            $partNet = $index === $lastIndex ? $netLeft : Money::round(bcdiv(bcmul(Money::of($open), Money::of($net), 8), Money::of($gross), 8));
+            $netLeft = Money::subtract($netLeft, $partNet);
+            $parts[] = [
+                'due_date' => $states[$index]['installment']->due_date->toDateString(),
+                'gross' => $open,
+                'net' => $partNet,
+                'installment' => $states[$index]['installment']->position.'/'.count($states),
+            ];
+        }
+
+        return $parts;
     }
 
     /**

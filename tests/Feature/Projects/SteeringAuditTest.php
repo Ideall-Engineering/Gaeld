@@ -30,6 +30,7 @@ use App\Domains\Projects\Services\AllocationCoverageService;
 use App\Domains\Projects\Services\ExpectedExpensesService;
 use App\Domains\Projects\Services\InvoiceProjectService;
 use App\Domains\Projects\Services\SteeringService;
+use App\Support\Money;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -144,6 +145,39 @@ class SteeringAuditTest extends TestCase
         $this->assertSame('10000.00', collect($data['people'])->keyBy('name')['Anna A']['contribution_received']);
         $this->assertSame([], $data['open_invoices']);
         $this->assertSame('15000.00', collect($data['outlook']['months'])->keyBy('key')['2026-12']['bank']);
+    }
+
+    /**
+     * Spec 013: an invoice of 1'500 in three rates shows as three open
+     * payments, each on its own due day.
+     */
+    public function test_steering_spreads_a_plan_over_its_rates(): void
+    {
+        $this->makeAccount('1100', 'Receivables', AccountType::Asset);
+        $job = $this->makeProject('P3');
+        $customer = Contact::create(['organization_id' => $this->organization->id, 'name' => 'Raten AG']);
+        $invoice = app(CreateInvoiceAction::class)->execute(new CreateInvoiceData(
+            organizationId: $this->organization->id,
+            customerId: $customer->id,
+            number: 'INV-PLAN-STEER',
+            issueDate: '2026-10-15',
+            dueDate: null,
+            currency: 'CHF',
+            notes: null,
+            paymentTerms: null,
+            lines: [InvoiceLineData::fromArray(['description' => 'Work', 'quantity' => 1, 'unit_price' => '1500.00'])],
+            installments: [['due_date' => '2026-11-20', 'amount' => '600.00'], ['due_date' => '2026-12-20', 'amount' => '600.00'], ['due_date' => '2027-01-20']],
+        ));
+        app(InvoiceProjectService::class)->assign($invoice, $job->id);
+        app(FinalizeInvoiceAction::class)->execute($invoice->fresh());
+
+        $rows = app(SteeringService::class)->openInvoices($this->organization->id, collect());
+
+        $this->assertSame(['INV-PLAN-STEER', 'INV-PLAN-STEER', 'INV-PLAN-STEER'], array_column($rows, 'number'));
+        $this->assertSame(['1/3', '2/3', '3/3'], array_column($rows, 'installment'));
+        $this->assertSame(['2026-11-20', '2026-12-20', '2027-01-20'], array_column($rows, 'due_date'));
+        $this->assertSame(['600.00', '600.00', '300.00'], array_column($rows, 'gross'));
+        $this->assertSame('1500.00', array_reduce(array_column($rows, 'net'), fn (string $sum, string $net) => Money::add($sum, $net), '0.00'));
     }
 
     /**

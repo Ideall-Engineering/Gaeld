@@ -43,6 +43,8 @@ return [
     'reminder_closing' => 'Falls die Zahlung bereits erfolgt ist, betrachten Sie diese Nachricht bitte als gegenstandslos.',
     'reminder_contact' => 'Bei Fragen zu dieser Rechnung wenden Sie sich bitte an :email.',
     'reminder_regards' => 'Freundliche Grüsse',
+    'reminder_overdue_rates' => "Die Rechnung wird in Raten bezahlt. Überfällig sind:",
+    'reminder_rate_line' => "Rate :position/:count, fällig am :due_date: :currency :amount",
 
     // Erstes Rechnungs-E-Mail
     'invoice_subject' => 'Rechnung :number',

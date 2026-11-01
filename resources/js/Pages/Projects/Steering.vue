@@ -70,7 +70,7 @@ const openYear = ref(props.year)
 const invoicesOf = y => (props.steering.open_invoices ?? []).filter(i => (i.due_date && i.due_date.slice(0, 4) > String(props.year) ? Number(i.due_date.slice(0, 4)) : props.year) === y)
 const paymentsOf = y => [
   ...((y === props.year ? props.steering.open_payments : props.steering.open_payments_next_year) ?? []),
-  ...invoicesOf(y).map(i => ({ ...i, invoice: true, key: 'inv-' + i.id, sort: i.due_date, expected: i.net })),
+  ...invoicesOf(y).map(i => ({ ...i, invoice: true, key: 'inv-' + i.id + (i.installment ? '-' + i.installment : ''), sort: i.due_date, expected: i.net })),
 ].sort((a, b) => (a.sort ?? '9999').localeCompare(b.sort ?? '9999'))
 const openPayments = computed(() => paymentsOf(openYear.value))
 const openTotal = computed(() => openPayments.value.reduce((sum, p) => sum + num(p.expected), 0))
@@ -596,7 +596,7 @@ function removeItem(item) {
                       <div v-for="person in p.people" :key="person.name">{{ person.name }} {{ formatCurrency(person.part) }}</div>
                       <span v-if="!p.people.length" class="text-amber-700 dark:text-amber-300">{{ t('steering_open_nobody') }}</span>
                     </td>
-                    <td class="py-1 text-xs"><Link :href="`/invoices/${p.id}`" class="hover:underline">{{ p.number }}</Link></td>
+                    <td class="py-1 text-xs"><Link :href="`/invoices/${p.id}`" class="hover:underline">{{ p.number }}</Link><span v-if="p.installment" class="text-[hsl(var(--muted-foreground))]"> · {{ t('installment') }} {{ p.installment }}</span></td>
                   </tr>
                   <tr v-else>
                   <td class="py-1">

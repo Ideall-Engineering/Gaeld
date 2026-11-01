@@ -43,6 +43,8 @@ return [
     'reminder_closing' => 'Se il pagamento è già stato effettuato, si prega di ignorare questo messaggio.',
     'reminder_contact' => 'Per domande su questa fattura, contatti :email.',
     'reminder_regards' => 'Cordiali saluti',
+    'reminder_overdue_rates' => "La fattura viene pagata a rate. Sono scadute:",
+    'reminder_rate_line' => "Rata :position/:count, scadenza :due_date: :currency :amount",
 
     // E-mail iniziale della fattura
     'invoice_subject' => 'Fattura :number',

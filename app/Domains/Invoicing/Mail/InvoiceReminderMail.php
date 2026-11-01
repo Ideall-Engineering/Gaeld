@@ -3,7 +3,9 @@
 namespace App\Domains\Invoicing\Mail;
 
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InstallmentPlanService;
 use App\Domains\Organizations\Models\Organization;
+use App\Support\Money;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
@@ -19,13 +21,31 @@ class InvoiceReminderMail extends Mailable
 
     public readonly string $amountDue;
 
+    /**
+     * Spec 013: the overdue rates of a payment plan, which the reminder asks
+     * for instead of the whole open amount.
+     *
+     * @var list<array{position: int, count: int, due_date: string, open: string}>
+     */
+    public readonly array $overdueRates;
+
     public function __construct(
         public readonly Invoice $invoice,
         public readonly Organization $organization,
         public readonly int $reminderNumber,
     ) {
         $this->daysOverdue = (int) ($invoice->due_date?->diffInDays(now()) ?? 0);
-        $this->amountDue = $invoice->amountDue();
+        $states = app(InstallmentPlanService::class)->states($invoice);
+        $overdue = array_values(array_filter($states, fn (array $state) => $state['overdue']));
+        $this->overdueRates = array_map(fn (array $state) => [
+            'position' => $state['installment']->position,
+            'count' => count($states),
+            'due_date' => $state['installment']->due_date->format('d.m.Y'),
+            'open' => $state['open'],
+        ], $overdue);
+        $this->amountDue = $overdue === []
+            ? $invoice->amountDue()
+            : array_reduce($overdue, fn (string $sum, array $state) => Money::add($sum, $state['open']), '0.00');
     }
 
     public function envelope(): Envelope
@@ -50,6 +70,7 @@ class InvoiceReminderMail extends Mailable
             with: [
                 'organization' => $this->organization,
                 'amountDue' => $this->amountDue,
+                'overdueRates' => $this->overdueRates,
             ],
         );
     }

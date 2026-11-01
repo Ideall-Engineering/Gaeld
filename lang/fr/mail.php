@@ -43,6 +43,8 @@ return [
     'reminder_closing' => 'Si le paiement a déjà été effectué, veuillez ne pas tenir compte de ce message.',
     'reminder_contact' => 'Pour toute question concernant cette facture, veuillez contacter :email.',
     'reminder_regards' => 'Cordialement',
+    'reminder_overdue_rates' => "La facture est payée en échéances. Sont en retard :",
+    'reminder_rate_line' => "Échéance :position/:count du :due_date : :currency :amount",
 
     // E-mail initial de facture
     'invoice_subject' => 'Facture :number',

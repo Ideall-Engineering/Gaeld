@@ -43,6 +43,8 @@ return [
     'reminder_closing' => 'Please disregard this message if payment has already been made.',
     'reminder_contact' => 'For questions about this invoice, please contact :email.',
     'reminder_regards' => 'Kind regards',
+    'reminder_overdue_rates' => "The invoice is paid in rates. Overdue are:",
+    'reminder_rate_line' => "Rate :position/:count, due :due_date: :currency :amount",
 
     // Initial invoice email
     'invoice_subject' => 'Invoice :number',

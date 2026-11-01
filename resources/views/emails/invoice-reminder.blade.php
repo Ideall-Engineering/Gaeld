@@ -19,6 +19,20 @@
 | **{{ __('mail.reminder_days_overdue') }}** | {{ $daysOverdue }} |
 @endcomponent
 
+@if(! empty($overdueRates))
+{{ __('mail.reminder_overdue_rates') }}
+
+@foreach($overdueRates as $rate)
+- {{ __('mail.reminder_rate_line', [
+    'position' => $rate['position'],
+    'count' => $rate['count'],
+    'due_date' => $rate['due_date'],
+    'currency' => $invoice->currency,
+    'amount' => number_format((float) $rate['open'], 2, '.', "'"),
+]) }}
+@endforeach
+@endif
+
 {{ __('mail.reminder_closing') }}
 
 @if($organization->contact_email)
