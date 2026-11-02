@@ -189,13 +189,16 @@ class ProjectController extends Controller
             return $this->refuse(__('app.cannot_delete_with_children'));
         }
 
+        // A deleted invoice stays in the table, its link to the job with it.
+        $links = InvoiceProject::query()->where('cost_center_id', $project->id);
         $used = LineAllocation::query()->where('cost_center_id', $project->id)->exists()
-            || InvoiceProject::query()->where('cost_center_id', $project->id)->exists();
+            || (clone $links)->whereHas('invoice')->exists();
 
         if ($used) {
             return $this->refuse(__('app.project_delete_used'));
         }
 
+        $links->delete();
         $project->delete();
         if ($this->wantsApiAnswer()) {
             return response()->json(null, 204);

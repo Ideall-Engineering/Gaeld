@@ -326,6 +326,17 @@ class InvoiceProjectTest extends TestCase
         $this->assertNotNull($other->fresh());
     }
 
+    public function test_a_project_whose_only_invoice_was_deleted_is_deleted(): void
+    {
+        $other = $this->makeProject('LINKED');
+        $draft = $this->createInvoice();
+        app(InvoiceProjectService::class)->assign($draft, $other->id);
+        $draft->delete();
+
+        $this->actAsOrg()->delete("/projects/{$other->id}")->assertSessionHasNoErrors();
+        $this->assertNull($other->fresh());
+    }
+
     public function test_a_credit_note_reduces_invoiced_and_open(): void
     {
         $invoice = $this->createInvoice();
