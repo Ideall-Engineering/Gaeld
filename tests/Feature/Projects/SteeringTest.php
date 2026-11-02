@@ -479,6 +479,28 @@ class SteeringTest extends TestCase
         $this->assertSame('80.00', $rows['ALLG']['in_block']);
     }
 
+    public function test_general_costs_counted_in_a_block_are_shown_at_the_general_job(): void
+    {
+        $office = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Office', 'kind' => 'running', 'plan_amount' => '500.00']);
+        $material = $this->makeAccount('6049', 'Material', AccountType::Expense);
+        $office->accounts()->sync([$material->id]);
+        $general = app(AllocationCoverageService::class)->generalProject($this->organization->id);
+        app(LedgerService::class)->postEntry($this->organization->id, new JournalEntryData('2026-04-01', 'ALLG', 'x', [
+            new JournalLineData(accountId: (string) $material->id, debit: '80.00', credit: '0', allocations: $this->whole($general)),
+            new JournalLineData(accountId: (string) $this->bank->id, debit: '0', credit: '80.00'),
+        ]));
+
+        $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
+        $anna = collect($data['people'])->keyBy('name')['Anna A'];
+        $row = collect($anna['jobs'])->firstWhere('code', AllocationCoverageService::GENERAL_CODE);
+
+        // Booked on "General" like the job list shows it, counted in the block.
+        $this->assertNotNull($row, 'The general job is listed even when nothing of it is left.');
+        $this->assertSame('0.00', $row['part']);
+        $this->assertSame('-40.00', $row['elsewhere_part']);
+        $this->assertSame('700.00', $anna['contribution']);
+    }
+
     public function test_owners_keep_internal_settlements_on_the_general_costs_page(): void
     {
         $job = Project::query()->where('code', 'C')->sole();

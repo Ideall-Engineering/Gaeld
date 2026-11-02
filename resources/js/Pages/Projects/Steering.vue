@@ -60,6 +60,13 @@ function editBlock(block) {
   if (editingBlock.value) showBlockForm.value = true
 }
 const num = v => Number(v ?? 0)
+// Net from jobs, opened: what is booked as on the job list, less the
+// "General" lines a cost block already counts, plus what is still expected.
+const bookedPart = job => num(job.part) - num(job.rest_part) + num(job.elsewhere_part)
+const bookedJobs = person => person.jobs.filter(j => Math.abs(bookedPart(j)) >= 0.005)
+const bookedTotal = person => person.jobs.reduce((sum, j) => sum + bookedPart(j), 0)
+const elsewhereTotal = person => person.jobs.reduce((sum, j) => sum + num(j.elsewhere_part), 0)
+const expectedJobs = person => person.jobs.filter(j => num(j.rest_part) !== 0)
 // Shown as an outflow, without a "-0.00" for nothing.
 const out = v => (num(v) === 0 ? 0 : -num(v))
 
@@ -265,13 +272,41 @@ function removeItem(item) {
                       <p v-if="!person.jobs?.length" class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('person_jobs_empty') }}</p>
                       <table v-else class="w-full text-xs">
                         <tbody class="divide-y divide-[hsl(var(--border))]">
-                          <tr v-for="job in person.jobs" :key="job.id">
+                          <tr class="text-[hsl(var(--muted-foreground))]">
+                            <td class="py-1 font-medium" colspan="3">{{ t('steering_booked_in_year', { year }) }}</td>
+                          </tr>
+                          <tr v-for="job in bookedJobs(person)" :key="'b-' + job.id">
                             <td class="py-1">
                               <Link :href="`/projects/${job.id}/report?from=${year}-01-01&to=${year}-12-31`" class="hover:underline">{{ job.name }}</Link>
-                              <span class="text-[hsl(var(--muted-foreground))]"><template v-if="job.group"> · {{ job.group }}</template> · {{ job.general ? t('steering_general_job') : t('project_status_' + job.status) }}<template v-if="!job.booked"> · {{ t('person_expected') }}</template><template v-else-if="Number(job.open_part) !== 0"> · {{ t('steering_invoice_open', { amount: formatCurrency(job.open_part) }) }}</template></span>
+                              <span class="text-[hsl(var(--muted-foreground))]"><template v-if="job.group"> · {{ job.group }}</template> · {{ job.general ? t('steering_general_job') : t('project_status_' + job.status) }}<template v-if="Number(job.open_part) !== 0"> · {{ t('steering_invoice_open', { amount: formatCurrency(job.open_part) }) }}</template></span>
                             </td>
                             <td class="py-1 text-right tabular-nums text-[hsl(var(--muted-foreground))]">{{ Number(job.share) }} %</td>
-                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(job.part) }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(bookedPart(job)) }}</td>
+                          </tr>
+                          <tr class="font-medium">
+                            <td class="py-1" colspan="2">{{ t('steering_booked_subtotal') }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(bookedTotal(person)) }}</td>
+                          </tr>
+                          <tr v-if="elsewhereTotal(person) !== 0">
+                            <td class="py-1" colspan="2"><Link :href="`/projects/general-costs?year=${year}`" class="hover:underline">{{ t('steering_general_elsewhere') }}</Link></td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(-elsewhereTotal(person)) }}</td>
+                          </tr>
+                          <template v-if="expectedJobs(person).length">
+                            <tr class="text-[hsl(var(--muted-foreground))]">
+                              <td class="py-1 pt-3 font-medium" colspan="3">{{ t('steering_expected_in_year', { year }) }}</td>
+                            </tr>
+                            <tr v-for="job in expectedJobs(person)" :key="'e-' + job.id">
+                              <td class="py-1">
+                                <Link :href="`/projects/${job.id}/report?from=${year}-01-01&to=${year}-12-31`" class="hover:underline">{{ job.name }}</Link>
+                                <span class="text-[hsl(var(--muted-foreground))]"><template v-if="job.group"> · {{ job.group }}</template> · {{ job.booked ? t('steering_rest_to_invoice') : t('project_status_' + job.status) }}<template v-if="job.billing"> · {{ job.billing }}</template></span>
+                              </td>
+                              <td class="py-1 text-right tabular-nums text-[hsl(var(--muted-foreground))]">{{ Number(job.share) }} %</td>
+                              <td class="py-1 text-right tabular-nums">{{ formatCurrency(job.rest_part) }}</td>
+                            </tr>
+                          </template>
+                          <tr class="font-semibold">
+                            <td class="py-1" colspan="2">= {{ t('steering_contribution') }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.contribution) }}</td>
                           </tr>
                         </tbody>
                       </table>

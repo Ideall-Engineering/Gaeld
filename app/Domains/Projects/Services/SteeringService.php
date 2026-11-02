@@ -127,10 +127,9 @@ class SteeringService
             if ($project->kind !== ProjectKind::Project || $project->status === ProjectStatus::Lost) {
                 $net = Money::subtract($booked[$project->id]['revenue'] ?? '0.00', $booked[$project->id]['expenses'] ?? '0.00');
                 // "General" lines in a block or at a person count there.
-                if ($project->code === AllocationCoverageService::GENERAL_CODE) {
-                    $net = Money::subtract($net, $once['general_elsewhere']);
-                }
-                if (Money::compare($net, '0') === 0) {
+                $elsewhere = $project->code === AllocationCoverageService::GENERAL_CODE ? $once['general_elsewhere'] : '0.00';
+                $net = Money::subtract($net, $elsewhere);
+                if (Money::compare($net, '0') === 0 && Money::compare($elsewhere, '0') === 0) {
                     continue;
                 }
                 $key = $this->keyFor($project, $byId, $shares) ?: $ownersKey;
@@ -140,6 +139,7 @@ class SteeringService
 
                     continue;
                 }
+                $elsewhereParts = $this->split($elsewhere, $key);
                 foreach ($this->split($net, $key) as $employeeId => $part) {
                     if (isset($general[$employeeId])) {
                         $general[$employeeId] = Money::add($general[$employeeId], $part);
@@ -156,6 +156,8 @@ class SteeringService
                             'value' => $net,
                             'part' => $part,
                             'open_part' => '0.00',
+                            // Booked here, counted in a block or at a person.
+                            'elsewhere_part' => $elsewhereParts[$employeeId] ?? '0.00',
                         ];
                     }
                 }
