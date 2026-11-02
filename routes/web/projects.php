@@ -32,6 +32,7 @@ Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::get('/projects/acquisitions/export', [AcquisitionController::class, 'export'])->name('projects.acquisitions.export');
     Route::post('/projects/acquisitions', [AcquisitionController::class, 'store'])->name('projects.acquisitions.store');
     Route::put('/projects/acquisitions/{acquisition}', [AcquisitionController::class, 'update'])->name('projects.acquisitions.update');
+    Route::post('/projects/acquisitions/{acquisition}/return', [AcquisitionController::class, 'returnPart'])->name('projects.acquisitions.return');
     Route::delete('/projects/acquisitions/{acquisition}', [AcquisitionController::class, 'destroy'])->name('projects.acquisitions.destroy');
     Route::get('/projects/steering', [SteeringController::class, 'index'])->name('projects.steering');
     Route::get('/projects/general-costs', [SteeringController::class, 'generalCosts'])->name('projects.general-costs');

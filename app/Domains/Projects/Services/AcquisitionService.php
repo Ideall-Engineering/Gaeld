@@ -82,6 +82,50 @@ class AcquisitionService
     }
 
     /**
+     * Mark an article returned. Part of it splits off as a returned row of
+     * its own with the same people and receipt; amounts follow the quantity
+     * and together stay what was bought.
+     */
+    public function returnPart(Acquisition $acquisition, string $quantity, ?string $note): Acquisition
+    {
+        $note = $note !== null && trim($note) !== '' ? trim($note) : null;
+        $withNote = fn (?string $notes) => $note === null ? $notes : trim(($notes ?? '').' '.__('app.acquisition_returned_note', ['quantity' => (float) $quantity, 'note' => $note]));
+
+        if (bccomp(Money::of($quantity), Money::of((string) $acquisition->quantity), 2) >= 0) {
+            $acquisition->update(['status' => AcquisitionStatus::Returned, 'notes' => $withNote($acquisition->notes)]);
+
+            return $acquisition->load('people');
+        }
+
+        return DB::transaction(function () use ($acquisition, $quantity, $withNote): Acquisition {
+            $all = Money::of((string) $acquisition->quantity);
+            $share = fn (string $amount) => Money::round(bcdiv(bcmul(Money::of($amount), Money::of($quantity), 8), $all, 8));
+            $gross = $share((string) $acquisition->gross_amount);
+            $net = $share((string) $acquisition->net_amount);
+
+            $returned = $acquisition->replicate();
+            $returned->fill([
+                'quantity' => $quantity,
+                'gross_amount' => $gross,
+                'net_amount' => $net,
+                'status' => AcquisitionStatus::Returned,
+                'notes' => $withNote($acquisition->notes),
+            ])->save();
+            $returned->people()->sync($acquisition->people->mapWithKeys(fn (Employee $e) => [
+                $e->id => ['share' => (string) data_get($e, 'pivot.share')],
+            ])->all());
+
+            $acquisition->update([
+                'quantity' => bcsub($all, Money::of($quantity), 2),
+                'gross_amount' => Money::subtract((string) $acquisition->gross_amount, $gross),
+                'net_amount' => Money::subtract((string) $acquisition->net_amount, $net),
+            ]);
+
+            return $returned->load('people');
+        });
+    }
+
+    /**
      * Charge of each person for one article, rounding on the last share;
      * nothing for a returned article.
      *

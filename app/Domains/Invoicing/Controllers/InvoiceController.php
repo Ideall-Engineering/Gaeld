@@ -25,6 +25,7 @@ use App\Domains\Invoicing\Support\DocumentContactPerson;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Organizations\Services\OrganizationDocumentStorageService;
 use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Services\InvoiceProjectService;
 use App\Domains\Projects\Support\InvoiceProjectInput;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
@@ -36,6 +37,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Throwable;
@@ -67,8 +69,12 @@ class InvoiceController extends Controller
         $request->merge(['filter' => $filter]);
         $counts = InvoiceQuery::stateCounts($request);
 
+        $invoices = InvoiceQuery::list($request);
+
         return Inertia::render('Invoices/Index', [
-            'invoices' => InvoiceQuery::list($request),
+            'invoices' => $invoices,
+            // Drafts whose job Gäld made and nothing else is on: deleting asks about it.
+            'ownJobs' => (object) app(InvoiceProjectService::class)->emptyOwnJobs($invoices->items()),
             'states' => collect(InvoiceListState::cases())->map(fn (InvoiceListState $s) => [
                 'value' => $s->value,
                 'label' => $s->label(),
@@ -226,6 +232,7 @@ class InvoiceController extends Controller
             'invoice' => $invoice->load(['customer', 'lines.vatRate', 'journalEntry.lines.account', 'payments.journalEntry']),
             'canForceDelete' => $request->user()->can('forceDelete', $invoice),
             'canDelete' => $request->user()->can('delete', $invoice),
+            'ownJob' => ($own = app(InvoiceProjectService::class)->emptyOwnJob($invoice)) !== null ? ['id' => $own->id, 'code' => $own->code] : null,
             'canRecordPayment' => $request->user()->can('recordPayment', $invoice),
             'canUpdatePayment' => $request->user()->can('updatePayment', $invoice),
             'canCancel' => $request->user()->can('cancel', $invoice),
@@ -393,17 +400,25 @@ class InvoiceController extends Controller
         return back()->with('success', __('app.invoice_dates_updated'));
     }
 
-    public function destroy(Invoice $invoice, DeleteInvoiceAction $action): RedirectResponse
+    public function destroy(Request $request, Invoice $invoice, DeleteInvoiceAction $action, InvoiceProjectService $jobs): RedirectResponse
     {
         $this->authorize('delete', $invoice);
 
+        // The job Gäld made for the draft goes with it when asked and empty.
+        $job = $request->boolean('with_job') ? $jobs->emptyOwnJob($invoice) : null;
+
         try {
-            $action->execute($invoice);
+            DB::transaction(function () use ($action, $invoice, $job, $jobs): void {
+                $action->execute($invoice);
+                if ($job !== null) {
+                    $jobs->deleteJob($job);
+                }
+            });
         } catch (InvalidInvoiceStateException $e) {
             return $this->backWithError($e);
         }
 
         return redirect()->route('invoices.index')
-            ->with('success', __('app.invoice_deleted'));
+            ->with('success', $job !== null ? __('app.invoice_deleted_with_job', ['code' => $job->code]) : __('app.invoice_deleted'));
     }
 }

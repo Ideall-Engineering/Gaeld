@@ -33,6 +33,8 @@ function isInvoiceOverdue(row) {
 
 const props = defineProps({
   invoices: Object,
+  // Drafts whose empty job Gäld made: invoice id => job code.
+  ownJobs: { type: Object, default: () => ({}) },
   states: { type: Array, default: () => [] },
   query: {
     type: Object,
@@ -42,8 +44,11 @@ const props = defineProps({
 
 const deleteTarget = ref(null)
 const deleting = ref(false)
+const deleteWithJob = ref(true)
+const targetJob = computed(() => (deleteTarget.value ? props.ownJobs?.[deleteTarget.value.id] : null))
 
 function confirmDelete(invoice) {
+  deleteWithJob.value = true
   deleteTarget.value = invoice
 }
 
@@ -51,6 +56,7 @@ function executeDelete() {
   if (!deleteTarget.value) return
   deleting.value = true
   router.delete(`/invoices/${deleteTarget.value.id}`, {
+    data: { with_job: !!targetJob.value && deleteWithJob.value },
     onFinish: () => {
       deleting.value = false
       deleteTarget.value = null
@@ -341,7 +347,12 @@ const hiddenByStatus = computed(() => props.states.some(s => s.count > 0))
       :processing="deleting"
       @confirm="executeDelete"
       @cancel="deleteTarget = null"
-    />
+    >
+      <label v-if="targetJob" class="mb-6 -mt-3 flex items-start gap-2 text-sm">
+        <input v-model="deleteWithJob" type="checkbox" class="mt-0.5 h-4 w-4" />
+        <span>{{ t('invoice_delete_with_job', { code: targetJob }) }}</span>
+      </label>
+    </ConfirmDialog>
 
     <ConfirmDialog
       :open="!!pendingStep"

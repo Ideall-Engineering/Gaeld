@@ -11,6 +11,7 @@ use App\Domains\Invoicing\Enums\PaymentMethod;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Models\InvoicePayment;
 use App\Domains\Invoicing\Models\Quote;
+use App\Domains\Organizations\Models\Organization;
 use App\Domains\Projects\Enums\AllocationSource;
 use App\Domains\Projects\Enums\ProjectKind;
 use App\Domains\Projects\Enums\ProjectStatus;
@@ -102,6 +103,12 @@ class InvoiceProjectService
                 ]);
             } elseif ($current->cost_center_id !== $projectId) {
                 $current->update(['cost_center_id' => $projectId]);
+            }
+
+            // A job without an expected amount expects what it is invoiced.
+            if ($projectId !== null && $invoice->type === InvoiceType::Invoice) {
+                Project::withoutGlobalScopes()->whereKey($projectId)->whereNull('expected_amount')
+                    ->first()?->update(['expected_amount' => $invoice->subtotal]);
             }
 
             // Only a live booking follows the project. A cancelled or reverted
@@ -253,6 +260,58 @@ class InvoiceProjectService
     /**
      * The job Gäld made for this invoice, while nothing else uses it.
      */
+    /**
+     * The job Gäld made for a draft or cancelled invoice when nothing else
+     * is on it, offered for deletion together with the invoice.
+     */
+    public function emptyOwnJob(Invoice $invoice): ?Project
+    {
+        $invoice->loadMissing(['organization', 'customer']);
+
+        return ProjectsModule::enabledFor($invoice->organization) ? $this->emptyJobOf($invoice) : null;
+    }
+
+    private function emptyJobOf(Invoice $invoice): ?Project
+    {
+        if (! $invoice->status->isDeletable()) {
+            return null;
+        }
+        $job = $this->ownJob($invoice);
+
+        return $job !== null && ! LineAllocation::withoutGlobalScopes()->where('cost_center_id', $job->id)->exists() ? $job : null;
+    }
+
+    /**
+     * The empty jobs of the invoices listed, by invoice.
+     *
+     * @param  iterable<Invoice>  $invoices
+     * @return array<string, string> invoice id => job code
+     */
+    public function emptyOwnJobs(iterable $invoices): array
+    {
+        $codes = [];
+        $enabled = null;
+        foreach ($invoices as $invoice) {
+            $enabled ??= ProjectsModule::enabledFor(Organization::query()->find($invoice->organization_id));
+            if (! $enabled) {
+                break;
+            }
+            $job = $this->emptyJobOf($invoice);
+            if ($job !== null) {
+                $codes[$invoice->id] = $job->code;
+            }
+        }
+
+        return $codes;
+    }
+
+    /** Remove an empty job with its links, after its invoice is deleted. */
+    public function deleteJob(Project $job): void
+    {
+        InvoiceProject::withoutGlobalScopes()->where('cost_center_id', $job->id)->delete();
+        $job->delete();
+    }
+
     private function ownJob(Invoice $invoice): ?Project
     {
         $jobId = InvoiceProject::withoutGlobalScopes()->where('invoice_id', $invoice->id)->value('cost_center_id');

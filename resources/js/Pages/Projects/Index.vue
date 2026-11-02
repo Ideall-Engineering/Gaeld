@@ -438,6 +438,7 @@ const jobHref = job => `/projects/${job.id}/report?from=${props.year}-01-01&to=$
                 <td class="px-2 py-2 text-right tabular-nums whitespace-nowrap">
                   {{ money(job.revenue) }}
                   <div v-if="!Number(job.revenue) && Number(job.expected)" class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('job_expected_hint', { amount: formatCurrency(job.expected) }) }}</div>
+                  <div v-if="job.needs_expected" class="text-xs text-amber-600 dark:text-amber-400">{{ t('job_needs_expected') }}</div>
                 </td>
                 <td class="hidden px-2 py-2 text-right tabular-nums whitespace-nowrap sm:table-cell">{{ money(job.expenses) }}</td>
                 <td class="px-2 py-2 text-right font-medium tabular-nums whitespace-nowrap" :class="Number(job.net) < 0 ? 'text-[hsl(var(--destructive))]' : ''">{{ money(job.net) }}</td>

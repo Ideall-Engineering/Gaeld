@@ -337,6 +337,38 @@ class InvoiceProjectTest extends TestCase
         $this->assertNull($other->fresh());
     }
 
+    public function test_deleting_a_draft_asks_about_the_empty_job_made_for_it(): void
+    {
+        $draft = $this->createInvoice('INV-2026-009');
+        $job = app(InvoiceProjectService::class)->createJobFor($draft);
+
+        $this->actAsOrg()->get("/invoices/{$draft->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('ownJob.code', $job->code));
+        $this->actAsOrg()->get('/invoices')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('ownJobs.'.$draft->id, $job->code));
+
+        $this->actAsOrg()->delete("/invoices/{$draft->id}", ['with_job' => true])->assertSessionHasNoErrors();
+
+        $this->assertSoftDeleted($draft);
+        $this->assertNull($job->fresh());
+    }
+
+    public function test_the_job_of_a_deleted_draft_stays_unless_asked_or_in_use(): void
+    {
+        $kept = $this->createInvoice('INV-2026-010');
+        $keptJob = app(InvoiceProjectService::class)->createJobFor($kept);
+        $this->actAsOrg()->delete("/invoices/{$kept->id}")->assertSessionHasNoErrors();
+        $this->assertNotNull($keptJob->fresh());
+
+        $used = $this->createInvoice('INV-2026-011');
+        $usedJob = app(InvoiceProjectService::class)->createJobFor($used);
+        app(InvoiceProjectService::class)->assign($this->createInvoice('INV-2026-012'), $usedJob->id);
+        $this->actAsOrg()->get("/invoices/{$used->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('ownJob', null));
+        $this->actAsOrg()->delete("/invoices/{$used->id}", ['with_job' => true])->assertSessionHasNoErrors();
+        $this->assertNotNull($usedJob->fresh(), 'Another invoice is on the job.');
+    }
+
     public function test_a_credit_note_reduces_invoiced_and_open(): void
     {
         $invoice = $this->createInvoice();

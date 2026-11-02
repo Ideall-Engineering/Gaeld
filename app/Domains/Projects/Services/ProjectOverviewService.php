@@ -111,6 +111,9 @@ class ProjectOverviewService
                 'received' => $figures['received'],
                 'open' => $figures['open'],
                 'payment' => $this->paymentState($figures['invoice_count'], $figures['open'], $figures['received']),
+                // Counted in the steering, yet nothing says what it brings.
+                'needs_expected' => $project->kind === ProjectKind::Project && $project->expected_amount === null
+                    && in_array($project->status, [ProjectStatus::InProgress, ProjectStatus::Invoiced, ProjectStatus::Done], true),
             ];
         }
 

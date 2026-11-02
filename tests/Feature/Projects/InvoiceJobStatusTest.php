@@ -21,6 +21,7 @@ use App\Domains\Projects\Enums\ProjectStatus;
 use App\Domains\Projects\Models\InvoiceProject;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Services\InvoiceProjectService;
+use App\Domains\Projects\Services\ProjectOverviewService;
 use App\Domains\Projects\Services\QuoteJobStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -231,6 +232,29 @@ class InvoiceJobStatusTest extends TestCase
         $this->job->update(['expected_amount' => '1500.00']);
         $this->actAsOrg()->get("/projects/{$this->job->id}/report")
             ->assertInertia(fn (AssertableInertia $page) => $page->where('rest', '500.00'));
+    }
+
+    public function test_a_job_without_an_expected_amount_takes_the_invoice_net(): void
+    {
+        $this->job->update(['expected_amount' => null]);
+        $this->onJob('INV-1', '1000.00');
+        $this->assertSame('1000.00', (string) $this->job->fresh()->expected_amount);
+
+        $this->job->update(['expected_amount' => '2500.00']);
+        $this->onJob('INV-2', '400.00');
+        $this->assertSame('2500.00', (string) $this->job->fresh()->expected_amount, 'An amount set by hand stays.');
+    }
+
+    public function test_the_job_list_flags_counted_jobs_without_an_expected_amount(): void
+    {
+        $this->job->update(['expected_amount' => null]);
+        $open = $this->makeProject('P26-31');
+        $open->update(['status' => ProjectStatus::Possible, 'expected_amount' => null]);
+
+        $rows = collect(app(ProjectOverviewService::class)->overview($this->organization->id, '2026-01-01', '2026-12-31')['rows'])->keyBy('code');
+
+        $this->assertTrue($rows['P26-30']['needs_expected']);
+        $this->assertFalse($rows['P26-31']['needs_expected'], 'A job not yet given needs no amount yet.');
     }
 
     private function onJob(string $number, string $amount): Invoice

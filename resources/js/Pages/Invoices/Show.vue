@@ -26,6 +26,8 @@ const props = defineProps({
   invoice: Object,
   canForceDelete: { type: Boolean, default: false },
   canDelete: { type: Boolean, default: false },
+  // The job Gäld made for this draft, empty: deleting asks about it.
+  ownJob: { type: Object, default: null },
   canRecordPayment: { type: Boolean, default: false },
   canUpdatePayment: { type: Boolean, default: false },
   canCancel: { type: Boolean, default: false },
@@ -238,9 +240,11 @@ function removeJustificatif() {
   router.delete(`/invoices/${props.invoice.id}/justificatif`)
 }
 
+const deleteWithJob = ref(true)
 function executeDelete() {
   deleting.value = true
   router.delete(`/invoices/${props.invoice.id}`, {
+    data: { with_job: !!props.ownJob && deleteWithJob.value },
     onFinish: () => { deleting.value = false },
   })
 }
@@ -876,7 +880,12 @@ const bankAccountOptions = computed(() =>
       :processing="deleting"
       @confirm="executeDelete"
       @cancel="showDeleteDialog = false"
-    />
+    >
+      <label v-if="ownJob" class="mb-6 -mt-3 flex items-start gap-2 text-sm">
+        <input v-model="deleteWithJob" type="checkbox" class="mt-0.5 h-4 w-4" />
+        <span>{{ t('invoice_delete_with_job', { code: ownJob.code }) }}</span>
+      </label>
+    </ConfirmDialog>
 
     <!-- Cancel Confirmation -->
     <ConfirmDialog

@@ -8,6 +8,7 @@ use App\Domains\Projects\Models\Acquisition;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Requests\AcquisitionRequest;
+use App\Domains\Projects\Services\AcquisitionReceiptCheckService;
 use App\Domains\Projects\Services\AcquisitionService;
 use App\Http\Controllers\Concerns\AnswersApiCalls;
 use App\Http\Controllers\Controller;
@@ -26,7 +27,7 @@ class AcquisitionController extends Controller
 {
     use AnswersApiCalls;
 
-    public function index(Request $request, AcquisitionService $acquisitions, CurrentOrganization $currentOrg): Response
+    public function index(Request $request, AcquisitionService $acquisitions, AcquisitionReceiptCheckService $check, CurrentOrganization $currentOrg): Response
     {
         $this->authorize('viewAny', Project::class);
 
@@ -40,6 +41,8 @@ class AcquisitionController extends Controller
             'year' => $year,
             'filters' => ['employee_id' => $filters['employee_id'] ?? '', 'status' => $filters['status'] ?? ''],
             'overview' => $acquisitions->overview($currentOrg->id(), $year, $filters['employee_id'] ?? null, $filters['status'] ?? null),
+            // Receipts whose articles no longer match them, as after a credit note.
+            'mismatches' => $check->mismatches($currentOrg->id(), $year),
             'employees' => ProjectQuery::employeeOptions(),
             'defaultVatRate' => AcquisitionService::DEFAULT_VAT_RATE,
             'deadlineDays' => AcquisitionService::DEADLINE_DAYS,
@@ -65,6 +68,22 @@ class AcquisitionController extends Controller
         $acquisitions->save($acquisition, $acquisition->organization_id, $validated, $validated['people']);
 
         return $this->answer(__('app.saved'), ['id' => $acquisition->id]);
+    }
+
+    /**
+     * Mark an article returned, all of it or part of the quantity.
+     */
+    public function returnPart(Request $request, Acquisition $acquisition, AcquisitionService $acquisitions): RedirectResponse|JsonResponse
+    {
+        $this->authorize('create', Project::class);
+
+        $validated = $request->validate([
+            'quantity' => ['required', 'numeric', 'gt:0', 'lte:'.(float) $acquisition->quantity],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+        $returned = $acquisitions->returnPart($acquisition, (string) $validated['quantity'], $validated['note'] ?? null);
+
+        return $this->answer(__('app.saved'), ['id' => $returned->id]);
     }
 
     public function destroy(Acquisition $acquisition): RedirectResponse|JsonResponse

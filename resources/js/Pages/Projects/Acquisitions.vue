@@ -18,7 +18,7 @@ import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { Link, router, useForm } from '@inertiajs/vue3'
 import { computed, ref, watch } from 'vue'
-import { Download, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
+import { AlertTriangle, Download, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
 
 // Material and devices assigned to people (spec 009, stage 4). The net
 // amount charges the people; a returned article charges nobody.
@@ -30,6 +30,7 @@ const props = defineProps({
   defaultVatRate: String,
   deadlineDays: Number,
   can: Object,
+  mismatches: { type: Array, default: () => [] },
 })
 
 const { t } = useTranslations()
@@ -191,6 +192,18 @@ function performDelete() {
   router.delete(`/projects/acquisitions/${deleting.value.id}`, { preserveScroll: true, onFinish: () => { deleting.value = null } })
 }
 
+// A receipt whose articles are worth more than it books less its credit
+// notes: something went back. Returned here, all or part of the quantity.
+const returning = ref({})
+function returnArticle(mismatch, article) {
+  const quantity = returning.value[article.id] || article.quantity
+  const note = mismatch.credits.map(c => c.reference || c.description).filter(Boolean).join(', ')
+  router.post(`/projects/acquisitions/${article.id}/return`, { quantity, note }, {
+    preserveScroll: true,
+    onSuccess: () => { delete returning.value[article.id] },
+  })
+}
+
 const peopleError = computed(() => form.errors.people || Object.entries(form.errors).find(([k]) => k.startsWith('people.'))?.[1])
 </script>
 
@@ -210,6 +223,32 @@ const peopleError = computed(() => form.errors.people || Object.entries(form.err
       </CardHeader>
       <CardContent>
         <p class="mb-4 text-sm text-[hsl(var(--muted-foreground))]">{{ t('acquisitions_desc', { days: deadlineDays }) }}</p>
+
+        <div v-for="mismatch in mismatches" :key="mismatch.journal_entry_id" class="mb-4 rounded-md border border-amber-500/50 bg-amber-500/5 p-4 text-sm">
+          <div class="flex items-start gap-2">
+            <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <div class="min-w-0 flex-1">
+              <div class="font-medium">{{ t('acquisition_mismatch_title', { reference: mismatch.reference ?? '', supplier: mismatch.supplier ?? '' }) }}</div>
+              <div class="text-[hsl(var(--muted-foreground))]">
+                {{ t('acquisition_mismatch_desc', { booked: formatCurrency(mismatch.booked), credited: formatCurrency(mismatch.credited), listed: formatCurrency(mismatch.listed), difference: formatCurrency(mismatch.difference) }) }}
+              </div>
+              <ul v-if="mismatch.credits.length" class="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                <li v-for="credit in mismatch.credits" :key="credit.id">{{ formatDate(credit.date) }} · {{ credit.reference }} · {{ formatCurrency(credit.amount) }} · {{ credit.description }}</li>
+              </ul>
+              <div v-if="can.manage" class="mt-3 divide-y divide-[hsl(var(--border))] text-xs">
+                <div v-for="article in mismatch.articles" :key="article.id" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
+                  <span class="min-w-0 flex-1 basis-40">{{ article.item }}</span>
+                  <span class="tabular-nums">{{ Number(article.quantity) }} {{ t('acquisition_pieces') }}</span>
+                  <span class="w-24 text-right tabular-nums">{{ formatCurrency(article.net_amount) }}</span>
+                  <span class="flex items-center gap-2">
+                    <input v-model="returning[article.id]" type="number" min="0" step="1" :max="article.quantity" :placeholder="String(Number(article.quantity))" :aria-label="t('acquisition_return_quantity')" class="h-8 w-16 rounded-md border border-[hsl(var(--input))] bg-transparent px-2 text-right text-xs" />
+                    <Button size="sm" variant="outline" @click="returnArticle(mismatch, article)">{{ t('acquisition_return') }}</Button>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div v-if="overview.people.length" class="mb-6 flex flex-wrap gap-3">
           <div v-for="person in overview.people" :key="person.employee_id" class="rounded-md border border-[hsl(var(--border))] px-4 py-2">
