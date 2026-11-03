@@ -3349,6 +3349,8 @@ return [
     'acquisition_skip_selected' => 'Selezionati (:count): nessuna acquisizione',
     'acquisition_record' => 'Registra come acquisizione',
     'acquisition_skip' => 'Nessuna acquisizione',
+    'acquisition_assign_job' => 'Assegna a un incarico …',
+    'acquisition_assign_selected' => 'Assegna i selezionati (:count) …',
     'acquisition_receipt_link' => 'Apri giustificativo',
     'steering_effect_expected' => 'Costi generali previsti',
     'steering_effect_booked' => 'di cui registrato',

@@ -91,6 +91,27 @@ class AcquisitionReceiptsTest extends TestCase
         $this->assertSame([], $this->unassigned());
     }
 
+    public function test_a_receipt_for_a_job_is_assigned_from_the_list(): void
+    {
+        $this->purchase('WISE-1', 'Bambu Lab printer', $this->inventory, '1000.00', '81.00');
+        $material = $this->purchase('BAN-2', 'Material for the fair', $this->software, '50.00', '0.00');
+        $job = $this->makeProject('P26-01');
+
+        $this->actAsOrg()->get('/projects/acquisitions?year=2026')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('projects')
+                ->where('can.allocate', true)
+                ->has('unassigned.0.cost_lines', 1)
+                ->where('unassigned.1.cost_lines', []));
+        $lines = $this->unassigned()[0]['cost_lines'];
+
+        $this->actAsOrg()->post('/projects/unallocated', ['items' => array_map(fn ($id) => ['line_id' => $id, 'project_id' => $job->id], $lines)])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(['WISE-1'], array_column($this->unassigned(), 'reference'), 'The printer still needs its acquisition.');
+        $this->assertSame($job->id, (int) $material->lines()->whereHas('allocations')->sole()->allocations()->sole()->cost_center_id);
+    }
+
     public function test_the_api_records_the_acquisition_or_the_decision_with_the_booking(): void
     {
         $anna = Employee::factory()->for($this->organization)->create(['first_name' => 'Anna', 'last_name' => 'A']);

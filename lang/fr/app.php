@@ -3353,6 +3353,8 @@ return [
     'acquisition_skip_selected' => 'Sélection (:count) : pas une acquisition',
     'acquisition_record' => 'Saisir comme acquisition',
     'acquisition_skip' => 'Pas une acquisition',
+    'acquisition_assign_job' => 'Attribuer à un mandat …',
+    'acquisition_assign_selected' => 'Attribuer la sélection (:count) …',
     'acquisition_receipt_link' => 'Ouvrir la pièce',
     'steering_effect_expected' => 'Frais généraux attendus',
     'steering_effect_booked' => 'dont comptabilisé',

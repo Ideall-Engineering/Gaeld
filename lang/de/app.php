@@ -3345,6 +3345,8 @@ return [
     'acquisition_skip_selected' => 'Ausgewählte (:count): keine Anschaffung',
     'acquisition_record' => 'Als Anschaffung erfassen',
     'acquisition_skip' => 'Keine Anschaffung',
+    'acquisition_assign_job' => 'Auftrag zuordnen …',
+    'acquisition_assign_selected' => 'Ausgewählte (:count) zuordnen …',
     'acquisition_receipt_link' => 'Beleg öffnen',
     'steering_effect_expected' => 'Allgemeine Kosten erwartet',
     'steering_effect_booked' => 'davon gebucht',

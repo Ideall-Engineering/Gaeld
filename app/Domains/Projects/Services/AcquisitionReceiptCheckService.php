@@ -154,6 +154,8 @@ class AcquisitionReceiptCheckService
                 'description' => $entry->description,
                 'document_url' => $entry->document_url,
                 'accounts' => $open->pluck('code')->unique()->values()->all(),
+                // The cost lines a job can take; asset lines need an acquisition.
+                'cost_lines' => $open->filter(fn (\stdClass $l) => $this->isCost($l->code))->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
                 'net' => $net,
                 'gross' => $gross,
                 // The rate the VAT on the receipt makes of its net.

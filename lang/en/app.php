@@ -3408,6 +3408,8 @@ return [
     'acquisition_skip_selected' => 'Selected (:count): no acquisition',
     'acquisition_record' => 'Record as acquisition',
     'acquisition_skip' => 'No acquisition',
+    'acquisition_assign_job' => 'Assign to a job …',
+    'acquisition_assign_selected' => 'Assign selected (:count) …',
     'acquisition_receipt_link' => 'Open receipt',
     'steering_effect_expected' => 'General costs expected',
     'steering_effect_booked' => 'of which booked',

@@ -13,6 +13,7 @@ import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
 import FormTextarea from '@/Components/UI/FormTextarea.vue'
 import Modal from '@/Components/UI/Modal.vue'
+import SearchableSelect from '@/Components/UI/SearchableSelect.vue'
 import ColumnMenu from '@/Components/Projects/ColumnMenu.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
@@ -32,6 +33,7 @@ const props = defineProps({
   can: Object,
   mismatches: { type: Array, default: () => [] },
   unassigned: { type: Array, default: () => [] },
+  projects: { type: Array, default: () => [] },
 })
 
 const { t } = useTranslations()
@@ -206,7 +208,8 @@ function returnArticle(mismatch, article) {
 }
 
 // Purchases nobody has decided on yet: recorded as acquisition from the
-// receipt, or set aside as general costs, one by one or several at once.
+// receipt, assigned to a job, or set aside as general costs, one by one or
+// several at once.
 const showUnassigned = ref(false)
 const picked = ref([])
 const allPicked = computed(() => props.unassigned.length > 0 && picked.value.length === props.unassigned.length)
@@ -216,6 +219,25 @@ function pickAll() {
 function skipReceipts(ids) {
   router.post('/projects/acquisitions/receipts/skip', { journal_entry_ids: ids }, {
     preserveScroll: true,
+    onSuccess: () => { picked.value = picked.value.filter(id => !ids.includes(id)) },
+  })
+}
+// Or no acquisition at all but costs of a job: its cost lines go there.
+const projectOptions = computed(() => [
+  ...props.projects.filter(p => p.kind !== 'area').map(p => ({ value: p.id, label: `${p.name} (${p.code})`, group: p.group ?? t('project_no_area') })),
+  ...props.projects.filter(p => p.kind === 'area').map(p => ({ value: p.id, label: `${p.name} (${p.code})`, group: t('project_kind_area') })),
+])
+const assignTo = ref({})
+const bulkJob = ref(null)
+const pickedForJob = computed(() => props.unassigned.filter(r => picked.value.includes(r.journal_entry_id) && r.cost_lines.length))
+function assignReceipts(receipts, projectId) {
+  if (!projectId) return
+  const items = receipts.flatMap(r => r.cost_lines.map(id => ({ line_id: id, project_id: Number(projectId) })))
+  if (!items.length) return
+  const ids = receipts.map(r => r.journal_entry_id)
+  router.post('/projects/unallocated', { items }, {
+    preserveScroll: true,
+    onFinish: () => { bulkJob.value = null; ids.forEach(id => { delete assignTo.value[id] }) },
     onSuccess: () => { picked.value = picked.value.filter(id => !ids.includes(id)) },
   })
 }
@@ -263,6 +285,18 @@ const peopleError = computed(() => form.errors.people || Object.entries(form.err
             <div v-if="can.manage" class="flex flex-wrap items-center gap-3 py-2 text-xs">
               <label class="flex items-center gap-2"><input type="checkbox" :checked="allPicked" class="h-4 w-4" @change="pickAll" /> {{ t('select_all') }}</label>
               <Button size="sm" variant="outline" :disabled="!picked.length" @click="skipReceipts(picked)">{{ t('acquisition_skip_selected', { count: picked.length }) }}</Button>
+              <SearchableSelect
+                v-if="can.allocate"
+                id="assign_picked"
+                v-model="bulkJob"
+                :options="projectOptions"
+                group-key="group"
+                :placeholder="t('acquisition_assign_selected', { count: pickedForJob.length })"
+                :disabled="!pickedForJob.length"
+                force-searchable
+                class="w-full sm:w-72"
+                @update:model-value="assignReceipts(pickedForJob, $event)"
+              />
             </div>
             <div class="max-h-[28rem] divide-y divide-[hsl(var(--border))] overflow-y-auto">
               <div v-for="receipt in unassigned" :key="receipt.journal_entry_id" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs">
@@ -274,7 +308,18 @@ const peopleError = computed(() => form.errors.people || Object.entries(form.err
                   <a v-if="receipt.document_url" :href="receipt.document_url" target="_blank" rel="noopener" class="ml-1 inline-flex align-middle text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" :aria-label="t('acquisition_receipt_link')"><ExternalLink class="h-3 w-3" /></a>
                 </span>
                 <span class="w-24 text-right tabular-nums">{{ formatCurrency(receipt.net) }}</span>
-                <span v-if="can.manage" class="flex flex-wrap gap-2">
+                <span v-if="can.manage" class="flex flex-wrap items-center gap-2">
+                  <SearchableSelect
+                    v-if="can.allocate && receipt.cost_lines.length"
+                    :id="`assign_${receipt.journal_entry_id}`"
+                    v-model="assignTo[receipt.journal_entry_id]"
+                    :options="projectOptions"
+                    group-key="group"
+                    :placeholder="t('acquisition_assign_job')"
+                    force-searchable
+                    class="w-56"
+                    @update:model-value="assignReceipts([receipt], $event)"
+                  />
                   <Button size="sm" variant="outline" @click="recordFrom(receipt)">{{ t('acquisition_record') }}</Button>
                   <Button size="sm" variant="ghost" @click="skipReceipts([receipt.journal_entry_id])">{{ t('acquisition_skip') }}</Button>
                 </span>

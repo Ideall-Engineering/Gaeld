@@ -45,10 +45,15 @@ class AcquisitionController extends Controller
             'mismatches' => $check->mismatches($currentOrg->id(), $year),
             // Purchases nobody has said yet whether they are an acquisition.
             'unassigned' => $check->unassigned($currentOrg->id(), $year),
+            // A purchase that is no acquisition goes to its job right here.
+            'projects' => ProjectQuery::options(),
             'employees' => ProjectQuery::employeeOptions(),
             'defaultVatRate' => AcquisitionService::DEFAULT_VAT_RATE,
             'deadlineDays' => AcquisitionService::DEADLINE_DAYS,
-            'can' => ['manage' => $request->user()?->can('create', Project::class) ?? false],
+            'can' => [
+                'manage' => $request->user()?->can('create', Project::class) ?? false,
+                'allocate' => $request->user()?->can('allocate', Project::class) ?? false,
+            ],
         ]);
     }
 
