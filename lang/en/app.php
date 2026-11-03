@@ -3416,7 +3416,6 @@ return [
     'acquisition_return' => 'Return',
     'acquisition_returned_note' => 'Returned: :quantity pcs, :note.',
     'steering_booked_in_year' => 'Booked in :year',
-    'steering_booked_subtotal' => 'Subtotal booked',
     'steering_general_elsewhere' => 'General, already counted in cost blocks',
     'steering_expected_in_year' => 'Still expected in :year',
     'edit_lines' => 'Edit line items',

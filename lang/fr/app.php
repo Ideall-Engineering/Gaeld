@@ -3361,7 +3361,6 @@ return [
     'acquisition_return' => 'Retourner',
     'acquisition_returned_note' => 'Retourné : :quantity pce, :note.',
     'steering_booked_in_year' => 'Comptabilisé en :year',
-    'steering_booked_subtotal' => 'Sous-total comptabilisé',
     'steering_general_elsewhere' => 'Général, déjà compté dans les blocs de coûts',
     'steering_expected_in_year' => 'Encore attendu en :year',
     'edit_lines' => 'Modifier les positions',

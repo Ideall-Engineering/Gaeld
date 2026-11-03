@@ -3357,7 +3357,6 @@ return [
     'acquisition_return' => 'Rendere',
     'acquisition_returned_note' => 'Reso: :quantity pz, :note.',
     'steering_booked_in_year' => 'Registrato nel :year',
-    'steering_booked_subtotal' => 'Subtotale registrato',
     'steering_general_elsewhere' => 'Generale, già contato nei blocchi di costo',
     'steering_expected_in_year' => 'Ancora atteso nel :year',
     'edit_lines' => 'Modifica posizioni',

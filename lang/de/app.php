@@ -3353,7 +3353,6 @@ return [
     'acquisition_return' => 'Zurückgeben',
     'acquisition_returned_note' => 'Zurückgegeben: :quantity Stk, :note.',
     'steering_booked_in_year' => 'Gebucht :year',
-    'steering_booked_subtotal' => 'Zwischensumme gebucht',
     'steering_general_elsewhere' => 'Allgemein, schon in Kostenblöcken gezählt',
     'steering_expected_in_year' => 'Noch erwartet :year',
     'edit_lines' => 'Positionen bearbeiten',
