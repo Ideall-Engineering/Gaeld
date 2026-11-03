@@ -43,6 +43,8 @@ class AcquisitionController extends Controller
             'overview' => $acquisitions->overview($currentOrg->id(), $year, $filters['employee_id'] ?? null, $filters['status'] ?? null),
             // Receipts whose articles no longer match them, as after a credit note.
             'mismatches' => $check->mismatches($currentOrg->id(), $year),
+            // Purchases nobody has said yet whether they are an acquisition.
+            'unassigned' => $check->unassigned($currentOrg->id(), $year),
             'employees' => ProjectQuery::employeeOptions(),
             'defaultVatRate' => AcquisitionService::DEFAULT_VAT_RATE,
             'deadlineDays' => AcquisitionService::DEADLINE_DAYS,
@@ -84,6 +86,22 @@ class AcquisitionController extends Controller
         $returned = $acquisitions->returnPart($acquisition, (string) $validated['quantity'], $validated['note'] ?? null);
 
         return $this->answer(__('app.saved'), ['id' => $returned->id]);
+    }
+
+    /**
+     * Set purchases aside as no acquisition: their costs are general costs.
+     */
+    public function skip(Request $request, AcquisitionReceiptCheckService $check, CurrentOrganization $currentOrg): RedirectResponse|JsonResponse
+    {
+        $this->authorize('create', Project::class);
+
+        $validated = $request->validate([
+            'journal_entry_ids' => ['required', 'array', 'min:1', 'max:500'],
+            'journal_entry_ids.*' => ['uuid'],
+        ]);
+        $check->skip($currentOrg->id(), $validated['journal_entry_ids']);
+
+        return $this->answer(__('app.saved'));
     }
 
     public function destroy(Acquisition $acquisition): RedirectResponse|JsonResponse

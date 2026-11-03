@@ -89,6 +89,9 @@ class StoreJournalEntryApiRequest extends FormRequest
             // project share belongs to would be a guess (spec 009).
             if ($currentOrganization->isBound() && ProjectsModule::enabledFor($currentOrganization->get())) {
                 $rules['lines.*.allocations'] = ['prohibited'];
+                if ($this->isMethod('POST')) {
+                    $rules = [...$rules, ...self::acquisitionRules($organizationId)];
+                }
             }
 
             return $rules;
@@ -107,6 +110,10 @@ class StoreJournalEntryApiRequest extends FormRequest
         $rules['lines.*.vat_amount'] = ['nullable', 'string', 'regex:/^\d{1,11}(?:\.\d{1,2})?$/'];
         $rules['lines.*.vat_figure'] = ['nullable', 'string', Rule::in(self::DEDUCTION_FIGURES)];
 
+        if ($currentOrganization->isBound() && ProjectsModule::enabledFor($currentOrganization->get()) && $this->isMethod('POST')) {
+            $rules = [...$rules, ...self::acquisitionRules($organizationId)];
+        }
+
         if ($currentOrganization->isBound() && ProjectsModule::enabledFor($currentOrganization->get())) {
             $entry = $this->route('journalEntry');
             $entry = $entry instanceof JournalEntry ? $entry : null;
@@ -120,11 +127,45 @@ class StoreJournalEntryApiRequest extends FormRequest
     }
 
     /**
+     * A purchase says with its booking whether it is an acquisition: the
+     * articles bought for people, or no_acquisition for general costs.
+     *
+     * @return array<string, mixed>
+     */
+    private static function acquisitionRules(string $organizationId): array
+    {
+        return [
+            'no_acquisition' => ['sometimes', 'boolean'],
+            'acquisitions' => ['sometimes', 'array', 'min:1', 'max:50', 'prohibited_if:no_acquisition,true'],
+            'acquisitions.*.item' => ['required', 'string', 'max:255'],
+            'acquisitions.*.category' => ['nullable', 'string', 'max:60'],
+            'acquisitions.*.supplier' => ['nullable', 'string', 'max:120'],
+            'acquisitions.*.quantity' => ['required', 'numeric', 'gt:0', 'max:99999999'],
+            'acquisitions.*.unit_price' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
+            'acquisitions.*.vat_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'acquisitions.*.net_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999999.99'],
+            'acquisitions.*.return_until' => ['nullable', 'date'],
+            'acquisitions.*.warranty_until' => ['nullable', 'date'],
+            'acquisitions.*.notes' => ['nullable', 'string', 'max:5000'],
+            'acquisitions.*.people' => ['required', 'array', 'min:1', 'max:10'],
+            'acquisitions.*.people.*.employee_id' => ['required', 'uuid', Rule::exists('employees', 'id')->where('organization_id', $organizationId)],
+            'acquisitions.*.people.*.share' => ['required', 'numeric', 'gt:0', 'max:100'],
+        ];
+    }
+
+    /**
      * @return array<int, callable(Validator): void>
      */
     public function after(): array
     {
         return [function (Validator $validator): void {
+            foreach ((array) $this->input('acquisitions', []) as $index => $article) {
+                $total = array_sum(array_map(fn ($p) => (float) ($p['share'] ?? 0), (array) ($article['people'] ?? [])));
+                if (is_array($article) && abs($total - 100) > 0.0001) {
+                    $validator->errors()->add("acquisitions.{$index}.people", __('app.acquisition_shares_total'));
+                }
+            }
+
             $shorthand = $this->usesShorthand();
 
             foreach ($this->input('lines', []) as $index => $line) {

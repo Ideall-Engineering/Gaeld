@@ -11,6 +11,7 @@ use App\Domains\Invoicing\Models\InvoiceInstallment;
 use App\Domains\Invoicing\Models\InvoicePayment;
 use App\Domains\Organizations\Models\OrganizationInvitation;
 use App\Domains\Payroll\Models\DeductionRate;
+use App\Domains\Projects\Models\AcquisitionSkip;
 use App\Support\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -53,6 +54,7 @@ class OrganizationScopedModelPolicyCoverageTest extends TestCase
         ReceiptScan::class => 'Managed exclusively through Expense controllers, authorized via the parent Expense.',
         InvoicePayment::class => 'Managed exclusively through InvoiceLifecycleController, authorized via the parent Invoice.',
         InvoiceInstallment::class => 'Rates of a payment plan, written only with the parent draft Invoice and authorized through it.',
+        AcquisitionSkip::class => 'A purchase set aside as no acquisition, written only by AcquisitionController::skip under the projects "create" ability.',
         OrganizationInvitation::class => 'InvitationController authorizes against the parent Organization ("manageUsers" ability), not the invitation itself.',
         DeductionRate::class => 'No dedicated policy yet — tracked as follow-up.',
     ];

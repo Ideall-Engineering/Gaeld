@@ -5,6 +5,7 @@ namespace App\Domains\Projects\Services;
 use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Projects\Enums\AcquisitionStatus;
 use App\Domains\Projects\Models\Acquisition;
+use App\Domains\Projects\Models\AcquisitionSkip;
 use App\Support\Money;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -107,6 +108,97 @@ class AcquisitionReceiptCheckService
     }
 
     /**
+     * Purchases of the year nobody has decided on yet: paid or owed, on an
+     * asset account (15 to 17) or a cost account (4, 6) that is not put on
+     * a job, a project or a person, with no acquisition recorded for them
+     * and not set aside as general costs.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function unassigned(string $organizationId, int $year): array
+    {
+        $entries = DB::table('journal_entries')
+            ->where('organization_id', $organizationId)
+            ->where('is_posted', true)
+            ->whereNull('reversal_of_entry_id')
+            ->whereBetween('date', ["{$year}-01-01", "{$year}-12-31"])
+            ->whereNotExists(fn ($q) => $q->from('acquisitions')->whereColumn('acquisitions.journal_entry_id', 'journal_entries.id'))
+            ->whereNotExists(fn ($q) => $q->from('acquisition_skips')->whereColumn('acquisition_skips.journal_entry_id', 'journal_entries.id'))
+            ->orderBy('date')
+            ->orderBy('reference')
+            ->get(['id', 'date', 'reference', 'description', 'document_url']);
+        $lines = $this->linesOf($entries->pluck('id'));
+        $decided = DB::table('line_allocations')
+            ->whereIn('transaction_line_id', $lines->flatten(1)->pluck('id'))
+            ->pluck('transaction_line_id')
+            ->flip();
+
+        $found = [];
+        foreach ($entries as $entry) {
+            $entryLines = $lines[$entry->id] ?? collect();
+            $paid = $entryLines->contains(fn (\stdClass $l) => Money::isPositive((string) $l->credit) && $this->isMoney($l->code));
+            $open = $entryLines->filter(fn (\stdClass $l) => Money::isPositive((string) $l->debit)
+                && ($this->isAsset($l->code) || ($this->isCost($l->code) && ! isset($decided[$l->id]))));
+            if (! $paid || $open->isEmpty()) {
+                continue;
+            }
+            $net = $open->reduce(fn (string $sum, \stdClass $l) => Money::add($sum, (string) $l->debit), '0.00');
+            $vat = $entryLines->filter(fn (\stdClass $l) => $l->code === AccountCode::VAT_INPUT)
+                ->reduce(fn (string $sum, \stdClass $l) => Money::add($sum, Money::subtract((string) $l->debit, (string) $l->credit)), '0.00');
+            $gross = $entryLines->filter(fn (\stdClass $l) => $this->isMoney($l->code))
+                ->reduce(fn (string $sum, \stdClass $l) => Money::add($sum, (string) $l->credit), '0.00');
+            $found[] = [
+                'journal_entry_id' => $entry->id,
+                'date' => substr((string) $entry->date, 0, 10),
+                'reference' => $entry->reference,
+                'description' => $entry->description,
+                'document_url' => $entry->document_url,
+                'accounts' => $open->pluck('code')->unique()->values()->all(),
+                'net' => $net,
+                'gross' => $gross,
+                // The rate the VAT on the receipt makes of its net.
+                'vat_rate' => Money::isPositive($vat) && Money::isPositive($net) ? bcadd(bcadd(bcdiv(bcmul($vat, '100', 6), $net, 6), '0.05', 1), '0', 2) : null,
+            ];
+        }
+
+        return $found;
+    }
+
+    /**
+     * Set purchases aside as no acquisition.
+     *
+     * @param  list<string>  $entryIds
+     */
+    public function skip(string $organizationId, array $entryIds): void
+    {
+        $ids = DB::table('journal_entries')->where('organization_id', $organizationId)->whereIn('id', $entryIds)->pluck('id');
+        foreach ($ids as $id) {
+            AcquisitionSkip::withoutGlobalScopes()->firstOrCreate(['organization_id' => $organizationId, 'journal_entry_id' => $id]);
+        }
+    }
+
+    /** Whether a booked entry is a purchase still waiting for a decision. */
+    public function isOpen(string $organizationId, string $entryId, int $year): bool
+    {
+        return in_array($entryId, array_column($this->unassigned($organizationId, $year), 'journal_entry_id'), true);
+    }
+
+    private function isMoney(string $code): bool
+    {
+        return collect(self::MONEY_PREFIXES)->contains(fn (string $prefix) => str_starts_with($code, $prefix));
+    }
+
+    private function isAsset(string $code): bool
+    {
+        return preg_match('/^1[5-7]/', $code) === 1;
+    }
+
+    private function isCost(string $code): bool
+    {
+        return preg_match('/^[46]/', $code) === 1;
+    }
+
+    /**
      * Posted entries after a receipt that take an amount off one of its
      * accounts against money coming back: no write-off, no reversal.
      *
@@ -191,7 +283,7 @@ class AcquisitionReceiptCheckService
         return DB::table('transaction_lines')
             ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
             ->whereIn('transaction_lines.journal_entry_id', $entryIds)
-            ->get(['transaction_lines.journal_entry_id', 'transaction_lines.account_id', 'transaction_lines.debit', 'transaction_lines.credit', 'transaction_lines.description', 'accounts.code'])
+            ->get(['transaction_lines.id', 'transaction_lines.journal_entry_id', 'transaction_lines.account_id', 'transaction_lines.debit', 'transaction_lines.credit', 'transaction_lines.description', 'accounts.code'])
             ->groupBy('journal_entry_id');
     }
 }

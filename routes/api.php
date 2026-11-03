@@ -199,6 +199,8 @@ Route::middleware(['auth:sanctum', 'api-org', HandleApiIdempotency::class, LogOr
         Route::get('/projects/{project}/report', [ProjectApiController::class, 'report'])->name('api.projects.report');
         Route::get('/acquisitions', [AcquisitionApiController::class, 'index'])->name('api.acquisitions.index');
         Route::post('/acquisitions', [AcquisitionApiController::class, 'store'])->name('api.acquisitions.store');
+        Route::post('/acquisitions/skips', [AcquisitionController::class, 'skip'])->name('api.acquisitions.skip');
+        Route::get('/acquisitions/unassigned', [AcquisitionApiController::class, 'unassigned'])->name('api.acquisitions.unassigned');
         Route::get('/acquisitions/people', [AcquisitionApiController::class, 'people'])->name('api.acquisitions.people');
         Route::put('/projects/{project}/shares', [ProjectApiController::class, 'shares'])->name('api.projects.shares');
         Route::put('/budget-groups/{budgetGroup}/people', [BudgetGroupApiController::class, 'people'])->name('api.budget-groups.people');

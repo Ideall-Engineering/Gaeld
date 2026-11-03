@@ -6,6 +6,7 @@ use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Queries\ProjectQuery;
 use App\Domains\Projects\Requests\AcquisitionRequest;
+use App\Domains\Projects\Services\AcquisitionReceiptCheckService;
 use App\Domains\Projects\Services\AcquisitionService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
@@ -49,6 +50,23 @@ class AcquisitionApiController extends Controller
             'net_amount' => $acquisition->net_amount,
             'charges' => AcquisitionService::charges($acquisition),
         ]], 201);
+    }
+
+    /**
+     * List purchases without a decision
+     *
+     * Booked purchases of a year on asset (15 to 17) or cost accounts (4, 6)
+     * not put on a job or person, with no acquisition recorded and not set
+     * aside. Record one with journal_entry_id, or set it aside with
+     * POST /acquisitions/skips.
+     */
+    public function unassigned(Request $request, AcquisitionReceiptCheckService $check, CurrentOrganization $currentOrg): JsonResponse
+    {
+        $this->authorize('viewAny', Project::class);
+
+        $year = (int) $request->validate(['year' => ['required', 'integer', 'between:2000,2100']])['year'];
+
+        return response()->json(['data' => $check->unassigned($currentOrg->id(), $year)]);
     }
 
     /**

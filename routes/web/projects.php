@@ -31,6 +31,7 @@ Route::middleware(EnsureProjectsModule::class)->group(function () {
     Route::get('/projects/acquisitions', [AcquisitionController::class, 'index'])->name('projects.acquisitions');
     Route::get('/projects/acquisitions/export', [AcquisitionController::class, 'export'])->name('projects.acquisitions.export');
     Route::post('/projects/acquisitions', [AcquisitionController::class, 'store'])->name('projects.acquisitions.store');
+    Route::post('/projects/acquisitions/receipts/skip', [AcquisitionController::class, 'skip'])->name('projects.acquisitions.skip');
     Route::put('/projects/acquisitions/{acquisition}', [AcquisitionController::class, 'update'])->name('projects.acquisitions.update');
     Route::post('/projects/acquisitions/{acquisition}/return', [AcquisitionController::class, 'returnPart'])->name('projects.acquisitions.return');
     Route::delete('/projects/acquisitions/{acquisition}', [AcquisitionController::class, 'destroy'])->name('projects.acquisitions.destroy');

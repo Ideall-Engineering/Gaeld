@@ -1275,11 +1275,22 @@
             "B81|B26|B38": "acquisition tax on foreign services; books 1170 and 2202, bank pays net",
             "V0": "zero-rated turnover; counts in figure 200 and is deducted under vat_figure",
             "M0|I0": "no VAT; the entry is booked without a VAT line"
+          },
+          "acquisitions": {
+            "type": "array|null",
+            "required": false,
+            "note": "Projects module only. Articles of a purchase bought for people, recorded with the booking and linked to it: [{item, category?, supplier?, quantity, unit_price, vat_rate?, net_amount?, return_until?, warranty_until?, notes?, people: [{employee_id, share}] adding up to 100}]. Bought on the entry date, delivered."
+          },
+          "no_acquisition": {
+            "type": "boolean",
+            "required": false,
+            "note": "Projects module only. The purchase is no acquisition (general costs); it leaves the list of purchases without a decision. Not together with acquisitions."
           }
         }
       },
       "response_201": {
-        "data": "JournalEntryResource"
+        "data": "JournalEntryResource",
+        "meta": "{acquisition_check: recorded|none|open|null}; open = a purchase on an asset (15 to 17) or cost account (4, 6) not put on a job or person: record its acquisition (POST /acquisitions with journal_entry_id) or set it aside (POST /acquisitions/skips)"
       },
       "errors": {
         "422 unknown_vat_code": "the shorthand line names a VAT code the API does not know",
@@ -2528,6 +2539,42 @@
         "data": "{id, item, net_amount, charges: {employee_id: amount}}"
       },
       "notes": "Spec 009, stage 4. Only for organizations with the projects module switched on; otherwise 403."
+    },
+    {
+      "name": "api.acquisitions.unassigned",
+      "method": "GET",
+      "path": "/api/v1/acquisitions/unassigned",
+      "controller": "AcquisitionApiController@unassigned",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.view"
+      ],
+      "request": {
+        "query": {
+          "year": "required integer"
+        }
+      },
+      "response_200": {
+        "data": "[{journal_entry_id, date, reference, description, document_url, accounts, net, gross, vat_rate}]"
+      },
+      "notes": "Purchases of the year on asset (15 to 17) or cost accounts (4, 6), paid or owed, not put on a job, project or person, with no acquisition recorded and not set aside. Projects module only; otherwise 403."
+    },
+    {
+      "name": "api.acquisitions.skip",
+      "method": "POST",
+      "path": "/api/v1/acquisitions/skips",
+      "controller": "AcquisitionController@skip",
+      "auth_required": true,
+      "abilities_required": [
+        "projects.manage"
+      ],
+      "request": {
+        "journal_entry_ids": "required array of entry uuids, 1 to 500"
+      },
+      "response_200": {
+        "message": "saved"
+      },
+      "notes": "Sets purchases aside as no acquisition (general costs). Projects module only; otherwise 403."
     },
     {
       "name": "api.acquisitions.people",

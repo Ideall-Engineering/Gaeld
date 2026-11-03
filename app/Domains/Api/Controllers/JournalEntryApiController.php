@@ -29,13 +29,17 @@ use App\Domains\Api\Services\ApiIdempotencyService;
 use App\Domains\Api\Services\JournalEntryApiMapper;
 use App\Domains\Api\Support\ApiIdempotencyReservation;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Projects\Enums\AcquisitionStatus;
 use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Services\AcquisitionReceiptCheckService;
+use App\Domains\Projects\Services\AcquisitionService;
 use App\Domains\Projects\Support\ProjectsModule;
 use App\Http\Controllers\Controller;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * JSON API access to the general journal.
@@ -185,6 +189,8 @@ class JournalEntryApiController extends Controller
         JournalEntryApiMapper $mapper,
         LedgerService $ledger,
         ApiIdempotencyService $idempotency,
+        AcquisitionService $acquisitions,
+        AcquisitionReceiptCheckService $check,
     ): JournalEntryResource|JsonResponse {
         $this->authorize('create', JournalEntry::class);
 
@@ -214,14 +220,31 @@ class JournalEntryApiController extends Controller
             }
 
             $entryData = $mapper->toData($validated, $currentOrganization->id(), $this->mayAllocate($request));
-            $entry = $request->string('status')->value() === 'posted'
-                ? $ledger->postEntry($currentOrganization->id(), $entryData)
-                : $ledger->createDraft($currentOrganization->id(), $entryData);
-            if (($validated['document_url'] ?? null) !== null) {
-                $entry->update(['document_url' => $validated['document_url']]);
-            }
+            $entry = DB::transaction(function () use ($request, $validated, $entryData, $ledger, $currentOrganization, $acquisitions, $check): JournalEntry {
+                $entry = $request->string('status')->value() === 'posted'
+                    ? $ledger->postEntry($currentOrganization->id(), $entryData)
+                    : $ledger->createDraft($currentOrganization->id(), $entryData);
+                if (($validated['document_url'] ?? null) !== null) {
+                    $entry->update(['document_url' => $validated['document_url']]);
+                }
+                // A purchase says whether it is an acquisition (2026-11-03).
+                foreach ($validated['acquisitions'] ?? [] as $article) {
+                    $acquisitions->save(null, $currentOrganization->id(), [
+                        ...$article,
+                        'purchased_on' => $entry->date->toDateString(),
+                        'status' => AcquisitionStatus::Delivered->value,
+                        'journal_entry_id' => $entry->id,
+                    ], $article['people']);
+                }
+                if ($validated['no_acquisition'] ?? false) {
+                    $check->skip($currentOrganization->id(), [$entry->id]);
+                }
+
+                return $entry;
+            });
 
             $response = (new JournalEntryResource($entry->load($this->lineRelations())))
+                ->additional(['meta' => ['acquisition_check' => $this->acquisitionCheck($entry, $validated, $check, $currentOrganization)]])
                 ->response()
                 ->setStatusCode(201);
 
@@ -233,6 +256,28 @@ class JournalEntryApiController extends Controller
 
             return $this->domainError($exception);
         }
+    }
+
+    /**
+     * Whether a booked purchase is settled as acquisition: recorded with it,
+     * none (general costs), open (a purchase nobody decided on yet) or null
+     * when the entry is no purchase or the projects module is off.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function acquisitionCheck(JournalEntry $entry, array $validated, AcquisitionReceiptCheckService $check, CurrentOrganization $currentOrganization): ?string
+    {
+        if (! ProjectsModule::enabledFor($currentOrganization->get())) {
+            return null;
+        }
+        if (($validated['acquisitions'] ?? []) !== []) {
+            return 'recorded';
+        }
+        if ($validated['no_acquisition'] ?? false) {
+            return 'none';
+        }
+
+        return $entry->is_posted && $check->isOpen($currentOrganization->id(), $entry->id, (int) $entry->date->year) ? 'open' : null;
     }
 
     /**

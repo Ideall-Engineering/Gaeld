@@ -18,7 +18,7 @@ import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { Link, router, useForm } from '@inertiajs/vue3'
 import { computed, ref, watch } from 'vue'
-import { AlertTriangle, Download, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
+import { AlertTriangle, ChevronDown, ChevronRight, Download, ExternalLink, Inbox, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
 
 // Material and devices assigned to people (spec 009, stage 4). The net
 // amount charges the people; a returned article charges nobody.
@@ -31,6 +31,7 @@ const props = defineProps({
   deadlineDays: Number,
   can: Object,
   mismatches: { type: Array, default: () => [] },
+  unassigned: { type: Array, default: () => [] },
 })
 
 const { t } = useTranslations()
@@ -204,6 +205,33 @@ function returnArticle(mismatch, article) {
   })
 }
 
+// Purchases nobody has decided on yet: recorded as acquisition from the
+// receipt, or set aside as general costs, one by one or several at once.
+const showUnassigned = ref(false)
+const picked = ref([])
+const allPicked = computed(() => props.unassigned.length > 0 && picked.value.length === props.unassigned.length)
+function pickAll() {
+  picked.value = allPicked.value ? [] : props.unassigned.map(r => r.journal_entry_id)
+}
+function skipReceipts(ids) {
+  router.post('/projects/acquisitions/receipts/skip', { journal_entry_ids: ids }, {
+    preserveScroll: true,
+    onSuccess: () => { picked.value = picked.value.filter(id => !ids.includes(id)) },
+  })
+}
+function recordFrom(receipt) {
+  openCreate()
+  Object.assign(form, {
+    item: (receipt.description ?? '').slice(0, 255),
+    purchased_on: receipt.date,
+    quantity: '1',
+    unit_price: receipt.vat_rate ? String(Number(receipt.net) + Number(receipt.net) * Number(receipt.vat_rate) / 100) : String(receipt.net),
+    vat_rate: receipt.vat_rate ?? '',
+    net_amount: String(receipt.net),
+    journal_entry_id: receipt.journal_entry_id,
+  })
+}
+
 const peopleError = computed(() => form.errors.people || Object.entries(form.errors).find(([k]) => k.startsWith('people.'))?.[1])
 </script>
 
@@ -223,6 +251,37 @@ const peopleError = computed(() => form.errors.people || Object.entries(form.err
       </CardHeader>
       <CardContent>
         <p class="mb-4 text-sm text-[hsl(var(--muted-foreground))]">{{ t('acquisitions_desc', { days: deadlineDays }) }}</p>
+
+        <div v-if="unassigned.length" class="mb-4 rounded-md border border-[hsl(var(--border))] text-sm">
+          <button type="button" class="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-[hsl(var(--muted)/0.4)]" @click="showUnassigned = !showUnassigned">
+            <component :is="showUnassigned ? ChevronDown : ChevronRight" class="h-4 w-4 shrink-0" />
+            <Inbox class="h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]" />
+            <span class="font-medium">{{ t('acquisition_unassigned_title', { count: unassigned.length }) }}</span>
+            <span class="hidden text-[hsl(var(--muted-foreground))] sm:inline">· {{ t('acquisition_unassigned_desc') }}</span>
+          </button>
+          <div v-if="showUnassigned" class="border-t border-[hsl(var(--border))] px-4 pb-3">
+            <div v-if="can.manage" class="flex flex-wrap items-center gap-3 py-2 text-xs">
+              <label class="flex items-center gap-2"><input type="checkbox" :checked="allPicked" class="h-4 w-4" @change="pickAll" /> {{ t('select_all') }}</label>
+              <Button size="sm" variant="outline" :disabled="!picked.length" @click="skipReceipts(picked)">{{ t('acquisition_skip_selected', { count: picked.length }) }}</Button>
+            </div>
+            <div class="max-h-[28rem] divide-y divide-[hsl(var(--border))] overflow-y-auto">
+              <div v-for="receipt in unassigned" :key="receipt.journal_entry_id" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs">
+                <input v-if="can.manage" v-model="picked" type="checkbox" :value="receipt.journal_entry_id" class="h-4 w-4" :aria-label="receipt.reference ?? receipt.description" />
+                <span class="w-20 shrink-0 tabular-nums text-[hsl(var(--muted-foreground))]">{{ formatDate(receipt.date) }}</span>
+                <span class="min-w-0 flex-1 basis-60">
+                  <Link :href="`/accounting/journal-entries/${receipt.journal_entry_id}`" class="hover:underline">{{ receipt.description || receipt.reference }}</Link>
+                  <span class="text-[hsl(var(--muted-foreground))]"> · {{ receipt.reference }} · {{ receipt.accounts.join(', ') }}</span>
+                  <a v-if="receipt.document_url" :href="receipt.document_url" target="_blank" rel="noopener" class="ml-1 inline-flex align-middle text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" :aria-label="t('acquisition_receipt_link')"><ExternalLink class="h-3 w-3" /></a>
+                </span>
+                <span class="w-24 text-right tabular-nums">{{ formatCurrency(receipt.net) }}</span>
+                <span v-if="can.manage" class="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" @click="recordFrom(receipt)">{{ t('acquisition_record') }}</Button>
+                  <Button size="sm" variant="ghost" @click="skipReceipts([receipt.journal_entry_id])">{{ t('acquisition_skip') }}</Button>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div v-for="mismatch in mismatches" :key="mismatch.journal_entry_id" class="mb-4 rounded-md border border-amber-500/50 bg-amber-500/5 p-4 text-sm">
           <div class="flex items-start gap-2">
@@ -346,6 +405,10 @@ const peopleError = computed(() => form.errors.people || Object.entries(form.err
 
     <Modal :open="showForm" :title="editing ? t('edit') : t('add')" size="xl" @close="showForm = false">
       <form class="space-y-4" @submit.prevent="submit">
+        <p v-if="form.journal_entry_id" class="text-xs text-[hsl(var(--muted-foreground))]">
+          {{ t('acquisition_from_receipt') }}
+          <Link :href="`/accounting/journal-entries/${form.journal_entry_id}`" class="underline hover:no-underline" target="_blank">{{ unassigned.find(r => r.journal_entry_id === form.journal_entry_id)?.reference ?? t('journal_entry') }}</Link>
+        </p>
         <FormInput id="item" v-model="form.item" :label="t('acquisition_item')" :error="form.errors.item" required />
         <div class="grid gap-4 sm:grid-cols-3">
           <FormInput id="category" v-model="form.category" :label="t('acquisition_category')" :error="form.errors.category" />
