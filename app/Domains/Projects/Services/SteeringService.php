@@ -273,8 +273,14 @@ class SteeringService
         // What is booked on each block so far, less the part at customer jobs.
         $actuals = array_column($this->plans->forYear($organizationId, $year)['groups'], 'actual', 'id');
 
+        // Spec 012: the expenses still expected, beside the payments; not
+        // worked out for the inner call that only fetches next year's.
+        $expected = $withNextYear ? $this->expected->forYear($organizationId, $year) : null;
+        $stillExpected = $this->stillExpectedByBlock($groups, $expected);
+
         $settled = $zero();
         $burden = $zero();
+        $burdenExpected = $zero();
         $blocks = [];
         foreach ($groups as $group) {
             // How the plan comes about, shown when a block is opened: a set
@@ -314,16 +320,23 @@ class SteeringService
                 'carry_equal' => $carryEqual,
                 'people' => [],
             ];
+            // What the block will cost in the year: booked plus what is still
+            // expected on its accounts or left of its plan (2026-11-03).
+            $row['expected'] = Money::add($actual, $stillExpected[$group->id] ?? '0.00');
             // Since 2026-10-22 work done for everyone is an internal
             // settlement; a credit key of a block no longer counts.
             $carryParts = $this->split($actual, $carry);
+            $expectedParts = $this->split($row['expected'], $carry);
             foreach ($ids as $id) {
                 $b = $carryParts[$id] ?? '0.00';
+                $e = $expectedParts[$id] ?? '0.00';
                 $burden[$id] = Money::add($burden[$id], $b);
+                $burdenExpected[$id] = Money::add($burdenExpected[$id], $e);
                 $row['people'][$id] = [
                     'carry_share' => isset($carry[$id]) ? (string) (float) $carry[$id] : '0',
                     'burden' => Money::negate($b),
                     'effect' => Money::negate($b),
+                    'expected_effect' => Money::negate($e),
                 ];
             }
             $blocks[] = $row;
@@ -356,10 +369,6 @@ class SteeringService
         $acquired = $this->acquisitions->chargesByPerson($organizationId, $from, $to);
         $salaries = $this->bookedSalaries($organizationId, $year);
 
-        // Spec 012: the expenses still expected, beside the payments; not
-        // worked out for the inner call that only fetches next year's.
-        $expected = $withNextYear ? $this->expected->forYear($organizationId, $year) : null;
-
         $rows = [];
         foreach ($people as $person) {
             $id = $person->id;
@@ -371,7 +380,9 @@ class SteeringService
             // the expected salaries, or it would be drawn twice.
             $assigned = $once['people'][$id] ?? '0.00';
             $drawn = Money::add(Money::add($planned, $acquired[$id] ?? '0.00'), $assigned);
-            $value = Money::add($contribution[$id], Money::subtract($settled[$id], $burden[$id]));
+            // Earned counts with the general costs the whole year expects.
+            $effectExpected = Money::subtract($settled[$id], $burdenExpected[$id]);
+            $value = Money::add($contribution[$id], $effectExpected);
             $play = Money::subtract($value, $drawn);
 
             $rows[] = [
@@ -392,6 +403,8 @@ class SteeringService
                 'credit' => $settled[$id],
                 'burden' => Money::negate($burden[$id]),
                 'effect' => Money::subtract($settled[$id], $burden[$id]),
+                'burden_expected' => Money::negate($burdenExpected[$id]),
+                'effect_expected' => $effectExpected,
                 'value' => $value,
                 'planned_items' => $planned,
                 'acquisitions' => $acquired[$id] ?? '0.00',
@@ -876,12 +889,49 @@ class SteeringService
     }
 
     /**
+     * What each cost block still expects in the year: the expected expenses
+     * on its accounts and what is left of its plan beyond them.
+     *
+     * @param  \Illuminate\Database\Eloquent\Collection<int, BudgetGroup>  $groups
+     * @param  array<string, mixed>|null  $expected  result of ExpectedExpensesService::forYear()
+     * @return array<int, string> block id => amount
+     */
+    private function stillExpectedByBlock(Collection $groups, ?array $expected): array
+    {
+        if ($expected === null) {
+            return [];
+        }
+        $byAccount = [];
+        $byBlock = [];
+        foreach ($expected['rows'] as $row) {
+            if (! $row['in_result']) {
+                continue;
+            }
+            if (isset($row['block'])) {
+                $byBlock[$row['block']] = Money::add($byBlock[$row['block']] ?? '0.00', (string) $row['amount']);
+
+                continue;
+            }
+            foreach ($row['accounts'] ?? ($row['account'] !== null ? [$row['account'] => $row['amount']] : []) as $code => $amount) {
+                $byAccount[$code] = Money::add($byAccount[$code] ?? '0.00', (string) $amount);
+            }
+        }
+
+        $still = [];
+        foreach ($groups as $group) {
+            $still[$group->id] = $group->accounts->reduce(fn (string $sum, $a) => Money::add($sum, $byAccount[$a->code] ?? '0.00'), $byBlock[$group->id] ?? '0.00');
+        }
+
+        return $still;
+    }
+
+    /**
      * @param  array<int, array<string, mixed>>  $rows
      * @return array<string, string>
      */
     private function totals(array $rows): array
     {
-        $fields = ['contribution', 'general', 'credit', 'settlements', 'burden', 'effect', 'value', 'planned_items', 'acquisitions', 'assigned_costs', 'drawn', 'booked_salary', 'play', 'prospects', 'later'];
+        $fields = ['contribution', 'general', 'credit', 'settlements', 'burden', 'effect', 'burden_expected', 'effect_expected', 'value', 'planned_items', 'acquisitions', 'assigned_costs', 'drawn', 'booked_salary', 'play', 'prospects', 'later'];
         $totals = array_fill_keys($fields, '0.00');
         foreach ($rows as $row) {
             foreach ($fields as $field) {

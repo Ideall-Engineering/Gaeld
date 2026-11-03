@@ -49,8 +49,8 @@ const open = reactive({})
 const toggle = key => { open[key] = !open[key] }
 const itemsOf = id => props.steering.items.filter(i => i.employee_id === id)
 const blocksOf = id => props.steering.blocks
-  .map(b => ({ ...b, effect: b.people[id]?.effect ?? '0.00' }))
-  .filter(b => Number(b.effect) !== 0)
+  .map(b => ({ ...b, effect: b.people[id]?.effect ?? '0.00', expected_effect: b.people[id]?.expected_effect ?? '0.00' }))
+  .filter(b => Number(b.effect) !== 0 || Number(b.expected_effect) !== 0)
 
 // Spec 010: a cost block is edited where its effect is seen.
 const showBlockForm = ref(false)
@@ -316,25 +316,43 @@ function removeItem(item) {
                     <td class="py-1">
                       <button type="button" class="flex items-center gap-1 hover:underline" @click="toggle('effect-' + person.employee_id)">
                         <component :is="open['effect-' + person.employee_id] ? ChevronDown : ChevronRight" class="h-4 w-4" />
-                        {{ t('steering_effect') }}
+                        {{ t('steering_effect_expected') }} {{ year }}
                       </button>
                     </td>
-                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.effect) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.effect_expected) }}</td>
+                  </tr>
+                  <tr class="text-xs text-[hsl(var(--muted-foreground))]">
+                    <td class="pb-1 pl-5">{{ t('steering_effect_booked') }}</td>
+                    <td class="pb-1 text-right tabular-nums">{{ formatCurrency(person.effect) }}</td>
                   </tr>
                   <tr v-if="open['effect-' + person.employee_id]">
                     <td colspan="2" class="pb-2 pl-5">
                       <table class="w-full text-xs">
+                        <thead>
+                          <tr class="text-[hsl(var(--muted-foreground))]">
+                            <th class="py-1 text-left font-normal"></th>
+                            <th class="py-1 text-right font-normal">{{ t('steering_col_booked') }}</th>
+                            <th class="py-1 text-right font-normal">{{ t('steering_col_expected') }}</th>
+                          </tr>
+                        </thead>
                         <tbody class="divide-y divide-[hsl(var(--border))]">
                           <tr v-if="Number(person.settlements) !== 0">
                             <td class="py-1"><Link :href="`/projects/general-costs?year=${year}`" class="hover:underline">{{ t('steering_settlements') }}</Link></td>
+                            <td class="py-1 text-right tabular-nums text-[hsl(var(--muted-foreground))]">{{ formatCurrency(person.settlements) }}</td>
                             <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.settlements) }}</td>
                           </tr>
                           <tr v-for="block in blocksOf(person.employee_id)" :key="block.id">
                             <td class="py-1"><button type="button" class="text-left hover:underline" @click="editBlock(block)">{{ block.name }}</button></td>
-                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.effect) }}</td>
+                            <td class="py-1 text-right tabular-nums text-[hsl(var(--muted-foreground))]">{{ formatCurrency(block.effect) }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(block.expected_effect) }}</td>
+                          </tr>
+                          <tr class="font-medium">
+                            <td class="py-1">{{ t('total') }}</td>
+                            <td class="py-1 text-right tabular-nums text-[hsl(var(--muted-foreground))]">{{ formatCurrency(person.effect) }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.effect_expected) }}</td>
                           </tr>
                           <tr>
-                            <td class="py-1" colspan="2"><Link :href="`/projects/general-costs?year=${year}`" class="underline hover:no-underline">{{ t('steering_general_costs_page') }}</Link></td>
+                            <td class="py-1" colspan="3"><Link :href="`/projects/general-costs?year=${year}`" class="underline hover:no-underline">{{ t('steering_general_costs_page') }}</Link></td>
                           </tr>
                         </tbody>
                       </table>
@@ -405,8 +423,8 @@ function removeItem(item) {
                             <td class="py-0.5 text-right tabular-nums">{{ formatCurrency(job.booked ? num(job.open_part) + num(job.rest_part) : job.part) }}</td>
                           </tr>
                           <tr>
-                            <td class="py-1">{{ t('steering_effect') }}</td>
-                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.effect) }}</td>
+                            <td class="py-1">{{ t('steering_effect_expected') }}</td>
+                            <td class="py-1 text-right tabular-nums">{{ formatCurrency(person.effect_expected) }}</td>
                           </tr>
                           <tr>
                             <td class="py-1">{{ t('steering_drawn') }}</td>

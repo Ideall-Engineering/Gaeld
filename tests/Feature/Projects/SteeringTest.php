@@ -22,7 +22,9 @@ use App\Domains\Projects\Services\AcquisitionService;
 use App\Domains\Projects\Services\AllocationCoverageService;
 use App\Domains\Projects\Services\SteeringService;
 use App\Domains\Users\Models\User;
+use App\Support\Money;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 use Tests\Traits\BuildsPostedJournalEntries;
@@ -499,6 +501,30 @@ class SteeringTest extends TestCase
         $this->assertSame('0.00', $row['part']);
         $this->assertSame('-40.00', $row['elsewhere_part']);
         $this->assertSame('700.00', $anna['contribution']);
+    }
+
+    public function test_general_costs_count_with_what_the_year_still_expects(): void
+    {
+        Carbon::setTestNow('2026-06-30 10:00:00');
+        $office = BudgetGroup::create(['organization_id' => $this->organization->id, 'year' => 2026, 'name' => 'Office', 'kind' => 'running', 'plan_amount' => '1200.00']);
+        $supplies = $this->makeAccount('6049', 'Supplies', AccountType::Expense);
+        $office->accounts()->sync([$supplies->id]);
+        $this->cost($supplies, '300.00', '2026-03-01');
+
+        $data = app(SteeringService::class)->forYear($this->organization->id, 2026);
+        Carbon::setTestNow();
+        $block = collect($data['blocks'])->keyBy('name')['Office'];
+        $anna = collect($data['people'])->keyBy('name')['Anna A'];
+
+        // Booked 300 of a plan of 1200: the year expects 1200, half each.
+        $this->assertSame('300.00', $block['actual']);
+        $this->assertSame('1200.00', $block['expected']);
+        $this->assertSame('-600.00', $block['people'][$this->anna->id]['expected_effect']);
+        // Booked: rent 300 and office 150 against the settlement of 1000.
+        $this->assertSame('550.00', $anna['effect']);
+        $this->assertSame('100.00', $anna['effect_expected']);
+        $this->assertSame(Money::add($anna['contribution'], '100.00'), $anna['value'], 'Earned counts with the expected costs.');
+        $this->assertSame(Money::subtract($anna['value'], $anna['drawn']), $anna['play']);
     }
 
     public function test_owners_keep_internal_settlements_on_the_general_costs_page(): void

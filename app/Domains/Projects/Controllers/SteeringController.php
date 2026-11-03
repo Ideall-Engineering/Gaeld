@@ -137,7 +137,7 @@ class SteeringController extends Controller
 
         $year = $this->year($request);
         $data = $steering->forYear($currentOrg->id(), $year);
-        $fields = ['contribution', 'effect', 'value', 'drawn', 'play', 'prospects', 'later', 'booked_salary'];
+        $fields = ['contribution', 'effect', 'effect_expected', 'value', 'drawn', 'play', 'prospects', 'later', 'booked_salary'];
 
         return $exporter->export(
             $format,

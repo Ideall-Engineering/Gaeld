@@ -481,7 +481,7 @@ class ExpectedExpensesService
             // paid too, so it uses up the plan as well (2026-11-01).
             $rest = Money::subtract(Money::subtract((string) $group['rest'], (string) $group['customer_projects']), $covered);
             if (Money::isPositive($rest)) {
-                $rests[] = $this->row(null, 'block', $group['name'], null, $rest, $rest, link: '/projects/plan?year='.$year);
+                $rests[] = [...$this->row(null, 'block', $group['name'], null, $rest, $rest, link: '/projects/plan?year='.$year), 'block' => $group['id']];
             }
         }
 
